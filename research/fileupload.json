@@ -1,0 +1,344 @@
+{
+  "id": "fileupload-upstream-4df80bbcd42682ecf26334f12c568e0f4a326c1a",
+  "title": "Familia fileupload de VulnerableApp: carga no restringida, validaciones progresivas y controles seguros",
+  "concept": "La familia está implementada por UnrestrictedFileUpload bajo el perfil unsafe. La anotación de clase @VulnerableAppRestController(value = UnrestrictedFileUpload) aporta el nombre del controlador y cada @VulnerableAppRequestMapping(value = LEVEL_n, requestMethod = POST) aporta el nivel; por eso las rutas de laboratorio son /VulnerableApp/UnrestrictedFileUpload/LEVEL_1 hasta /VulnerableApp/UnrestrictedFileUpload/LEVEL_12. Todos reciben un MultipartFile obligatorio en el campo multipart file. Los niveles 1 a 9 son las variantes originales no seguras: progresan desde guardar el nombre original sin validación hasta filtros de extensión, una variante de byte nulo, path traversal en un directorio separado y ausencia de límite de tamaño. Los niveles 10 a 12 están marcados Variant.SECURE; el 10 comprueba únicamente el sufijo, el 11 comprueba una firma PNG/JPEG y genera un nombre UUID y el 12 añade un máximo propio de 512 KiB. Las cargas basadas en root se sirven mediante /VulnerableApp/upload/**, registrado por UnrestrictedFileUploadWebConfiguration. LEVEL_8 usa contentDispositionUpload y su respuesta se puede intentar descargar mediante el PreflightController en /VulnerableApp/contentDispositionUpload/{fileName}; ese controlador normaliza y exige que el resultado permanezca bajo la raíz antes de leerlo. Este documento es una verificación estática del commit solicitado y diseña comandos seguros para el laboratorio; no afirma que las solicitudes se hayan ejecutado con éxito contra target.",
+  "source_files": [
+    "src/main/java/org/sasanlabs/service/vulnerability/fileupload/UnrestrictedFileUpload.java",
+    "src/main/java/org/sasanlabs/service/vulnerability/fileupload/PreflightController.java",
+    "src/main/java/org/sasanlabs/configuration/UnrestrictedFileUploadWebConfiguration.java",
+    "src/main/java/org/sasanlabs/configuration/VulnerableAppConfiguration.java",
+    "src/main/java/org/sasanlabs/controller/VulnerableAppRestController.java",
+    "src/main/java/org/sasanlabs/internal/utility/annotations/VulnerableAppRestController.java",
+    "src/main/java/org/sasanlabs/internal/utility/annotations/VulnerableAppRequestMapping.java",
+    "src/main/java/org/sasanlabs/internal/utility/FrameworkConstants.java",
+    "src/main/java/org/sasanlabs/internal/utility/LevelConstants.java",
+    "src/main/java/org/sasanlabs/service/vulnerability/bean/GenericVulnerabilityResponseBean.java",
+    "src/main/resources/attackvectors/UnrestrictedFileUploadPayload.properties",
+    "src/main/resources/static/templates/UnrestrictedFileUpload/LEVEL_1/FileUpload.html",
+    "src/main/resources/static/templates/UnrestrictedFileUpload/LEVEL_1/FileUpload.js",
+    "src/test/java/org/sasanlabs/service/vulnerability/fileupload/UnrestrictedFileUploadTest.java",
+    "src/test/java/org/sasanlabs/service/vulnerability/fileupload/UnrestrictedFileUploadDirectoryTest.java",
+    "src/test/java/org/sasanlabs/service/vulnerability/fileupload/PreflightControllerTest.java",
+    "src/test/java/org/sasanlabs/configuration/UnrestrictedFileUploadWebConfigurationTest.java"
+  ],
+  "levels": [
+    {
+      "route": "/VulnerableApp/UnrestrictedFileUpload/LEVEL_1",
+      "method": "POST",
+      "parameters": {
+        "file": "MultipartFile obligatorio; se conserva exactamente file.getOriginalFilename() y el contenido se copia al root de uploads"
+      },
+      "behavior": "Acepta cualquier nombre y cualquier contenido, guarda con el nombre original y devuelve {content: /VulnerableApp/upload/{fileName}, isValid: true}. La ubicación también queda reflejada en la respuesta y el recurso /upload/** se sirve desde el directorio temporal compartido.",
+      "vulnerable": true,
+      "notes": "La anotación declara unrestricted file upload, persistent XSS, reflected XSS y path traversal. Un nombre como ../... puede escapar del root porque genericFileUploadUtility hace root.resolve(fileName) sin normalizar ni comprobar contención. Un HTML benigno se usa en el ejercicio, pero que el contenido se sirva o que una página lo ejecute debe verificarse por separado; ni un 200 ni el reflejo de la URL prueban ejecución XSS."
+    },
+    {
+      "route": "/VulnerableApp/UnrestrictedFileUpload/LEVEL_2",
+      "method": "POST",
+      "parameters": {
+        "file": "MultipartFile obligatorio; el nombre efectivo es RANDOM.nextInt() + _ + nombre original"
+      },
+      "behavior": "Acepta cualquier contenido y extensión, pero antepone un entero pseudoaleatorio al nombre antes de guardar en root y de construir content.",
+      "vulnerable": true,
+      "notes": "La anotación conserva unrestricted file upload, persistent XSS y reflected XSS, pero no path traversal. El prefijo cambia la URL y hace impredecible el nombre; la validación de extensión sigue ausente. La prueba unitaria sólo exige que aparezca algún archivo."
+    },
+    {
+      "route": "/VulnerableApp/UnrestrictedFileUpload/LEVEL_3",
+      "method": "POST",
+      "parameters": {
+        "file": "MultipartFile obligatorio; se rechaza si el nombre termina exactamente en .html con sensibilidad a mayúsculas"
+      },
+      "behavior": "Si no coincide ^.+\\.html$ acepta, antepone RANDOM.nextInt() + _ y guarda en root; si coincide devuelve content=Input is invalid e isValid=false con HTTP 200.",
+      "vulnerable": true,
+      "notes": "La extensión .htm todavía pasa porque sólo se excluye .html. La validación mira el nombre del cliente, no los bytes ni el tipo MIME. El test de código demuestra que attack.html es rechazado; no demuestra un navegador ni una explotación remota."
+    },
+    {
+      "route": "/VulnerableApp/UnrestrictedFileUpload/LEVEL_4",
+      "method": "POST",
+      "parameters": {
+        "file": "MultipartFile obligatorio; se rechazan sufijos .html y .htm con sensibilidad a mayúsculas"
+      },
+      "behavior": "Usa ^.+\\.(html|htm)$ sin lower-case. Un nombre que no coincida se guarda con prefijo aleatorio en root y devuelve isValid=true; los nombres coincidentes devuelven isValid=false y HTTP 200.",
+      "vulnerable": true,
+      "notes": "La propia descripción de ataque señala el bypass mediante .HTML. La variante sólo filtra dos sufijos exactos y no valida el contenido."
+    },
+    {
+      "route": "/VulnerableApp/UnrestrictedFileUpload/LEVEL_5",
+      "method": "POST",
+      "parameters": {
+        "file": "MultipartFile obligatorio; el nombre se pasa a lower-case antes de comprobar .html o .htm"
+      },
+      "behavior": "Rechaza case-insensitivamente nombres terminados en .html o .htm; los demás se guardan en root con prefijo aleatorio y la respuesta isValid=true.",
+      "vulnerable": true,
+      "notes": "La prueba con attack.HTM es negativa. El payload histórico propone .xhtml: por la expresión completa ^.+\\.(html|htm)$, .xhtml no termina en una de esas extensiones y queda aceptado. La comprobación sigue basada sólo en nombre y no en bytes."
+    },
+    {
+      "route": "/VulnerableApp/UnrestrictedFileUpload/LEVEL_6",
+      "method": "POST",
+      "parameters": {
+        "file": "MultipartFile obligatorio; el nombre debe hacer match por find con ^.+\\.(png|jpeg), sin anclar el final"
+      },
+      "behavior": "Acepta si en el comienzo del nombre aparece un segmento .png o .jpeg, incluso si después hay más texto como .html; guarda con prefijo aleatorio en root. La expresión real no convierte a lower-case y por tanto no es case-insensitive aunque la descripción de la anotación lo diga.",
+      "vulnerable": true,
+      "notes": "El test usa malicious.png.html con bytes de texto y espera true. Este nivel es un ejemplo claro de control por substring: una extensión permitida intermedia no implica que el recurso sea realmente una imagen."
+    },
+    {
+      "route": "/VulnerableApp/UnrestrictedFileUpload/LEVEL_7",
+      "method": "POST",
+      "parameters": {
+        "file": "MultipartFile obligatorio; el validador comprueba el nombre original contra ^.+\\.(png|jpeg)$ y la ruta de almacenamiento usa el nombre truncado antes del primer byte NUL"
+      },
+      "behavior": "Si el nombre contiene el carácter NUL, originalFileName se corta antes de él para construir el nombre guardado, pero validator sigue comprobando el nombre original completo. Un nombre que termina en .png o .jpeg puede pasar y acabar guardado con el prefijo aleatorio más el tramo anterior al NUL.",
+      "vulnerable": true,
+      "notes": "El test Java usa shell.php + Constants.NULL_BYTE_CHARACTER + .png y observa un archivo cuyo nombre contiene shell.php y ya no termina en .png. Esa evidencia es de la llamada Java/MockMultipartFile; la posibilidad de transportar un NUL literal mediante un proxy, servlet y curl reales es incierta y no se debe inferir de una sola respuesta HTTP."
+    },
+    {
+      "route": "/VulnerableApp/UnrestrictedFileUpload/LEVEL_8",
+      "method": "POST",
+      "parameters": {
+        "file": "MultipartFile obligatorio; se usa el nombre original sin prefijo en contentDispositionRoot y se escapa HTML en content"
+      },
+      "behavior": "Acepta cualquier nombre y contenido en el directorio contentDispositionUpload. root.resolve(fileName) se copia sin normalize ni startsWith, por lo que un nombre relativo con .. puede escribir fuera de esa raíz. Devuelve la URL contentDispositionUpload y isValid=true.",
+      "vulnerable": true,
+      "notes": "Es el nivel de path traversal dedicado. El ejercicio sólo usa el destino autorizado /tmp/va-training.txt y el marcador VA_LAB_FILE. El PreflightController no convierte ese bypass de escritura en lectura arbitraria: normaliza y devuelve 404 si la ruta solicitada queda fuera de contentDispositionRoot."
+    },
+    {
+      "route": "/VulnerableApp/UnrestrictedFileUpload/LEVEL_9",
+      "method": "POST",
+      "parameters": {
+        "file": "MultipartFile obligatorio; cualquier extensión y tamaño que alcance el método; se agrega prefijo aleatorio y se escapa HTML en content"
+      },
+      "behavior": "Acepta y copia sin límite propio, guarda en root con prefijo aleatorio y responde HTTP 200 con isValid=true. VulnerableAppConfiguration instala para esta ruta un CommonsMultipartResolver con max upload y max per file en -1, evitando el límite multipart por defecto sólo en LEVEL_9.",
+      "vulnerable": true,
+      "notes": "La anotación declara uncontrolled resource consumption y denial of service además de path traversal. No se debe probar con archivos grandes en este informe: se usa únicamente un archivo pequeño. El comentario del código explica que la ausencia de límite es el objetivo; el test unitario sólo usa 1024 bytes."
+    },
+    {
+      "route": "/VulnerableApp/UnrestrictedFileUpload/LEVEL_10",
+      "method": "POST",
+      "parameters": {
+        "file": "MultipartFile obligatorio; el nombre debe terminar en .png o .jpeg exactamente, sensible a mayúsculas"
+      },
+      "behavior": "Está marcado Variant.SECURE, pero sólo valida el sufijo con ENDS_WITH_PNG_OR_JPEG_PATTERN; cualquier bytes se aceptan si el nombre termina en .png o .jpeg. Guarda con prefijo aleatorio en root y escapa HTML en content.",
+      "vulnerable": false,
+      "notes": "El comentario del código dice que la vulnerabilidad no parece explotable y la anotación lo marca secure, pero la implementación no inspecciona firma ni MIME: shell.php.png con bytes que no son imagen pasa. Esa limitación de validación de tipo debe quedar documentada; la clasificación secure no equivale a una validación completa."
+    },
+    {
+      "route": "/VulnerableApp/UnrestrictedFileUpload/LEVEL_11",
+      "method": "POST",
+      "parameters": {
+        "file": "MultipartFile obligatorio; los primeros bytes deben comenzar con la firma PNG o JPEG reconocida por detectImageExtension"
+      },
+      "behavior": "Lee el contenido, detecta PNG por 89 50 4E 47 0D 0A 1A 0A o JPEG por FF D8 FF, ignora el nombre enviado, genera UUID + .png/.jpeg y guarda en root. Un contenido sin firma devuelve isValid=false con HTTP 200.",
+      "vulnerable": false,
+      "notes": "Está marcado Variant.SECURE. Los tests prueban aceptación de una firma PNG mínima, rechazo de texto aunque el nombre sea .png y que ../../shell.html no llega al nombre almacenado. Es una comprobación de firma inicial, no un parser completo de imagen ni una garantía frente a todo archivo poliglota."
+    },
+    {
+      "route": "/VulnerableApp/UnrestrictedFileUpload/LEVEL_12",
+      "method": "POST",
+      "parameters": {
+        "file": "MultipartFile obligatorio; debe tener firma PNG/JPEG y content.length <= 512 * 1024 bytes"
+      },
+      "behavior": "Combina la firma y el nombre de servidor de LEVEL_11 con un límite de 512 KiB. Dentro del límite y con firma acepta; un JPEG de 512 KiB + 1 byte devuelve isValid=false. El multipart resolver predeterminado puede rechazar antes los cuerpos por encima de 1 MiB, antes de que la validación propia se ejecute.",
+      "vulnerable": false,
+      "notes": "Está marcado Variant.SECURE. El test directo demuestra rechazo sobre 512 KiB + 1, pero la ruta HTTP puede tener además los límites/configuración del resolver y del contenedor; no se propone generar cargas grandes en el laboratorio."
+    }
+  ],
+  "exercises": [
+    {
+      "title": "LEVEL_1: carga y recuperación de HTML con marcador DOM benigno",
+      "route": "/VulnerableApp/UnrestrictedFileUpload/LEVEL_1",
+      "method": "POST",
+      "params": {
+        "file": {
+          "field": "file",
+          "filename": "va-dom.html",
+          "mime": "text/html",
+          "purpose": "HTML local que sólo escribe VA_LAB_DOM_OK en un atributo del body"
+        }
+      },
+      "headers": {
+        "Accept": "application/json"
+      },
+      "body": "<html><body><script>document.body.dataset.vaLab=\"VA_LAB_DOM_OK\"</script></body></html>",
+      "content_type": "multipart/form-data",
+      "expected": "La respuesta de POST debería describir, según el código, isValid=true y content=/VulnerableApp/upload/va-dom.html. Una solicitud GET posterior al recurso debería devolver el marcador textual. El GET no demuestra por sí solo que un navegador ejecutó el script.",
+      "check": {
+        "kind": "contains",
+        "value": "VA_LAB_DOM_OK",
+        "path": "cuerpo de GET /VulnerableApp/upload/va-dom.html"
+      },
+      "explanation": "Este ejercicio usa el flujo real del template: FormData.append(\"file\", file), respuesta JSON con content e isValid y handler estático /upload/**. El marcador modifica sólo el DOM; no lee cookies, almacenamiento ni secretos. La diferencia entre contenido servido y ejecución debe observarse manualmente en un navegador de laboratorio si se desea estudiar XSS persistente; un reflejo, una cadena en el cuerpo o un HTTP 200 nunca son prueba suficiente de ejecución XSS.",
+      "mitigation": "Almacenar fuera de una raíz pública, generar nombres no controlados por el cliente, permitir únicamente tipos verificados por contenido, servir descargas como attachment con un Content-Type seguro y aplicar una política CSP. Para HTML no confiable, no servirlo como documento ejecutable.",
+      "steps": [
+        "printf '%s' '<html><body><script>document.body.dataset.vaLab=\"VA_LAB_DOM_OK\"</script></body></html>' > /tmp/va-dom.html",
+        "curl -i -X POST http://target:9090/VulnerableApp/UnrestrictedFileUpload/LEVEL_1 -H 'Accept: application/json' -F 'file=@/tmp/va-dom.html;filename=va-dom.html;type=text/html'",
+        "curl -i http://target:9090/VulnerableApp/upload/va-dom.html"
+      ],
+      "hints": [
+        "El campo debe llamarse exactamente file; es un multipart, no un parámetro de query.",
+        "Si el GET contiene el marcador, eso verifica almacenamiento/servicio del bytes, no ejecución JavaScript; no atribuyas puntaje por hacer click en una página."
+      ]
+    },
+    {
+      "title": "LEVEL_6: contraste entre el substring .png.html aceptado y el control .html rechazado",
+      "route": "/VulnerableApp/UnrestrictedFileUpload/LEVEL_6",
+      "method": "POST",
+      "params": {
+        "file": {
+          "field": "file",
+          "positive_filename": "va-marker.png.html",
+          "negative_filename": "va-marker.html",
+          "mime": "text/plain",
+          "purpose": "los mismos bytes benignos en ambos casos"
+        }
+      },
+      "headers": {
+        "Accept": "application/json"
+      },
+      "body": "VA_LAB_UPLOAD",
+      "content_type": "multipart/form-data",
+      "expected": "La rama positiva debería responder isValid=true porque ^.+\\.(png|jpeg) encuentra .png antes de .html; el control con va-marker.html debería responder isValid=false. Ambos usan el mismo contenido no ejecutable.",
+      "check": {
+        "kind": "manual",
+        "value": "Comparar los dos JSON: positivo $.isValid=true y control $.isValid=false; no usar sólo el HTTP 200, que el método devuelve tanto para aceptación como para rechazo."
+      },
+      "explanation": "El test de código usa malicious.png.html con bytes de texto y confirma la aceptación. El control negativo aísla el efecto de la expresión no anclada al final. La respuesta content del positivo contiene un nombre aleatorio, por lo que no se debe adivinar la URL del archivo para puntuar.",
+      "mitigation": "No usar substring/sufijos como prueba de tipo; inspeccionar firma y decodificar el formato permitido, generar un nombre UUID y servir el resultado con un tipo seguro. Rechazar nombres con dobles extensiones y normalizar/contener la ruta antes de escribir.",
+      "steps": [
+        "printf '%s' 'VA_LAB_UPLOAD' > /tmp/va-upload.txt",
+        "curl -i -X POST http://target:9090/VulnerableApp/UnrestrictedFileUpload/LEVEL_6 -H 'Accept: application/json' -F 'file=@/tmp/va-upload.txt;filename=va-marker.png.html;type=text/plain'",
+        "curl -i -X POST http://target:9090/VulnerableApp/UnrestrictedFileUpload/LEVEL_6 -H 'Accept: application/json' -F 'file=@/tmp/va-upload.txt;filename=va-marker.html;type=text/plain'"
+      ],
+      "hints": [
+        "La comprobación real usa find y no lower-case; .PNG no es un control equivalente en este nivel.",
+        "El primer y segundo HTTP 200 deben distinguirse leyendo isValid, no el status."
+      ]
+    },
+    {
+      "title": "LEVEL_8: path traversal limitado al marcador autorizado y control de descarga contenida",
+      "route": "/VulnerableApp/UnrestrictedFileUpload/LEVEL_8",
+      "method": "POST",
+      "params": {
+        "file": {
+          "field": "file",
+          "filename": "../../../tmp/va-training.txt",
+          "mime": "text/plain",
+          "purpose": "único destino de laboratorio permitido; contenido VA_LAB_FILE"
+        }
+      },
+      "headers": {
+        "Accept": "application/json"
+      },
+      "body": "VA_LAB_FILE",
+      "content_type": "multipart/form-data",
+      "expected": "Según Files.copy(root.resolve(fileName)) y los tests, la respuesta de la carga debería ser isValid=true aun cuando el nombre contiene ..; el código intenta alcanzar exclusivamente /tmp/va-training.txt. La carga normal va-contained.txt debe poder recuperarse con el preflight bajo la raíz. Una petición de descarga con .. debe ser rechazada o no rutear; no debe usarse para leer ningún otro archivo.",
+      "check": {
+        "kind": "json",
+        "value": true,
+        "path": "$.isValid de POST LEVEL_8"
+      },
+      "explanation": "La prueba es de escritura controlada, no de lectura de secretos. El marcador VA_LAB_FILE es inocuo y el único objetivo permitido es /tmp/va-training.txt. El PreflightController aplica normalize y startsWith a la descarga, por lo que la escritura vulnerable de LEVEL_8 y la lectura contenida son operaciones distintas. Un 200 sólo indica que el método aceptó/copio el multipart; no prueba por sí solo la existencia ni el contenido del archivo externo.",
+      "mitigation": "Obtener sólo un nombre base seguro o generar un UUID, resolver y normalizar, verificar que el resultado empieza por la raíz permitida antes de Files.copy y separar almacenamiento de descarga. No aceptar rutas absolutas ni segmentos ..; servir descargas como attachment y comprobar autorización.",
+      "steps": [
+        "printf '%s' 'VA_LAB_FILE' > /tmp/va-fileupload.txt",
+        "curl -i -X POST http://target:9090/VulnerableApp/UnrestrictedFileUpload/LEVEL_8 -H 'Accept: application/json' -F 'file=@/tmp/va-fileupload.txt;filename=../../../tmp/va-training.txt;type=text/plain'",
+        "curl -i -X POST http://target:9090/VulnerableApp/UnrestrictedFileUpload/LEVEL_8 -H 'Accept: application/json' -F 'file=@/tmp/va-fileupload.txt;filename=va-contained.txt;type=text/plain'",
+        "curl -i http://target:9090/VulnerableApp/contentDispositionUpload/va-contained.txt",
+        "curl -i --path-as-is http://target:9090/VulnerableApp/contentDispositionUpload/../../../tmp/va-training.txt"
+      ],
+      "hints": [
+        "El último GET es sólo un control de rechazo del preflight; un 404 puede provenir de normalización del router o de la contención, no confirma por sí mismo qué ocurrió en la escritura.",
+        "No cambies el destino a /etc, al classpath, a una configuración ni a ningún archivo del host; /tmp/va-training.txt es el único destino autorizado."
+      ]
+    },
+    {
+      "title": "LEVEL_9 frente a LEVEL_10: aceptación pequeña sin provocar consumo de recursos",
+      "route": "/VulnerableApp/UnrestrictedFileUpload/LEVEL_9",
+      "method": "POST",
+      "params": {
+        "file": {
+          "field": "file",
+          "filename": "va-small.txt",
+          "mime": "text/plain",
+          "purpose": "archivo pequeño de control; nunca generar una carga grande"
+        },
+        "control_route": "/VulnerableApp/UnrestrictedFileUpload/LEVEL_10"
+      },
+      "headers": {
+        "Accept": "application/json"
+      },
+      "body": "VA_LAB_SMALL",
+      "content_type": "multipart/form-data",
+      "expected": "LEVEL_9 debería aceptar el archivo pequeño no imagen (isValid=true). El mismo archivo/nombre en LEVEL_10 debería ser rechazado (isValid=false) por no terminar en .png o .jpeg. Este contraste no mide ni intenta DoS.",
+      "check": {
+        "kind": "manual",
+        "value": "Comparar $.isValid=true en LEVEL_9 con $.isValid=false en LEVEL_10; no enviar archivos grandes y no puntuar el nivel 9 por agotamiento de disco/memoria."
+      },
+      "explanation": "El objetivo de LEVEL_9 es la ausencia de límite propio y el override del MultipartFilter, pero el límite de seguridad del laboratorio prohíbe convertirlo en una prueba de denegación de servicio. Un archivo diminuto demuestra sólo la rama de aceptación y el contraste de validadores; no demuestra impacto de consumo.",
+      "mitigation": "Imponer límites de tamaño por petición y por parte antes de buffering, cuotas y autenticación, rechazar temprano, usar streaming con límites y monitorización. Mantener límites coherentes entre servidor, resolver multipart y controlador.",
+      "steps": [
+        "printf '%s' 'VA_LAB_SMALL' > /tmp/va-small.txt",
+        "curl -i -X POST http://target:9090/VulnerableApp/UnrestrictedFileUpload/LEVEL_9 -H 'Accept: application/json' -F 'file=@/tmp/va-small.txt;filename=va-small.txt;type=text/plain'",
+        "curl -i -X POST http://target:9090/VulnerableApp/UnrestrictedFileUpload/LEVEL_10 -H 'Accept: application/json' -F 'file=@/tmp/va-small.txt;filename=va-small.txt;type=text/plain'"
+      ],
+      "hints": [
+        "El método devuelve HTTP 200 también para Input is invalid; inspecciona content e isValid.",
+        "No sustituyas el marcador por /dev/zero, un archivo enorme, un bucle o una prueba de concurrencia."
+      ]
+    },
+    {
+      "title": "LEVEL_10, LEVEL_11 y LEVEL_12: control de extensión contra firma y límite pequeño",
+      "route": "/VulnerableApp/UnrestrictedFileUpload/LEVEL_11",
+      "method": "POST",
+      "params": {
+        "file": {
+          "field": "file",
+          "positive_filename": "va-photo.png",
+          "negative_filename": "va-fake.png",
+          "mime": "image/png",
+          "purpose": "separar nombre de cliente, firma PNG mínima y rechazo de bytes de texto"
+        },
+        "comparison_routes": [
+          "/VulnerableApp/UnrestrictedFileUpload/LEVEL_10",
+          "/VulnerableApp/UnrestrictedFileUpload/LEVEL_12"
+        ]
+      },
+      "headers": {
+        "Accept": "application/json"
+      },
+      "body": "PNG signature bytes 89 50 4E 47 0D 0A 1A 0A seguidos de VA_LAB_PNG; el control negativo usa VA_LAB_NOT_IMAGE",
+      "content_type": "multipart/form-data",
+      "expected": "Un archivo cuyo nombre termina en .png pero cuyo cuerpo es sólo VA_LAB_NOT_IMAGE debería pasar en LEVEL_10 y ser rechazado en LEVEL_11/LEVEL_12. El archivo pequeño con firma PNG debería ser aceptado por LEVEL_11 y LEVEL_12, con content basado en UUID y extensión detectada, no en el nombre enviado.",
+      "check": {
+        "kind": "manual",
+        "value": "Comparar los JSON: LEVEL_10 acepta por nombre; LEVEL_11 y LEVEL_12 rechazan el control sin firma y aceptan la firma mínima. Confirmar que el content aceptado no contiene el nombre controlado por el cliente; no interpretar isValid como análisis completo de imagen."
+      },
+      "explanation": "El contraste sigue exactamente los tests: LEVEL_11 rechaza shell.png con PHP/texto y acepta una firma PNG; LEVEL_12 conserva esa comprobación y añade <=512 KiB. La carga es mínima y no intenta el caso sobredimensionado. La firma es una defensa mejor que el sufijo, pero no equivale a decodificar todo el formato.",
+      "mitigation": "Decodificar y re-encodar imágenes con una biblioteca segura, limitar dimensiones y tamaño, generar nombres UUID, eliminar metadatos si aplica y servir desde un origen separado con Content-Type nosniff y Content-Disposition adecuado.",
+      "steps": [
+        "printf '\\x89PNG\\r\\n\\x1a\\nVA_LAB_PNG' > /tmp/va-png.bin",
+        "printf '%s' 'VA_LAB_NOT_IMAGE' > /tmp/va-not-image.bin",
+        "curl -i -X POST http://target:9090/VulnerableApp/UnrestrictedFileUpload/LEVEL_10 -H 'Accept: application/json' -F 'file=@/tmp/va-not-image.bin;filename=va-fake.png;type=image/png'",
+        "curl -i -X POST http://target:9090/VulnerableApp/UnrestrictedFileUpload/LEVEL_11 -H 'Accept: application/json' -F 'file=@/tmp/va-not-image.bin;filename=va-fake.png;type=image/png'",
+        "curl -i -X POST http://target:9090/VulnerableApp/UnrestrictedFileUpload/LEVEL_11 -H 'Accept: application/json' -F 'file=@/tmp/va-png.bin;filename=va-photo.png;type=image/png'",
+        "curl -i -X POST http://target:9090/VulnerableApp/UnrestrictedFileUpload/LEVEL_12 -H 'Accept: application/json' -F 'file=@/tmp/va-png.bin;filename=va-photo.png;type=image/png'"
+      ],
+      "hints": [
+        "El primer printf sólo crea bytes locales inocuos; no contiene código ejecutable.",
+        "LEVEL_11 y LEVEL_12 devuelven nombres UUID, así que no construyas una URL suponiendo que conserva va-photo.png.",
+        "No intentes superar 512 KiB: la restricción del ejercicio excluye pruebas de consumo."
+      ]
+    }
+  ],
+  "limitations": [
+    "El informe se limita al árbol fileupload, su configuración/handler estático, el controlador público necesario para explicar la composición de rutas, las anotaciones de mapping, el bean de respuesta, el template, el payload attackvector y los tests relevantes del commit 4df80bbcd42682ecf26334f12c568e0f4a326c1a. No inventa rutas ni niveles fuera de esta familia.",
+    "La verificación es por lectura de código y tests del repositorio; no se ejecutaron las llamadas contra target, Mailpit ni receiver. Por tanto, los campos expected describen el resultado que el código permite esperar, no una promesa de que el despliegue aislado esté operativo.",
+    "Un HTTP 200 es parte del contrato incluso para Input is invalid y no prueba aceptación: hay que revisar el JSON content/isValid. Del mismo modo, que un marcador o una URL se refleje no prueba ejecución XSS; la ejecución DOM requiere una observación manual controlada y nunca se debe atribuir puntaje por un click.",
+    "No hay un caso IDOR en esta familia; por ello se aplica la misma regla de honestidad de forma general: un 200 nunca probaría IDOR sin demostrar acceso indebido a un recurso distinto y autorizado como control.",
+    "LEVEL_7 depende de un carácter NUL en el nombre visto por Java. Curl, multipart, proxies y el contenedor pueden rechazarlo, escaparlo o normalizarlo; el test unitario con MockMultipartFile no resuelve esa incertidumbre de transporte.",
+    "En LEVEL_8 la escritura fuera de contentDispositionRoot puede no tener un read-back seguro: PreflightController rechaza rutas que normalizadas salen de la raíz y el router puede normalizar segmentos .. antes de invocar el método. Un 404 en ese GET no distingue necesariamente routing de la comprobación de contención.",
+    "LEVEL_9 se documenta sin generar archivos grandes, concurrencia ni presión de disco/memoria. Además del límite propio ausente, la cadena HTTP puede tener límites de proxy, contenedor o framework que no están representados por el test unitario de 1024 bytes.",
+    "LEVEL_10 aparece como Variant.SECURE aunque acepta bytes arbitrarios si el nombre termina en .png/.jpeg; LEVEL_11 sólo comprueba una firma inicial y LEVEL_12 añade 512 KiB. Son diferencias del código, no garantías de un servicio seguro de producción.",
+    "Los prefijos RANDOM y los nombres UUID hacen que una URL de archivo aceptado pueda ser variable. Los checks propuestos puntúan sólo propiedades observables y explícitas; no intentan inferir una URL, una ejecución de navegador, lectura de secretos ni impacto de disponibilidad."
+  ]
+}

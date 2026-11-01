@@ -1,0 +1,388 @@
+{
+  "id": "clickjacking",
+  "title": "Familia clickjacking (UI redress) de VulnerableApp",
+  "concept": "Clickjacking es el engaño de interfaz por el que una página víctima se carga en un iframe y una interfaz del atacante hace que el usuario active controles de la víctima sin saberlo. En este commit la familia enseña la defensa mediante X-Frame-Options y Content-Security-Policy frame-ancestors. La clase ClickjackingVulnerability expone siete rutas GET bajo /VulnerableApp/ClickjackingVulnerability/LEVEL_n. Los niveles 1, 2, 3, 6 y 7 están marcados por el código y sus pruebas como no seguros; los niveles 4 y 5 tienen Variant.SECURE. La respuesta HTTP es un GenericVulnerabilityResponseBean con content e isValid; isValid=true es un campo del laboratorio y no debe interpretarse como un veredicto de seguridad.",
+  "source_files": [
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/clickjacking/ClickjackingVulnerability.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/attackvectors/ClickjackingVulnerabilityPayload.properties",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/static/templates/ClickjackingVulnerability/LEVEL_1/ClickjackingVulnerability.html",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/static/templates/ClickjackingVulnerability/LEVEL_1/ClickjackingVulnerability.css",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/static/templates/ClickjackingVulnerability/LEVEL_1/ClickjackingVulnerability.js",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/static/templates/ClickjackingVulnerability/LEVEL_4/ClickjackingVulnerability.html",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/static/templates/ClickjackingVulnerability/LEVEL_4/ClickjackingVulnerability.css",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/static/templates/ClickjackingVulnerability/LEVEL_4/ClickjackingVulnerability.js",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/static/vulnerableApp.js",
+    "/home/ubuntu/workshop-research/upstream/src/test/java/org/sasanlabs/service/vulnerability/clickjacking/ClickjackingVulnerabilityTest.java",
+    "/home/ubuntu/workshop-research/upstream/src/test/java/org/sasanlabs/controller/VulnerableAppRestControllerTest.java",
+    "/home/ubuntu/workshop-research/upstream/src/test/java/org/sasanlabs/controller/VulnerableAppRestControllerContextPathTest.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/internal/utility/annotations/VulnerableAppRestController.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/internal/utility/annotations/VulnerableAppRequestMapping.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/internal/utility/LevelConstants.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/controller/VulnerableAppRestController.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/impl/EndPointsInformationProvider.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/bean/GenericVulnerabilityResponseBean.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/application.properties"
+  ],
+  "levels": [
+    {
+      "route": "/VulnerableApp/ClickjackingVulnerability/LEVEL_1",
+      "method": "GET",
+      "parameters": {
+        "query": {},
+        "path": {},
+        "body": {}
+      },
+      "behavior": "noFramingProtection devuelve 200 y no añade X-Frame-Options ni Content-Security-Policy. El cuerpo es {\"content\":\"Page loaded without framing protection. This page can be embedded in an iframe.\",\"isValid\":true}. La plantilla LEVEL_1 coloca esta URL en un iframe y describe que cualquier origen puede intentar incrustarla.",
+      "vulnerable": true,
+      "notes": "@VulnerableAppRequestMapping usa value=LevelConstants.LEVEL_1, htmlTemplate=LEVEL_1/ClickjackingVulnerability y el método por defecto GET. @AttackVector describe CLICKJACKING_NO_FRAMING_PROTECTION y el recurso de payload dice que no aplica. La ausencia de cabeceras se observa en HTTP, pero curl no prueba por sí solo el comportamiento del navegador."
+    },
+    {
+      "route": "/VulnerableApp/ClickjackingVulnerability/LEVEL_2",
+      "method": "GET",
+      "parameters": {
+        "query": {},
+        "path": {},
+        "body": {}
+      },
+      "behavior": "xFrameOptionsAllowAll devuelve 200 con X-Frame-Options: ALLOWALL y sin Content-Security-Policy. El cuerpo sigue siendo el mensaje de página sin protección. El código trata ALLOWALL como permiso explícito para cualquier origen, equivalente a no protección.",
+      "vulnerable": true,
+      "notes": "@AttackVector describe CLICKJACKING_X_FRAME_OPTIONS_ALLOWALL y el payload de propiedades es un iframe sencillo. ALLOWALL no es el valor estándar habitual de X-Frame-Options; por ello la evidencia reproducible es la cabecera que emite este commit y la interpretación final debe comprobarse en el navegador objetivo, no inferirse de un 200."
+    },
+    {
+      "route": "/VulnerableApp/ClickjackingVulnerability/LEVEL_3",
+      "method": "GET",
+      "parameters": {
+        "query": {},
+        "path": {},
+        "body": {}
+      },
+      "behavior": "xFrameOptionsSameOrigin devuelve 200 con X-Frame-Options: SAMEORIGIN y sin CSP. Un navegador debe impedir un ancestro de otro origen, pero permite el framing del mismo origen; la propia UI carga la URL desde /VulnerableApp y por eso el nivel ilustra esa limitación.",
+      "vulnerable": true,
+      "notes": "@AttackVector describe CLICKJACKING_X_FRAME_OPTIONS_SAMEORIGIN. El test de la familia agrupa el nivel 3 entre los vulnerables porque el requisito del laboratorio considera insuficiente SAMEORIGIN cuando un atacante puede operar en el mismo origen. La cabecera por sí sola no demuestra que exista un atacante same-origin ni que se haya ejecutado una acción."
+    },
+    {
+      "route": "/VulnerableApp/ClickjackingVulnerability/LEVEL_4",
+      "method": "GET",
+      "parameters": {
+        "query": {},
+        "path": {},
+        "body": {}
+      },
+      "behavior": "xFrameOptionsDeny devuelve 200 con X-Frame-Options: DENY y sin CSP. El cuerpo cambia a {\"content\":\"Page loaded with framing protection header set.\",\"isValid\":true}. La plantilla LEVEL_1 informa que el navegador debe rechazar la carga en cualquier iframe.",
+      "vulnerable": false,
+      "notes": "La anotación de ruta usa variant=Variant.SECURE y htmlTemplate=LEVEL_1/ClickjackingVulnerability. En la implementación no hay @AttackVector ni @ChallengeCard para este nivel, pero sí existe la ruta y el test exige DENY. Es un control positivo de cabecera, no una garantía universal frente a navegadores o proxies mal configurados."
+    },
+    {
+      "route": "/VulnerableApp/ClickjackingVulnerability/LEVEL_5",
+      "method": "GET",
+      "parameters": {
+        "query": {},
+        "path": {},
+        "body": {}
+      },
+      "behavior": "cspFrameAncestorsNone devuelve 200 con Content-Security-Policy: frame-ancestors 'none' y sin X-Frame-Options. El cuerpo es el mensaje de protección activa. La plantilla LEVEL_1 presenta frame-ancestors 'none' como la defensa moderna contra todo framing.",
+      "vulnerable": false,
+      "notes": "La anotación de ruta usa variant=Variant.SECURE y htmlTemplate=LEVEL_1/ClickjackingVulnerability. El test exige exactamente el directorio frame-ancestors 'none'. No se debe concluir a partir de un 200 que el iframe cargó: la comprobación correcta es la política de respuesta y, como confirmación separada, el comportamiento de un navegador."
+    },
+    {
+      "route": "/VulnerableApp/ClickjackingVulnerability/LEVEL_6",
+      "method": "GET",
+      "parameters": {
+        "query": {},
+        "path": {},
+        "body": {}
+      },
+      "behavior": "overlayAttackNoProtection devuelve 200 sin X-Frame-Options ni CSP y usa la plantilla LEVEL_4. Esa plantilla muestra una falsa caja de premio y un iframe víctima casi transparente. El CSS deja pointer-events:none en el iframe y pointer-events:all en la capa falsa; el JavaScript del overlay dispara un GET Ajax a la misma URL cuando se pulsa la capa falsa. El endpoint no recibe parámetros y solo devuelve el mensaje didáctico estático.",
+      "vulnerable": true,
+      "notes": "@AttackVector describe CLICKJACKING_OVERLAY_NO_PROTECTION. La demostración representa el impacto de un overlay, pero el código observado no hace que el iframe reciba el clic: la capa falsa captura el evento y llama directamente a doGetAjaxCall. Por eso un curl puede verificar la falta de cabeceras, no una acción de usuario ni una sesión autenticada."
+    },
+    {
+      "route": "/VulnerableApp/ClickjackingVulnerability/LEVEL_7",
+      "method": "GET",
+      "parameters": {
+        "query": {},
+        "path": {},
+        "body": {}
+      },
+      "behavior": "overlayAttackSameOrigin devuelve 200 con X-Frame-Options: SAMEORIGIN y sin CSP, usa la misma plantilla LEVEL_4 y mantiene el overlay. El código lo presenta como el caso en que SAMEORIGIN bloquea framing cross-origin pero no evita un atacante del mismo origen.",
+      "vulnerable": true,
+      "notes": "@AttackVector describe CLICKJACKING_OVERLAY_SAMEORIGIN. Es el control contrastante de LEVEL_6 para mostrar que añadir SAMEORIGIN no resuelve el supuesto same-origin. La evidencia curl es únicamente la cabecera; la maqueta visual y su Ajax GET no prueban por sí mismos que se haya ejecutado una operación sensible real."
+    }
+  ],
+  "exercises": [
+    {
+      "title": "Nivel 1: detectar ausencia de protección de framing",
+      "route": "/VulnerableApp/ClickjackingVulnerability/LEVEL_1",
+      "method": "GET",
+      "params": {},
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": {
+        "status": 200,
+        "headers": {
+          "X-Frame-Options": "absent",
+          "Content-Security-Policy": "absent"
+        },
+        "json": {
+          "content": "Page loaded without framing protection. This page can be embedded in an iframe.",
+          "isValid": true
+        }
+      },
+      "check": {
+        "kind": "manual",
+        "value": "En la salida de curl, confirmar que no aparece X-Frame-Options ni Content-Security-Policy. Esta comprobación de ausencia no demuestra que todo navegador vaya a permitir un iframe en todos los contextos."
+      },
+      "explanation": "Es el caso base: no existe una política HTTP que restrinja los ancestros del documento. El JSON 200 solo confirma la ruta y su contrato; la propiedad relevante es la ausencia de ambas cabeceras.",
+      "mitigation": "Emitir Content-Security-Policy: frame-ancestors 'none' si no se necesita framing, o una lista explícita de orígenes permitidos. Como compatibilidad heredada puede añadirse X-Frame-Options: DENY o SAMEORIGIN según el requisito, sin usar ALLOWALL.",
+      "steps": [
+        "Desde Kali, solicitar solo el endpoint del laboratorio: curl -i --get http://target:9090/VulnerableApp/ClickjackingVulnerability/LEVEL_1",
+        "Registrar el bloque de cabeceras y el JSON; no enviar parámetros ni credenciales porque el endpoint no los declara.",
+        "Usar LEVEL_4 y LEVEL_5 como controles positivos de comparación; no asignar hallazgo por el código de estado 200."
+      ],
+      "hints": [
+        "La prueba específica exige ausencia de X-Frame-Options y Content-Security-Policy.",
+        "La ruta es GET y no tiene parámetros; la cabecera Content-Type de la petición no cambia el comportamiento del método.",
+        "Si se necesita evidencia de ejecución en navegador, debe observarse por separado la política de framing; el reflejo o la carga de un recurso no equivalen a ejecución."
+      ]
+    },
+    {
+      "title": "Nivel 2: observar X-Frame-Options ALLOWALL",
+      "route": "/VulnerableApp/ClickjackingVulnerability/LEVEL_2",
+      "method": "GET",
+      "params": {},
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": {
+        "status": 200,
+        "headers": {
+          "X-Frame-Options": "ALLOWALL",
+          "Content-Security-Policy": "absent"
+        },
+        "json": {
+          "content": "Page loaded without framing protection. This page can be embedded in an iframe.",
+          "isValid": true
+        }
+      },
+      "check": {
+        "kind": "header",
+        "header": "X-Frame-Options",
+        "value": "ALLOWALL"
+      },
+      "explanation": "El servidor agrega literalmente ALLOWALL. El código del laboratorio lo considera permiso para cualquier origen y el test lo contrasta con la ausencia de DENY; no hay que convertir ese texto en una afirmación de que todos los navegadores implementan ese token de forma idéntica.",
+      "mitigation": "Sustituir ALLOWALL por X-Frame-Options: DENY/SAMEORIGIN o, preferentemente, una CSP frame-ancestors con los orígenes estrictamente necesarios. Verificar que un proxy no reescriba o elimine la cabecera.",
+      "steps": [
+        "Solicitar el nivel: curl -i --get http://target:9090/VulnerableApp/ClickjackingVulnerability/LEVEL_2",
+        "Comprobar que la cabecera X-Frame-Options tiene el valor ALLOWALL y que la respuesta conserva el JSON estático.",
+        "Comparar sin cambiar la petición con LEVEL_4: curl -i --get http://target:9090/VulnerableApp/ClickjackingVulnerability/LEVEL_4",
+        "Tratar la comparación de cabeceras como evidencia del control; no concluir ejecución de clickjacking por un 200."
+      ],
+      "hints": [
+        "La comprobación machine-readable recomendada es una coincidencia exacta de la cabecera.",
+        "ALLOWALL es una decisión insegura en este laboratorio y no una entrada controlada por el usuario.",
+        "El payload original es un iframe, pero curl no renderiza HTML."
+      ]
+    },
+    {
+      "title": "Nivel 3: distinguir SAMEORIGIN de una denegación total",
+      "route": "/VulnerableApp/ClickjackingVulnerability/LEVEL_3",
+      "method": "GET",
+      "params": {},
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": {
+        "status": 200,
+        "headers": {
+          "X-Frame-Options": "SAMEORIGIN",
+          "Content-Security-Policy": "absent"
+        },
+        "json": {
+          "content": "Page loaded without framing protection. This page can be embedded in an iframe.",
+          "isValid": true
+        }
+      },
+      "check": {
+        "kind": "header",
+        "header": "X-Frame-Options",
+        "value": "SAMEORIGIN"
+      },
+      "explanation": "SAMEORIGIN es una defensa parcial: el navegador puede bloquear a un ancestro de otro origen, pero el propio sitio puede enmarcar la página. El test del repositorio clasifica este nivel como vulnerable porque el escenario de aprendizaje incluye un atacante del mismo origen.",
+      "mitigation": "Si ninguna página debe incrustar el endpoint, usar DENY o CSP frame-ancestors 'none'. Si el framing same-origin es un requisito real, combinar una política explícita de ancestros con controles de autorización, CSRF y confirmaciones para operaciones con efectos.",
+      "steps": [
+        "Solicitar el nivel: curl -i --get http://target:9090/VulnerableApp/ClickjackingVulnerability/LEVEL_3",
+        "Confirmar X-Frame-Options: SAMEORIGIN y ausencia de CSP en la salida.",
+        "Comparar con el control positivo total: curl -i --get http://target:9090/VulnerableApp/ClickjackingVulnerability/LEVEL_4",
+        "Documentar que la diferencia observada es la política de ancestros, no el estado 200 ni el campo isValid."
+      ],
+      "hints": [
+        "SAMEORIGIN no significa DENY.",
+        "El iframe de la plantilla LEVEL_1 apunta a la ruta del mismo despliegue /VulnerableApp.",
+        "Una comprobación de cabecera no sustituye una prueba de navegador desde el origen que se quiera evaluar."
+      ]
+    },
+    {
+      "title": "Nivel 4: control positivo con X-Frame-Options DENY",
+      "route": "/VulnerableApp/ClickjackingVulnerability/LEVEL_4",
+      "method": "GET",
+      "params": {},
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": {
+        "status": 200,
+        "headers": {
+          "X-Frame-Options": "DENY",
+          "Content-Security-Policy": "absent"
+        },
+        "json": {
+          "content": "Page loaded with framing protection header set.",
+          "isValid": true
+        }
+      },
+      "check": {
+        "kind": "header",
+        "header": "X-Frame-Options",
+        "value": "DENY"
+      },
+      "explanation": "Es un control positivo de la defensa heredada X-Frame-Options. El endpoint puede responder 200 a una petición HTTP directa aunque un navegador rechace la misma URL como contenido de un iframe; por eso el código de estado no debe usarse como prueba de que el framing sea posible.",
+      "mitigation": "Mantener DENY cuando el recurso nunca necesita framing y añadir CSP frame-ancestors 'none' o una allowlist explícita como política moderna, validando la política efectiva después de proxies y CDN.",
+      "steps": [
+        "Solicitar el control positivo: curl -i --get http://target:9090/VulnerableApp/ClickjackingVulnerability/LEVEL_4",
+        "Confirmar X-Frame-Options: DENY y el cuerpo protegido.",
+        "Contrastar con el nivel vulnerable base: curl -i --get http://target:9090/VulnerableApp/ClickjackingVulnerability/LEVEL_1",
+        "No atribuir el resultado a un clic: la evidencia reproducible de este ejercicio es la cabecera DENY."
+      ],
+      "hints": [
+        "La anotación del nivel marca Variant.SECURE.",
+        "DENY impide framing independientemente del origen según la descripción del código.",
+        "El campo isValid permanece en true también en este nivel y no es un score."
+      ]
+    },
+    {
+      "title": "Nivel 5: control positivo con CSP frame-ancestors none",
+      "route": "/VulnerableApp/ClickjackingVulnerability/LEVEL_5",
+      "method": "GET",
+      "params": {},
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": {
+        "status": 200,
+        "headers": {
+          "X-Frame-Options": "absent",
+          "Content-Security-Policy": "frame-ancestors 'none'"
+        },
+        "json": {
+          "content": "Page loaded with framing protection header set.",
+          "isValid": true
+        }
+      },
+      "check": {
+        "kind": "header",
+        "header": "Content-Security-Policy",
+        "value": "frame-ancestors 'none'"
+      },
+      "explanation": "Es el control positivo de la defensa CSP que el código describe como moderna. La petición directa sigue siendo 200; la decisión de permitir un documento como frame se toma al intentar cargarlo en un navegador y se debe verificar separadamente.",
+      "mitigation": "Conservar frame-ancestors 'none' si no hay un caso de framing. Si existe uno, reemplazar none por una allowlist mínima de orígenes autorizados y revisar que no haya otra CSP posterior que modifique la política efectiva.",
+      "steps": [
+        "Solicitar el control CSP: curl -i --get http://target:9090/VulnerableApp/ClickjackingVulnerability/LEVEL_5",
+        "Confirmar literalmente Content-Security-Policy: frame-ancestors 'none' y ausencia de X-Frame-Options.",
+        "Comparar con LEVEL_1: curl -i --get http://target:9090/VulnerableApp/ClickjackingVulnerability/LEVEL_1",
+        "Conservar la respuesta de curl como evidencia de configuración; no usar un 200 ni un reflejo visual como prueba de framing."
+      ],
+      "hints": [
+        "El valor esperado incluye comillas simples alrededor de none.",
+        "La prueba unitaria específica busca frame-ancestors 'none'.",
+        "CSP y X-Frame-Options son cabeceras distintas; la ausencia de XFO no invalida este control CSP."
+      ]
+    },
+    {
+      "title": "Nivel 6: reconocer el demo de overlay sin atribuir una acción por clic",
+      "route": "/VulnerableApp/ClickjackingVulnerability/LEVEL_6",
+      "method": "GET",
+      "params": {},
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": {
+        "status": 200,
+        "headers": {
+          "X-Frame-Options": "absent",
+          "Content-Security-Policy": "absent"
+        },
+        "json": {
+          "content": "Page loaded without framing protection. This page can be embedded in an iframe.",
+          "isValid": true
+        }
+      },
+      "check": {
+        "kind": "manual",
+        "value": "Confirmar en la salida de curl la ausencia de X-Frame-Options y Content-Security-Policy; tratar la interfaz de overlay solo como demostración visual y no como prueba automática de una operación sensible."
+      },
+      "explanation": "LEVEL_4/ClickjackingVulnerability.html construye una caja falsa de premio sobre un iframe víctima. Sin embargo, el CSS hace que el iframe no reciba eventos de puntero y el JavaScript ejecuta doGetAjaxCall sobre apiUrl desde el overlay. El ejercicio enseña el riesgo conceptual sin enviar credenciales ni tocar otro servicio.",
+      "mitigation": "Añadir DENY o CSP frame-ancestors 'none'/allowlist, y proteger cualquier acción real con POST, CSRF, SameSite y autorización del lado servidor. Un encabezado de framing no reemplaza esos controles de una operación con efectos.",
+      "steps": [
+        "Solicitar el endpoint sin parámetros: curl -i --get http://target:9090/VulnerableApp/ClickjackingVulnerability/LEVEL_6",
+        "Registrar que no aparecen X-Frame-Options ni Content-Security-Policy y que el cuerpo es el mensaje estático del laboratorio.",
+        "Comparar las cabeceras con el control seguro: curl -i --get http://target:9090/VulnerableApp/ClickjackingVulnerability/LEVEL_4",
+        "No atribuir puntaje ni hallazgo solo por pulsar la caja de premio: curl no emula un navegador y el código observado dispara un GET didáctico a la misma ruta."
+      ],
+      "hints": [
+        "La ruta usa htmlTemplate=LEVEL_4/ClickjackingVulnerability, aunque el número del nivel es LEVEL_6.",
+        "El receptor inocuo y Mailpit no son necesarios: esta familia no acepta una URL de salida ni envía correo.",
+        "Para un resultado automatizable, verifica cabeceras; reserva la evaluación de la UI para una comprobación manual explícita."
+      ]
+    },
+    {
+      "title": "Nivel 7: SAMEORIGIN no cubre el supuesto overlay same-origin",
+      "route": "/VulnerableApp/ClickjackingVulnerability/LEVEL_7",
+      "method": "GET",
+      "params": {},
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": {
+        "status": 200,
+        "headers": {
+          "X-Frame-Options": "SAMEORIGIN",
+          "Content-Security-Policy": "absent"
+        },
+        "json": {
+          "content": "Page loaded without framing protection. This page can be embedded in an iframe.",
+          "isValid": true
+        }
+      },
+      "check": {
+        "kind": "header",
+        "header": "X-Frame-Options",
+        "value": "SAMEORIGIN"
+      },
+      "explanation": "El nivel conserva SAMEORIGIN y no añade CSP, por lo que el código lo contrasta con LEVEL_6: el framing cross-origin queda limitado, pero el escenario same-origin que enseña el laboratorio no queda denegado. El endpoint no modela una transacción real ni lee secretos.",
+      "mitigation": "Si la política requerida es ningún framing, cambiar a DENY y/o CSP frame-ancestors 'none'. Si se permite same-origin de forma deliberada, reducir las páginas con privilegios en ese origen y usar controles de autorización y CSRF para cualquier estado mutable.",
+      "steps": [
+        "Solicitar el endpoint: curl -i --get http://target:9090/VulnerableApp/ClickjackingVulnerability/LEVEL_7",
+        "Confirmar X-Frame-Options: SAMEORIGIN, ausencia de CSP y el mensaje de respuesta sin protección.",
+        "Contrastar con el control positivo CSP: curl -i --get http://target:9090/VulnerableApp/ClickjackingVulnerability/LEVEL_5",
+        "No tratar un clic en la UI como verificación suficiente; el criterio reproducible es la política HTTP y la diferencia entre same-origin y deny-all."
+      ],
+      "hints": [
+        "La descripción y el test del nivel identifican explícitamente SAMEORIGIN como insuficiente para el supuesto same-origin.",
+        "El payload original usa un iframe con opacidad baja, pero no es necesario reproducirlo para comprobar la cabecera.",
+        "No confundir la respuesta 200 con la posibilidad de que un navegador acepte el recurso como ancestro."
+      ]
+    }
+  ],
+  "limitations": [
+    "El análisis estático corresponde al commit 4df80bbcd42682ecf26334f12c568e0f4a326c1a. No se afirma que los ejercicios se hayan ejecutado con éxito contra target; los comandos son procedimientos sugeridos y seguros.",
+    "El prefijo configurado en application.properties es /VulnerableApp. Las anotaciones de clase y método forman el nombre y LEVEL_n; el proveedor de endpoints y el controlador central construyen y publicitan las URLs con ese esquema. En una instalación con otro context path, el prefijo efectivo puede cambiar aunque los recursos JavaScript y payloads aquí leídos contienen /VulnerableApp/ de forma literal.",
+    "Todos los niveles de esta familia son GET y no declaran parámetros de query, path ni body. No se usan POST, formularios, credenciales, cookies, archivos, correo, receptor externo ni URLs suministradas por el usuario.",
+    "curl puede confirmar status, JSON y cabeceras, pero no aplica las decisiones de framing de un navegador, no crea un contexto de ancestro y no demuestra que un iframe se haya renderizado o bloqueado. Un 200 tampoco demuestra clickjacking.",
+    "El significado práctico de ALLOWALL puede variar porque no es el valor estándar común de X-Frame-Options. La afirmación segura y reproducible es que este commit emite esa cadena y la clasifica como vulnerable; la interoperabilidad debe comprobarse con el navegador que se evalúe.",
+    "La plantilla LEVEL_1 intenta leer contentDocument y muestra mensajes de carga/bloqueo, pero esa heurística depende del origen y de la política del navegador. La plantilla LEVEL_4 usa un iframe con pointer-events:none y una capa falsa que ejecuta un GET Ajax propio; por tanto, la demo no constituye evidencia de que el clic haya atravesado el iframe ni de que se haya usado una sesión autenticada.",
+    "La respuesta usa isValid=true tanto en los niveles inseguros como en los seguros. Ese campo no es un resultado de explotación ni debe emplearse para puntuar.",
+    "Los niveles 4 y 5 tienen rutas y Variant.SECURE, pero no llevan @AttackVector ni @ChallengeCard en la clase; por eso la metadata de vectores/desafíos puede no representarlos igual que los niveles 1–3 y 6–7, aunque las rutas sí existen y las pruebas unitarias verifican sus cabeceras.",
+    "Un verificador honesto debe distinguir presencia de un texto o una cabecera de ejecución: reflejo no prueba ejecución XSS, un 200 no prueba IDOR y ningún click debe recibir puntaje por sí solo. Para esta familia, la evidencia automatizable propuesta se limita a las cabeceras esperadas, el JSON estático y una revisión manual separada del comportamiento del navegador."
+  ]
+}

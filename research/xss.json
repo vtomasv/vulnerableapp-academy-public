@@ -1,0 +1,434 @@
+{
+  "id": "xss",
+  "title": "Familia XSS: rutas, niveles originales y ejercicios seguros reproducibles",
+  "concept": "Revisión exclusiva de la familia XSS en el commit 4df80bbcd42682ecf26334f12c568e0f4a326c1a. La familia contiene XSS reflejado en el atributo src de img, XSS reflejado por inyección de etiquetas HTML y XSS persistente almacenado en POSTS. Las clases llevan @VulnerableAppRestController(value=nombre) y cada método lleva @VulnerableAppRequestMapping(value=LEVEL_n); el controlador central expone por tanto /VulnerableApp/{nombre}/{LEVEL_n}. Salvo indicación contraria, todos los métodos tienen requestMethod GET por defecto y reciben parámetros de consulta. La clasificación vulnerable indica lo que se deduce del flujo de código y de variant=UNSECURE/SECURE; no es una afirmación de que una instancia desplegada haya sido probada. Los ejercicios usan únicamente marcadores benignos que escriben una propiedad data-va-lab en document.body: no leen cookies, no exfiltran datos, no contactan servicios externos y no requieren hacer clic. Un cuerpo de respuesta que refleja una cadena demuestra reflexión o almacenamiento, no ejecución XSS; la ejecución solo puede verificarse en un navegador de laboratorio controlado y con un indicador DOM observable.",
+  "source_files": [
+    "src/main/java/org/sasanlabs/service/vulnerability/xss/reflected/XSSInImgTagAttribute.java",
+    "src/main/java/org/sasanlabs/service/vulnerability/xss/reflected/XSSWithHtmlTagInjection.java",
+    "src/main/java/org/sasanlabs/service/vulnerability/xss/persistent/PersistentXSSInHTMLTagVulnerability.java",
+    "src/main/java/org/sasanlabs/service/vulnerability/xss/persistent/Post.java",
+    "src/main/java/org/sasanlabs/service/vulnerability/xss/persistent/PostRepository.java",
+    "src/test/java/org/sasanlabs/service/vulnerability/xss/reflected/XSSInImgTagAttributeTest.java",
+    "src/test/java/org/sasanlabs/service/vulnerability/xss/reflected/PersistentXSSInHTMLTagVulnerabilityTest.java",
+    "src/main/resources/scripts/xss/PersistentXSS/db/schema.sql",
+    "src/main/resources/static/templates/XSSInImgTagAttribute/LEVEL_1/XSS.html",
+    "src/main/resources/static/templates/XSSInImgTagAttribute/LEVEL_1/XSS.js",
+    "src/main/resources/static/templates/XSSInImgTagAttribute/LEVEL_1/XSS.css",
+    "src/main/resources/static/templates/XSSWithHtmlTagInjection/LEVEL_1/XSS.html",
+    "src/main/resources/static/templates/XSSWithHtmlTagInjection/LEVEL_1/XSS.js",
+    "src/main/resources/static/templates/XSSWithHtmlTagInjection/LEVEL_1/XSS.css",
+    "src/main/resources/static/templates/PersistentXSSInHTMLTagVulnerability/LEVEL_1/PersistentXSS.html",
+    "src/main/resources/static/templates/PersistentXSSInHTMLTagVulnerability/LEVEL_1/PersistentXSS.js",
+    "src/main/resources/static/templates/PersistentXSSInHTMLTagVulnerability/LEVEL_1/PersistentXSS.css",
+    "src/main/resources/static/templates/XSSWithNullBytesImgTagAttribute/LEVEL_1/XSS.html",
+    "src/main/resources/static/templates/XSSWithNullBytesImgTagAttribute/LEVEL_1/XSS.js",
+    "src/main/resources/static/templates/XSSWithNullBytesImgTagAttribute/LEVEL_1/XSS.css",
+    "src/main/resources/i18n/messages.properties",
+    "src/main/java/org/sasanlabs/internal/utility/annotations/VulnerableAppRestController.java",
+    "src/main/java/org/sasanlabs/internal/utility/annotations/VulnerableAppRequestMapping.java",
+    "src/main/java/org/sasanlabs/service/impl/EndPointsInformationProvider.java",
+    "src/main/java/org/sasanlabs/internal/utility/LevelConstants.java",
+    "src/main/java/org/sasanlabs/vulnerability/utils/Constants.java"
+  ],
+  "levels": [
+    {
+      "route": "/VulnerableApp/XSSInImgTagAttribute/LEVEL_1",
+      "method": "GET",
+      "parameters": {"src": "@RequestParam(\"src\") String imageLocation"},
+      "behavior": "Construye <img src=%s width=\"400\" height=\"300\"/> e interpola src sin comillas, escape ni whitelist.",
+      "vulnerable": true,
+      "notes": "getVulnerablePayloadLevel1; @AttackVector XSS_DIRECT_INPUT_SRC_ATTRIBUTE_IMG_TAG. Un input puede cerrar o añadir atributos al contexto no entrecomillado. La plantilla JS usa src y escribe la respuesta con innerHTML."
+    },
+    {
+      "route": "/VulnerableApp/XSSInImgTagAttribute/LEVEL_2",
+      "method": "GET",
+      "parameters": {"src": "@RequestParam(\"src\") String imageLocation"},
+      "behavior": "Construye <img src=\"%s\" width=\"400\" height=\"300\"/>: añade comillas, pero interpola src sin escape.",
+      "vulnerable": true,
+      "notes": "getVulnerablePayloadLevel2; @AttackVector XSS_QUOTES_ON_INPUT_SRC_ATTRIBUTE_IMG_TAG. Las comillas delimitadoras no sustituyen al escape contextual."
+    },
+    {
+      "route": "/VulnerableApp/XSSInImgTagAttribute/LEVEL_3",
+      "method": "GET",
+      "parameters": {"src": "@RequestParam(\"src\") String imageLocation"},
+      "behavior": "Aplica StringEscapeUtils.escapeHtml4 al valor, pero lo coloca en un atributo src sin comillas.",
+      "vulnerable": true,
+      "notes": "getVulnerablePayloadLevel3; @AttackVector XSS_HTML_ESCAPE_ON_DIRECT_INPUT_SRC_ATTRIBUTE_IMG_TAG. El propio comentario del código advierte que el escape no evita todos los manejos de eventos en este contexto; el escape HTML genérico no es una validación de URL ni un sustituto de un atributo correctamente delimitado."
+    },
+    {
+      "route": "/VulnerableApp/XSSInImgTagAttribute/LEVEL_4",
+      "method": "GET",
+      "parameters": {"src": "@RequestParam(\"src\") String imageLocation"},
+      "behavior": "Solo agrega la respuesta si no se cumplen simultáneamente contains(\"(\") y contains(\")\"); después aplica escapeHtml4 y la inserta en src sin comillas.",
+      "vulnerable": true,
+      "notes": "getVulnerablePayloadLevel4; @AttackVector XSS_HTML_ESCAPE_ON_DIRECT_INPUT_AND_REMOVAL_OF_VALUES_WITH_PARENTHESIS_SRC_ATTRIBUTE_IMG_TAG. La condición usa OR negado, por lo que no bloquea entradas que contengan solo una de las dos cadenas; el comentario del código menciona manejadores con backticks."
+    },
+    {
+      "route": "/VulnerableApp/XSSInImgTagAttribute/LEVEL_5",
+      "method": "GET",
+      "parameters": {"src": "@RequestParam(\"src\") String imageLocation"},
+      "behavior": "Si hay NUL, valida solo el prefijo frente a la whitelist exacta de /VulnerableApp/images/OWASP.png o ZAP.png, pero construye la respuesta con el valor completo escapado.",
+      "vulnerable": true,
+      "notes": "getVulnerablePayloadLevel5; @AttackVector XSS_HTML_ESCAPE_PLUS_FILTERING_ON_INPUT_SRC_ATTRIBUTE_IMG_TAG_BUT_NULL_BYTE_VULNERABLE. La diferencia entre el valor validado y el valor renderizado es el caso de entrenamiento; el transporte de un NUL real debe comprobarse solo en el laboratorio y no se representa como un NUL literal en un archivo JSON."
+    },
+    {
+      "route": "/VulnerableApp/XSSInImgTagAttribute/LEVEL_6",
+      "method": "GET",
+      "parameters": {"src": "@RequestParam(\"src\") String imageLocation"},
+      "behavior": "Solo permite exactamente las dos rutas de imagen de allowedValues; inserta el valor permitido en un atributo src entrecomillado y aplica escapeHtml4; los demás valores devuelven 400.",
+      "vulnerable": false,
+      "notes": "getVulnerablePayloadLevel6; variant=SECURE y @AttackVector XSS_QUOTES_AND_WITH_HTML_ESCAPE_ON_INPUT_SRC_ATTRIBUTE_IMG_TAG. La respuesta 200 por sí sola no es prueba de seguridad, pero aquí el flujo combina whitelist, delimitación y escape."
+    },
+    {
+      "route": "/VulnerableApp/XSSInImgTagAttribute/LEVEL_7",
+      "method": "GET",
+      "parameters": {"src": "@RequestParam(\"src\") String imageLocation"},
+      "behavior": "Permite una ruta que empiece por /VulnerableApp/images/ y termine en .png, o una ruta de allowedValues; la inserta entre comillas y usa HtmlUtils.htmlEscapeHex; si no valida devuelve 400.",
+      "vulnerable": false,
+      "notes": "getVulnerablePayloadLevelSecure; variant=SECURE y sin @AttackVector en el método. La whitelist de prefijo/extensión no prueba que el recurso exista, pero la salida usa comillas y escape hexadecimal."
+    },
+    {
+      "route": "/VulnerableApp/XSSWithHtmlTagInjection/LEVEL_1",
+      "method": "GET",
+      "parameters": {"value": "La plantilla usa value; el método recibe @RequestParam Map<String,String> queryParams y procesa cualquier clave"},
+      "behavior": "Por cada parámetro de consulta produce <div>%s<div> con el valor sin escape.",
+      "vulnerable": true,
+      "notes": "getVulnerablePayloadLevel1; @AttackVector XSS_HTML_TAG_INJECTION_LEVEL1_DESCRIPTION. La etiqueta de cierre escrita por el código es <div> y no </div>, pero el riesgo relevante es la inserción de HTML no confiable; el JS de la plantilla coloca la respuesta en innerHTML."
+    },
+    {
+      "route": "/VulnerableApp/XSSWithHtmlTagInjection/LEVEL_2",
+      "method": "GET",
+      "parameters": {"value": "La plantilla usa value; el controlador itera todos los parámetros de consulta"},
+      "behavior": "Solo agrega un valor si no coincide con Pattern.compile(\"[<]+[(script)(img)(a)]+.*[>]+\"); la cadena que pasa se inserta sin escape en div.",
+      "vulnerable": true,
+      "notes": "getVulnerablePayloadLevel2; @AttackVector XSS_HTML_TAG_INJECTION_LEVEL2_DESCRIPTION. El patrón usa clases de caracteres y una lista negativa frágil; permite otras etiquetas y atributos de evento."
+    },
+    {
+      "route": "/VulnerableApp/XSSWithHtmlTagInjection/LEVEL_3",
+      "method": "GET",
+      "parameters": {"value": "La plantilla usa value; el controlador itera todos los parámetros de consulta"},
+      "behavior": "Como LEVEL_2, además descarta valores que contengan literalmente alert o javascript; la comparación es sensible a mayúsculas y el valor permitido se inserta sin escape.",
+      "vulnerable": true,
+      "notes": "getVulnerablePayloadLevel3; @AttackVector XSS_HTML_TAG_INJECTION_LEVEL3_DESCRIPTION. Es un blacklist parcial: no constituye codificación contextual ni una allowlist de etiquetas/atributos."
+    },
+    {
+      "route": "/VulnerableApp/XSSWithHtmlTagInjection/LEVEL_4",
+      "method": "GET",
+      "parameters": {"value": "La plantilla usa value; el controlador itera todos los parámetros de consulta"},
+      "behavior": "Envuelve cada valor en <div>...</div> y aplica StringEscapeUtils.escapeHtml4 antes de insertarlo.",
+      "vulnerable": false,
+      "notes": "getSecurePayloadLevel4; variant=SECURE y @AttackVector XSS_SECURE_HTML_ESCAPE_DIV_TAG. La respuesta esperada es texto HTML escapado, no un nodo SVG/script ejecutable."
+    },
+    {
+      "route": "/VulnerableApp/XSSWithHtmlTagInjection/LEVEL_5",
+      "method": "GET",
+      "parameters": {"value": "La plantilla usa value; el controlador itera todos los parámetros de consulta"},
+      "behavior": "Envuelve cada valor en div y aplica HtmlUtils.htmlEscapeHex antes de renderizarlo.",
+      "vulnerable": false,
+      "notes": "getSecurePayloadLevel5; variant=SECURE y @AttackVector XSS_SECURE_HTML_ESCAPE_HEX_DIV_TAG. La codificación hexadecimal debe contrastarse con la respuesta y no con un click."
+    },
+    {
+      "route": "/VulnerableApp/PersistentXSSInHTMLTagVulnerability/LEVEL_1",
+      "method": "GET",
+      "parameters": {"comment": "@RequestParam Map<String,String>; si existe, se guarda en POSTS con levelIdentifier=LEVEL_1"},
+      "behavior": "Guarda comment sin transformar y en cada lectura concatena cada contenido como <div id=\"comments\">contenido</div>.",
+      "vulnerable": true,
+      "notes": "getVulnerablePayloadLevel1; @AttackVector PERSISTENT_XSS_HTML_TAG_URL_PARAM_DIRECTLY_INJECTED_IN_DIV_TAG. PostRepository separa los datos por nivel, pero no neutraliza el HTML. La segunda petición sin comment vuelve a leer lo almacenado."
+    },
+    {
+      "route": "/VulnerableApp/PersistentXSSInHTMLTagVulnerability/LEVEL_2",
+      "method": "GET",
+      "parameters": {"comment": "@RequestParam Map<String,String>; se guarda con levelIdentifier=LEVEL_2"},
+      "behavior": "Guarda el comentario original; al renderizar reemplaza coincidencias de <img y <input, sensibles a mayúsculas, pero deja el resto del HTML sin escape.",
+      "vulnerable": true,
+      "notes": "getVulnerablePayloadLevel2; @AttackVector PERSISTENT_XSS_HTML_TAG_URL_PARAM_DIRECTLY_INJECTED_IN_DIV_TAG_REPLACING_IMG_AND_INPUT_TAG. El filtro no cubre SVG, object, atributos o texto HTML alternativo."
+    },
+    {
+      "route": "/VulnerableApp/PersistentXSSInHTMLTagVulnerability/LEVEL_3",
+      "method": "GET",
+      "parameters": {"comment": "@RequestParam Map<String,String>; se guarda con levelIdentifier=LEVEL_3"},
+      "behavior": "Al renderizar usa IMG_INPUT_TAG_CASE_INSENSITIVE_PATTERN, que reemplaza de forma insensible a mayúsculas <img y <script; el resto se entrega sin escape.",
+      "vulnerable": true,
+      "notes": "getVulnerablePayloadLevel3; @AttackVector PERSISTENT_XSS_HTML_TAG_URL_PARAM_DIRECTLY_INJECTED_IN_DIV_TAG_REPLACING_IMG_AND_INPUT_TAG_CASE_INSENSITIVE. El patrón implementado contiene <script, no <input como su descripción textual sugiere; aun así no es una sanitización HTML completa."
+    },
+    {
+      "route": "/VulnerableApp/PersistentXSSInHTMLTagVulnerability/LEVEL_4",
+      "method": "GET",
+      "parameters": {"comment": "@RequestParam Map<String,String>; se guarda con levelIdentifier=LEVEL_4"},
+      "behavior": "El comprobador examina solo el prefijo anterior al primer NUL para decidir si debe sustituir <img/<input; si no encuentra esas etiquetas antes del NUL devuelve el comentario completo sin filtrar.",
+      "vulnerable": true,
+      "notes": "getVulnerablePayloadLevel4; @AttackVector ...IF_TAGS_ARE_PRESENT_BEFORE_NULL_BYTE. El valor se almacena intacto. No enviar NUL como carácter literal desde un editor; el ejercicio usa una secuencia %00 en una URL de laboratorio y deja la ejecución para verificación manual."
+    },
+    {
+      "route": "/VulnerableApp/PersistentXSSInHTMLTagVulnerability/LEVEL_5",
+      "method": "GET",
+      "parameters": {"comment": "@RequestParam Map<String,String>; se guarda con levelIdentifier=LEVEL_5"},
+      "behavior": "Igual que LEVEL_4, pero el patrón IMG_INPUT_TAG_CASE_INSENSITIVE_PATTERN se consulta solo en el prefijo anterior al NUL; si no hay coincidencia, el resto se conserva sin escape.",
+      "vulnerable": true,
+      "notes": "getVulnerablePayloadLevel5; @AttackVector ...CASE_INSENSITIVEIF_TAGS_ARE_PRESENT_BEFORE_NULL_BYTE. La etiqueta implementada incluye <script y es sensible a la posición del NUL."
+    },
+    {
+      "route": "/VulnerableApp/PersistentXSSInHTMLTagVulnerability/LEVEL_6",
+      "method": "GET",
+      "parameters": {"comment": "@RequestParam Map<String,String>; se guarda con levelIdentifier=LEVEL_6"},
+      "behavior": "Aplica escapeHtml4 solo al contenido anterior al NUL y concatena el sufijo desde el NUL sin transformar.",
+      "vulnerable": true,
+      "notes": "getVulnerablePayloadLevel6; @AttackVector ...AFTER_HTML_ESCAPING_POST_CONTENT_BEFORE_NULL_BYTE. La prueba incluida contrasta HTML escapado en un caso sin NUL, pero el flujo con sufijo sin escapar es la debilidad documentada."
+    },
+    {
+      "route": "/VulnerableApp/PersistentXSSInHTMLTagVulnerability/LEVEL_7",
+      "method": "GET",
+      "parameters": {"comment": "@RequestParam Map<String,String>; se guarda con levelIdentifier=LEVEL_7"},
+      "behavior": "Guarda el contenido y aplica StringEscapeUtils.escapeHtml4 al contenido completo antes de envolverlo en div.",
+      "vulnerable": false,
+      "notes": "getVulnerablePayloadLevel7; variant=SECURE y @ChallengeCard sin @AttackVector. La mitigación se hace en la salida; el repositorio conserva el texto original."
+    },
+    {
+      "route": "/VulnerableApp/PersistentXSSInHTMLTagVulnerability/LEVEL_8",
+      "method": "GET",
+      "parameters": {"comment": "@RequestParam Map<String,String>; se rechaza antes de guardar si contiene < o >"},
+      "behavior": "Si comment contiene < o > devuelve 400 y no llama a postRepository.save; si no, persiste y lo coloca sin escape en div.",
+      "vulnerable": false,
+      "notes": "getSecurePayloadLevel8; variant=SECURE y @ChallengeCard sin @AttackVector. Es una validación de entrada mínima para este contexto, no una política universal para todos los contextos HTML; la prueba confirma rechazo de <script>."
+    },
+    {
+      "route": "/VulnerableApp/PersistentXSSInHTMLTagVulnerability/LEVEL_9",
+      "method": "GET",
+      "parameters": {"comment": "@RequestParam Map<String,String>; se guarda con levelIdentifier=LEVEL_9"},
+      "behavior": "Persiste el valor original, pero al renderizar aplica HtmlUtils.htmlEscapeHex al contenido completo.",
+      "vulnerable": false,
+      "notes": "getSecurePayloadLevel9; variant=SECURE y @ChallengeCard sin @AttackVector. La prueba espera entidades hexadecimales como &#x3c; y &#x3e;, por lo que la representación no debe confundirse con una etiqueta ejecutable."
+    }
+  ],
+  "exercises": [
+    {
+      "title": "Reflejado en img sin comillas: marcador DOM benigno",
+      "route": "/VulnerableApp/XSSInImgTagAttribute/LEVEL_1",
+      "method": "GET",
+      "params": {"src": "/VulnerableApp/images/missing.png\" onerror=\"document.body.dataset.vaLab=`VA_XSS_IMG_L1`\""},
+      "headers": {"Accept": "text/html"},
+      "body": null,
+      "content_type": null,
+      "expected": "Según el código, la respuesta contiene un img con src no entrecomillado y el atributo onerror aportado por el laboratorio. Esto es evidencia de reflexión en un contexto HTML; curl no ejecuta el navegador.",
+      "check": {"kind": "manual", "value": "Guardar la respuesta y abrirla únicamente en un navegador de laboratorio aislado; sin hacer clic, comprobar en DevTools que document.body.dataset.vaLab sea VA_XSS_IMG_L1. La comprobación es manual y no debe puntuar un click ni interpretar el 200 como ejecución."},
+      "explanation": "La clase concatena imageLocation dentro de <img src=%s>. El valor benigno fuerza un error de carga local y solo escribe un marcador en el DOM; no lee cookies, no usa red y no envía información a otro host.",
+      "mitigation": "Usar una allowlist de URLs o identificadores de imagen, construir el nodo con APIs DOM seguras cuando corresponda y aplicar codificación contextual de atributo. No aceptar HTML controlado por el usuario en innerHTML.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/XSSInImgTagAttribute/LEVEL_1 --data-urlencode 'src=/VulnerableApp/images/missing.png\" onerror=\"document.body.dataset.vaLab=`VA_XSS_IMG_L1`\"'",
+        "Comparar el cuerpo recibido con el control de una src normal; la respuesta reflejada no demuestra ejecución.",
+        "Para la comprobación de navegador, navegar a la misma URL dentro del laboratorio y observar solo el atributo DOM data-va-lab; no hacer clic ni interactuar para producir un resultado."
+      ],
+      "hints": ["El método no pone comillas alrededor del placeholder %s.", "Use un recurso local inexistente para que el evento sea inocuo y un marcador DOM único."]
+    },
+    {
+      "title": "Control positivo de allowlist en img LEVEL_6",
+      "route": "/VulnerableApp/XSSInImgTagAttribute/LEVEL_6",
+      "method": "GET",
+      "params": {"src": "/VulnerableApp/images/ZAP.png"},
+      "headers": {"Accept": "text/html"},
+      "body": null,
+      "content_type": null,
+      "expected": "Según el código, una de las dos rutas permitidas produce 200 y un img con src entrecomillado y escapado.",
+      "check": {"kind": "contains", "value": "<img src=\"/VulnerableApp/images/ZAP.png\" width=\"400\" height=\"300\"/>"},
+      "explanation": "Este es el control positivo de entrada legítima para contrastar con una entrada de evento o una URL no permitida. El contains verifica forma de respuesta, no la seguridad completa del navegador.",
+      "mitigation": "Mantener la allowlist exacta o mapear un identificador corto a recursos internos; conservar el escape contextual y no aceptar URLs arbitrarias.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/XSSInImgTagAttribute/LEVEL_6 --data-urlencode 'src=/VulnerableApp/images/ZAP.png'",
+        "Comprobar el estado y el fragmento exacto del cuerpo; un 200 aislado no es prueba de ausencia de XSS."
+      ],
+      "hints": ["La whitelist de LEVEL_6 contiene exactamente ZAP.png y OWASP.png bajo /VulnerableApp/images/.", "Contraste este caso con el ejercicio siguiente, que usa un valor sintácticamente parecido pero no permitido."]
+    },
+    {
+      "title": "Control negativo de img LEVEL_6 ante evento benigno",
+      "route": "/VulnerableApp/XSSInImgTagAttribute/LEVEL_6",
+      "method": "GET",
+      "params": {"src": "/VulnerableApp/images/missing.png\" onerror=\"document.body.dataset.vaLab=`VA_XSS_IMG_L6_NEG`\""},
+      "headers": {"Accept": "text/html"},
+      "body": null,
+      "content_type": null,
+      "expected": "El valor no coincide con allowedValues, por lo que el método debería responder 400 y no construir el img.",
+      "check": {"kind": "manual", "value": "Verificar en la salida de curl un estado HTTP 400 y ausencia del marcador o de un img generado. No inferir seguridad solo del estado HTTP: el control se apoya en la revisión del flujo de whitelist, comillas y escape."},
+      "explanation": "Contrasta una ruta permitida con una entrada que intenta añadir un manejador pero no es un miembro de la whitelist. El marcador nunca debe llegar al HTML de respuesta en este nivel.",
+      "mitigation": "Rechazar por allowlist antes de renderizar y registrar de forma segura los rechazos; no relajar el control a filtros de subcadenas.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/XSSInImgTagAttribute/LEVEL_6 --data-urlencode 'src=/VulnerableApp/images/missing.png\" onerror=\"document.body.dataset.vaLab=`VA_XSS_IMG_L6_NEG`\"'",
+        "Comparar con el control positivo de /VulnerableApp/images/ZAP.png."
+      ],
+      "hints": ["La validación ocurre antes de String.format.", "No uses alert ni cookies; el marcador es solo una referencia para inspección si llegara a reflejarse."]
+    },
+    {
+      "title": "Reflected HTML tag injection LEVEL_1",
+      "route": "/VulnerableApp/XSSWithHtmlTagInjection/LEVEL_1",
+      "method": "GET",
+      "params": {"value": "<svg onload=\"document.body.dataset.vaLab=`VA_XSS_HTML_L1`\"></svg>"},
+      "headers": {"Accept": "text/html"},
+      "body": null,
+      "content_type": null,
+      "expected": "Según el código, el valor se refleja literalmente dentro de un div y la interfaz lo asigna a innerHTML.",
+      "check": {"kind": "manual", "value": "En un navegador de laboratorio aislado, abrir la URL y comprobar sin click que document.body.dataset.vaLab sea VA_XSS_HTML_L1. El body de curl solo demuestra reflexión y no prueba ejecución."},
+      "explanation": "LEVEL_1 no filtra las claves ni sus valores. SVG onload es un marcador benigno de ejecución DOM; no realiza solicitudes, no lee cookies y no muestra datos sensibles.",
+      "mitigation": "Aplicar escape HTML al insertar texto, usar textContent cuando se espera texto y evitar innerHTML con datos no confiables.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/XSSWithHtmlTagInjection/LEVEL_1 --data-urlencode 'value=<svg onload=\"document.body.dataset.vaLab=`VA_XSS_HTML_L1`\"></svg>'",
+        "Verificar que la cadena aparece en el cuerpo; registrar esto como reflexión, no como ejecución.",
+        "Abrir la misma URL solo en el navegador aislado y observar el marcador DOM sin hacer clic."
+      ],
+      "hints": ["La plantilla JS envía el parámetro value y asigna la respuesta a innerHTML.", "El payload no contiene alert, javascript, llamadas de red ni acceso a cookies."]
+    },
+    {
+      "title": "Bypass inocuo del blacklist de etiquetas en LEVEL_2",
+      "route": "/VulnerableApp/XSSWithHtmlTagInjection/LEVEL_2",
+      "method": "GET",
+      "params": {"value": "<svg onload=\"document.body.dataset.vaLab=`VA_XSS_HTML_L2`\"></svg>"},
+      "headers": {"Accept": "text/html"},
+      "body": null,
+      "content_type": null,
+      "expected": "El patrón solo intenta bloquear combinaciones de caracteres asociadas a script, img o a; una etiqueta svg con onload no contiene esos tokens y, según el código, se agrega al div.",
+      "check": {"kind": "manual", "value": "Comprobar primero con curl que el valor no fue eliminado y, solo en navegador aislado, observar VA_XSS_HTML_L2 en document.body.dataset.vaLab sin hacer click. Una coincidencia en el cuerpo no equivale a ejecución."},
+      "explanation": "La expresión regular es un blacklist frágil, no un parser HTML ni una sanitización. El marcador está limitado a una mutación DOM local.",
+      "mitigation": "Eliminar el blacklist y codificar según contexto; si se necesita HTML enriquecido, usar una sanitización HTML mantenida con allowlist de elementos y atributos.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/XSSWithHtmlTagInjection/LEVEL_2 --data-urlencode 'value=<svg onload=\"document.body.dataset.vaLab=`VA_XSS_HTML_L2`\"></svg>'",
+        "Comparar la respuesta con el mismo valor enviado a LEVEL_4, donde se espera escape.",
+        "No contar un click ni un 200 como evidencia de ejecución; observar el marcador DOM solo de forma manual."
+      ],
+      "hints": ["El Pattern contiene clases de caracteres y no enumera svg.", "No añadas palabras alert o javascript: el objetivo es comprobar el filtro, no ejecutar una acción dañina."]
+    },
+    {
+      "title": "Control seguro para HTML tag injection LEVEL_4",
+      "route": "/VulnerableApp/XSSWithHtmlTagInjection/LEVEL_4",
+      "method": "GET",
+      "params": {"value": "<svg onload=\"document.body.dataset.vaLab=`VA_XSS_HTML_L4`\"></svg>"},
+      "headers": {"Accept": "text/html"},
+      "body": null,
+      "content_type": null,
+      "expected": "El código aplica escapeHtml4 y por ello el texto debe aparecer como entidades HTML dentro de div, no como un elemento svg ejecutable.",
+      "check": {"kind": "not_contains", "value": "<svg"},
+      "explanation": "Es el control negativo frente a LEVEL_1 y LEVEL_2. not_contains solo verifica la representación textual de la respuesta; la verificación de que el navegador no creó un nodo debe ser manual y no depende de un click.",
+      "mitigation": "Conservar la codificación contextual y preferir textContent para contenido textual; añadir CSP como defensa en profundidad, no como reemplazo del escape.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/XSSWithHtmlTagInjection/LEVEL_4 --data-urlencode 'value=<svg onload=\"document.body.dataset.vaLab=`VA_XSS_HTML_L4`\"></svg>'",
+        "Comprobar que el cuerpo contiene una forma escapada como &lt;svg y no la etiqueta literal <svg.",
+        "Si se hace la revisión de navegador, confirmar que no aparece VA_XSS_HTML_L4; no usar interacción como criterio de puntuación."
+      ],
+      "hints": ["LEVEL_4 está marcado variant=SECURE.", "El escape de HTML cambia la sintaxis de etiqueta a texto visible."]
+    },
+    {
+      "title": "Stored XSS LEVEL_1: separar almacenamiento de ejecución",
+      "route": "/VulnerableApp/PersistentXSSInHTMLTagVulnerability/LEVEL_1",
+      "method": "GET",
+      "params": {"comment": "<svg onload=\"document.body.dataset.vaLab=`VA_XSS_PERSIST_L1`\"></svg>"},
+      "headers": {"Accept": "text/html"},
+      "body": null,
+      "content_type": null,
+      "expected": "La primera petición guarda comment y devuelve los posts del nivel dentro de div id=comments; una segunda petición sin comment debería volver a incluir el mismo contenido porque el repositorio es persistente por nivel.",
+      "check": {"kind": "manual", "value": "Usar curl para confirmar que la segunda respuesta conserva el marcador textual; luego, solo en navegador aislado, comprobar VA_XSS_PERSIST_L1 en document.body.dataset.vaLab. La persistencia/reflexión no demuestra ejecución y no se debe puntuar un click."},
+      "explanation": "getCommentsPayload guarda cualquier comment presente y después renderiza todos los posts sin escape en un div. Las pruebas Mockito confirman la llamada a save y la separación por levelIdentifier.",
+      "mitigation": "Escapar al renderizar o usar textContent; validar el formato del comentario, controlar la autorización y aplicar sanitización allowlist si el producto realmente requiere HTML.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/PersistentXSSInHTMLTagVulnerability/LEVEL_1 --data-urlencode 'comment=<svg onload=\"document.body.dataset.vaLab=`VA_XSS_PERSIST_L1`\"></svg>'",
+        "curl -i --get http://target:9090/VulnerableApp/PersistentXSSInHTMLTagVulnerability/LEVEL_1",
+        "Comparar ambos cuerpos; la segunda petición comprueba lectura del registro, no ejecución del marcador.",
+        "En el navegador de laboratorio, abrir la URL sin hacer clic y observar únicamente la propiedad data-va-lab. No borrar datos ni usar comandos de limpieza."
+      ],
+      "hints": ["El parámetro se llama comment y se guarda antes de consultar findByLevelIdentifier.", "Cada nivel usa su propio levelIdentifier, por lo que este ejercicio no necesita modificar otro nivel."]
+    },
+    {
+      "title": "Stored XSS LEVEL_6: sufijo posterior a NUL como caso de código",
+      "route": "/VulnerableApp/PersistentXSSInHTMLTagVulnerability/LEVEL_6",
+      "method": "GET",
+      "params": {"comment": "<span>VA_BEFORE_NUL</span>%00<svg onload=\"document.body.dataset.vaLab=`VA_XSS_PERSIST_L6`\"></svg>"},
+      "headers": {"Accept": "text/html"},
+      "body": null,
+      "content_type": null,
+      "expected": "La implementación escapa el prefijo antes del NUL y concatena el sufijo sin escape. El request codifica %00 en la URL para que el laboratorio decida cómo lo decodifica Spring; no contiene comandos ni acceso a archivos.",
+      "check": {"kind": "manual", "value": "Inspeccionar la respuesta y registrar por separado el prefijo escapado y el sufijo. Solo si el despliegue entrega el sufijo como HTML, observar en navegador aislado VA_XSS_PERSIST_L6 sin click. No afirmar resultado si el servidor/proxy rechaza o normaliza %00."},
+      "explanation": "Este ejercicio reproduce la diferencia de ramas del método, no una garantía de comportamiento de todos los proxies. El marcador solo modifica el DOM y no se comunica con ningún receptor.",
+      "mitigation": "Rechazar caracteres de control antes de persistir y aplicar escape al valor completo, sin concatenar ningún fragmento posterior a un NUL; preferir una única política de codificación contextual.",
+      "steps": [
+        "curl -i --get 'http://target:9090/VulnerableApp/PersistentXSSInHTMLTagVulnerability/LEVEL_6?comment=%3Cspan%3EVA_BEFORE_NUL%3C%2Fspan%3E%00%3Csvg%20onload%3D%22document.body.dataset.vaLab%3D%60VA_XSS_PERSIST_L6%60%22%3E%3C%2Fsvg%3E'",
+        "curl -i --get http://target:9090/VulnerableApp/PersistentXSSInHTMLTagVulnerability/LEVEL_6",
+        "Si el primer request recibe 400, 414, 500 o el valor se normaliza, documentar esa incertidumbre y no llamarlo prueba de ausencia o presencia de XSS.",
+        "No enviar NUL literal desde un script o editor; la secuencia %00 es suficiente para una comprobación controlada del transporte."
+      ],
+      "hints": ["La rama vulnerable es post.contains(NULL_BYTE_CHARACTER) ? escapeHtml4(prefijo)+sufijo : escapeHtml4(post).", "El contenido de ambos lados es inocuo y no debe contener instrucciones de shell, cookies ni destinos externos."]
+    },
+    {
+      "title": "Control seguro de Stored XSS LEVEL_7",
+      "route": "/VulnerableApp/PersistentXSSInHTMLTagVulnerability/LEVEL_7",
+      "method": "GET",
+      "params": {"comment": "<svg onload=\"document.body.dataset.vaLab=`VA_XSS_PERSIST_L7`\"></svg>"},
+      "headers": {"Accept": "text/html"},
+      "body": null,
+      "content_type": null,
+      "expected": "El comentario puede guardarse, pero la respuesta debería contener entidades escapadas y no la etiqueta svg literal.",
+      "check": {"kind": "not_contains", "value": "<svg"},
+      "explanation": "LEVEL_7 aplica escapeHtml4 al contenido completo en el momento de renderizar. Es un control de salida frente a LEVEL_1; la base conserva el valor original y no debe inspeccionarse como si fuera HTML confiable.",
+      "mitigation": "Mantener el escape contextual en cada salida y usar textContent en el frontend; restringir los permisos de escritura y separar datos de presentación.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/PersistentXSSInHTMLTagVulnerability/LEVEL_7 --data-urlencode 'comment=<svg onload=\"document.body.dataset.vaLab=`VA_XSS_PERSIST_L7`\"></svg>'",
+        "curl -i --get http://target:9090/VulnerableApp/PersistentXSSInHTMLTagVulnerability/LEVEL_7",
+        "Comprobar que el cuerpo contiene &lt;svg o equivalente y no <svg; esto es un control de serialización, no una prueba por click."
+      ],
+      "hints": ["La anotación marca variant=SECURE aunque el valor original se persiste.", "La prueba existente espera &lt;img ... &gt; en la respuesta de LEVEL_6 sin NUL; usa la misma idea para contrastar LEVEL_7."]
+    },
+    {
+      "title": "Rechazo de entrada antes de persistir en LEVEL_8",
+      "route": "/VulnerableApp/PersistentXSSInHTMLTagVulnerability/LEVEL_8",
+      "method": "GET",
+      "params": {"comment": "<svg onload=\"document.body.dataset.vaLab=`VA_XSS_PERSIST_L8`\"></svg>"},
+      "headers": {"Accept": "text/html"},
+      "body": null,
+      "content_type": null,
+      "expected": "El método comprueba < y > y debe devolver 400 sin llamar a save. Un comentario sin esos caracteres debe seguir el camino normal.",
+      "check": {"kind": "manual", "value": "Verificar estado HTTP 400 para la entrada con etiquetas y, si se desea, 200 para un texto plano separado. No deducir que todo el contenido sin < o > es seguro en cualquier contexto; esta conclusión es específica de este flujo."},
+      "explanation": "La prueba incluida confirma que una entrada con <script> no llama al repositorio. El ejercicio usa SVG solo como cadena de control; nunca se solicita un script ni acceso a secretos.",
+      "mitigation": "Mantener rechazo temprano para este campo o, preferiblemente, aceptar un formato de datos explícito y escapar al renderizar; no reutilizar esta regla como sanitizador universal.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/PersistentXSSInHTMLTagVulnerability/LEVEL_8 --data-urlencode 'comment=<svg onload=\"document.body.dataset.vaLab=`VA_XSS_PERSIST_L8`\"></svg>'",
+        "curl -i --get http://target:9090/VulnerableApp/PersistentXSSInHTMLTagVulnerability/LEVEL_8 --data-urlencode 'comment=VA_plain_control'",
+        "Comparar 400 frente al control plano; no borrar registros ni atribuir puntaje a clicks."
+      ],
+      "hints": ["La validación ocurre antes de getCommentsPayload y solo busca los caracteres < y >.", "El resultado esperado es un control de rechazo, no una demostración de ejecución."]
+    },
+    {
+      "title": "Codificación hexadecimal en Stored XSS LEVEL_9",
+      "route": "/VulnerableApp/PersistentXSSInHTMLTagVulnerability/LEVEL_9",
+      "method": "GET",
+      "params": {"comment": "<svg onload=\"document.body.dataset.vaLab=`VA_XSS_PERSIST_L9`\"></svg>"},
+      "headers": {"Accept": "text/html"},
+      "body": null,
+      "content_type": null,
+      "expected": "El valor original se guarda, pero la respuesta usa HtmlUtils.htmlEscapeHex; la prueba existente espera entidades como &#x3c; y &#x3e;.",
+      "check": {"kind": "not_contains", "value": "<svg"},
+      "explanation": "La comprobación diferencia almacenamiento de presentación: el repositorio puede contener la cadena original, pero el HTML entregado no debe contener una etiqueta literal. not_contains no sustituye una inspección DOM en navegador.",
+      "mitigation": "Mantener codificación contextual completa al renderizar y evitar que otro consumidor de la base reutilice el texto sin escape.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/PersistentXSSInHTMLTagVulnerability/LEVEL_9 --data-urlencode 'comment=<svg onload=\"document.body.dataset.vaLab=`VA_XSS_PERSIST_L9`\"></svg>'",
+        "curl -i --get http://target:9090/VulnerableApp/PersistentXSSInHTMLTagVulnerability/LEVEL_9",
+        "Buscar &#x3c;svg o una representación equivalente escapada y confirmar ausencia de <svg literal."
+      ],
+      "hints": ["HtmlUtils.htmlEscapeHex convierte los caracteres especiales a referencias hexadecimales.", "No tratar una coincidencia textual del marcador como evidencia de ejecución."]
+    },
+    {
+      "title": "Null byte de validación en img LEVEL_5: contraste de transporte",
+      "route": "/VulnerableApp/XSSInImgTagAttribute/LEVEL_5",
+      "method": "GET",
+      "params": {"src": "/VulnerableApp/images/ZAP.png%00\" onerror=\"document.body.dataset.vaLab=`VA_XSS_IMG_L5`\""},
+      "headers": {"Accept": "text/html"},
+      "body": null,
+      "content_type": null,
+      "expected": "La rama de código valida el prefijo anterior a NUL frente a la whitelist pero renderiza el valor completo escapado. El resultado real depende de cómo target, Spring y los proxies acepten y decodifiquen %00.",
+      "check": {"kind": "manual", "value": "Registrar literalmente el estado y cuerpo devueltos; si el servidor acepta el parámetro, comprobar si la respuesta refleja el sufijo. No afirmar ejecución ni seguridad a partir de un 200, y no usar un NUL literal en el sistema de archivos o shell."},
+      "explanation": "Es un ejercicio de revisión de la discrepancia validar-prefijo/renderizar-completo. El marcador solo intenta escribir data-va-lab en el DOM y no realiza ninguna operación lateral.",
+      "mitigation": "Rechazar caracteres de control, normalizar y validar el valor completo antes de usarlo, y mantener una allowlist exacta de identificadores de imagen.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/XSSInImgTagAttribute/LEVEL_5 --data-urlencode 'src=/VulnerableApp/images/ZAP.png'",
+        "curl -i --get 'http://target:9090/VulnerableApp/XSSInImgTagAttribute/LEVEL_5?src=%2FVulnerableApp%2Fimages%2FZAP.png%00%22%20onerror%3D%22document.body.dataset.vaLab%3D%60VA_XSS_IMG_L5%60%22'",
+        "Si target rechaza la URL codificada, dejar constancia de la limitación de transporte y basar la conclusión en el código y la prueba unitaria, no en un resultado inventado."
+      ],
+      "hints": ["La prueba de la familia usa \u0000 en Java, pero una shell no debe recibir un NUL literal como parte de un argumento.", "El primer curl es solo un control de whitelist y el segundo usa %00 en la URL, sin comandos externos."]
+    }
+  ],
+  "limitations": "La revisión es estática y está limitada estrictamente a la familia xss del commit solicitado. No se inició Docker, no se llamó a target, Mailpit ni receiver y no se afirma que ningún ejercicio haya funcionado en una instancia concreta. Las rutas y métodos se derivan de las anotaciones y del proveedor central; el mapeo exacto de Spring, filtros, proxies, CSP, navegador y perfil public puede cambiar el resultado observado. curl no ejecuta HTML, por lo que contains o not_contains solo verifican representación/reflexión, no ejecución XSS. Un 200 tampoco demuestra IDOR, autorización ni seguridad. La comprobación positiva propuesta es un marcador DOM benigno en un navegador aislado, sin lectura de cookies, sin exfiltración, sin red externa y sin puntuar clicks; si no aparece, no se debe concluir automáticamente que no existe una variante XSS. Los NUL se describen como %00 en URLs porque no es seguro ni fiable insertar un carácter NUL literal en un comando o JSON; servidores y proxies pueden rechazarlo, decodificarlo, truncarlo o normalizarlo. La base persistente POSTS conserva efectos entre peticiones; los ejercicios no borran datos, por lo que una respuesta posterior puede incluir registros preexistentes del mismo LEVEL. Solo se encontraron dos pruebas Java XSS: XSSInImgTagAttributeTest y PersistentXSSInHTMLTagVulnerabilityTest, esta última está en un paquete de test llamado reflected aunque prueba la clase persistent. No hay un archivo dedicado de payloads XSS en src/main/resources/attackvectors; los textos XSS relevantes están en src/main/resources/i18n/messages.properties. El directorio static/templates/XSSWithNullBytesImgTagAttribute existe en el commit, pero no hay una clase @VulnerableAppRestController correspondiente, por lo que no se inventó una ruta ni se contó como nivel. No se cubre DOM-based XSS porque VulnerabilityType lo enumera, pero el commit inspeccionado no aporta un controlador/clase DOM dentro de la familia xss."
+}

@@ -1,0 +1,466 @@
+{
+  "id": "cachePoisoning",
+  "title": "Cache poisoning web: claves de caché, entradas no indexadas y contenido personalizado",
+  "concept": "La familia modela una caché compartida en memoria mediante un ConcurrentHashMap estático de la aplicación, con TTL de 60 segundos. El controlador central combina el nombre anotado CachePoisoning con el nivel anotado para exponer las rutas /VulnerableApp/CachePoisoning/LEVEL_1 a /VulnerableApp/CachePoisoning/LEVEL_5. La lección progresa desde una respuesta reflejada cuyo parámetro no participa en la clave, pasa por un filtro superficial y por un encabezado no indexado, muestra la filtración de contenido personalizado por una cookie no indexada, y termina con una respuesta privada que no se almacena. La evidencia principal es la relación entre X-Cache-Status, X-Cache-Key, Cache-Control y el contenido JSON de la respuesta. Los niveles 1 y 2 reflejan HTML sin escape; el nivel 3 escapa el banner pero construye una URL de activo con X-Forwarded-Host; el nivel 4 escapa el contenido personalizado, pero lo publica y lo cachea por ruta; el nivel 5 escapa el banner, fija el host de activo y devuelve private, no-store sin guardarlo en la caché compartida. El nivel 3 no hace una petición HTTP saliente desde el servidor: únicamente inserta la URL en HTML, por lo que no debe etiquetarse como SSRF a partir de este código.",
+  "source_files": [
+    "src/main/java/org/sasanlabs/service/vulnerability/cachePoisoning/CachePoisoningVulnerability.java",
+    "src/main/java/org/sasanlabs/service/vulnerability/cachePoisoning/CachedResponse.java",
+    "src/main/resources/attackvectors/CachePoisoningPayload.properties",
+    "src/main/resources/static/templates/CachePoisoning/Common/CachePoisoningCommon.js",
+    "src/main/resources/static/templates/CachePoisoning/LEVEL_1/CachePoisoning.html",
+    "src/main/resources/static/templates/CachePoisoning/LEVEL_1/CachePoisoning.js",
+    "src/main/resources/static/templates/CachePoisoning/LEVEL_1/CachePoisoning.css",
+    "src/main/resources/static/templates/CachePoisoning/LEVEL_2/CachePoisoning.html",
+    "src/main/resources/static/templates/CachePoisoning/LEVEL_2/CachePoisoning.js",
+    "src/main/resources/static/templates/CachePoisoning/LEVEL_2/CachePoisoning.css",
+    "src/main/resources/static/templates/CachePoisoning/LEVEL_3/CachePoisoning.html",
+    "src/main/resources/static/templates/CachePoisoning/LEVEL_3/CachePoisoning.js",
+    "src/main/resources/static/templates/CachePoisoning/LEVEL_3/CachePoisoning.css",
+    "src/main/resources/static/templates/CachePoisoning/LEVEL_4/CachePoisoning.html",
+    "src/main/resources/static/templates/CachePoisoning/LEVEL_4/CachePoisoning.js",
+    "src/main/resources/static/templates/CachePoisoning/LEVEL_4/CachePoisoning.css",
+    "src/main/resources/static/templates/CachePoisoning/LEVEL_5/CachePoisoning.html",
+    "src/main/resources/static/templates/CachePoisoning/LEVEL_5/CachePoisoning.js",
+    "src/main/resources/static/templates/CachePoisoning/LEVEL_5/CachePoisoning.css",
+    "src/test/java/org/sasanlabs/service/vulnerability/cachePoisoning/CachePoisoningVulnerabilityTest.java"
+  ],
+  "levels": [
+    {
+      "route": "/VulnerableApp/CachePoisoning/LEVEL_1",
+      "method": "GET",
+      "parameters": {
+        "query": {
+          "banner": "Opcional; si está vacío se usa 'Welcome to the shared cache demo'. Se refleja sin escape.",
+          "browserCache": "Opcional, por defecto true; true publica 'public, max-age=60' y false publica 'public, s-maxage=60, max-age=0'. No cambia que el código almacene la respuesta en su caché compartida.",
+          "clave_de_cache": "No es un parámetro HTTP: solo requestURI, es decir, /VulnerableApp/CachePoisoning/LEVEL_1."
+        },
+        "headers": {},
+        "cookies": {}
+      },
+      "behavior": "buildLevel1Response refleja banner directamente dentro de un fragmento HTML y buildRouteOnlyCacheKey usa únicamente request.getRequestURI(). La primera respuesta para la ruta se guarda durante 60 segundos; peticiones posteriores, aunque lleven otro banner o ninguno, reciben el contenido almacenado. X-Cache-Status marca MISS al crear la entrada y HIT al reutilizarla; X-Cache-Key solo contiene la ruta.",
+      "vulnerable": true,
+      "notes": "Es una vulnerabilidad de clave de caché y también una reflexión HTML/XSS en el cuerpo. Para la demostración segura se debe usar un marcador DOM benigno que solo escriba document.body.dataset.vaLab='VA_LAB_OK'; nunca usar document.cookie, exfiltración o navegación a terceros. La reflexión de una cadena o un 200 por sí solos no prueban ejecución XSS."
+    },
+    {
+      "route": "/VulnerableApp/CachePoisoning/LEVEL_2",
+      "method": "GET",
+      "parameters": {
+        "query": {
+          "banner": "Opcional; se eliminan bloques/etiquetas script y el texto javascript: mediante expresiones regulares, pero se conserva HTML como <b> o un manejador de evento.",
+          "browserCache": "Opcional, por defecto true; selecciona la directiva pública del navegador, pero la entrada sigue guardándose en la caché compartida.",
+          "clave_de_cache": "No es un parámetro HTTP: solo requestURI, /VulnerableApp/CachePoisoning/LEVEL_2."
+        },
+        "headers": {},
+        "cookies": {}
+      },
+      "behavior": "applyNaiveBannerFilter elimina únicamente patrones obvios de script y el esquema javascript:. La respuesta filtrada se almacena con la misma clave solo-de-ruta que en L1. Un HTML inofensivo puede persistir para el siguiente visitante; un atributo de evento como el marcador DOM benigno queda fuera del filtro y se refleja en la entrada cacheada.",
+      "vulnerable": true,
+      "notes": "El test confirma que <script>alert(1)</script> desaparece, que <b>...</b> sobrevive y que <img src=x onerror=...> sobrevive. No se debe usar alert, cookies ni enlaces de phishing para verificarlo. El hecho de que el filtro quite una etiqueta no demuestra que la salida sea segura."
+    },
+    {
+      "route": "/VulnerableApp/CachePoisoning/LEVEL_3",
+      "method": "GET",
+      "parameters": {
+        "query": {
+          "banner": "Opcional; se normaliza con trim, se escapa para HTML y sí participa en la clave como |banner=VALOR.",
+          "browserCache": "Opcional, por defecto true; solo controla Cache-Control público del navegador.",
+          "clave_de_cache": "requestURI + |banner=normalizeBanner(banner); X-Forwarded-Host no participa."
+        },
+        "headers": {
+          "X-Forwarded-Host": "Opcional; el servidor lo acepta sin validación para formar https://HOST/assets/cache-poisoning-demo.js. En el laboratorio usar exclusivamente receiver:8081.",
+          "cookies": "No intervienen."
+        }
+      },
+      "behavior": "buildLevel3Response escapa banner, inserta el activo en un enlace y en un iframe, y usa resolveUntrustedForwardedHost. El atacante puede llenar la caché para una clave URI+banner con una URL de activo basada en X-Forwarded-Host; la petición posterior sin el header obtiene la misma URL si repite exactamente el banner. Si cambia el banner, la clave cambia y el test espera MISS. El código no realiza fetch, DNS, conexión ni lectura del host indicado.",
+      "vulnerable": true,
+      "notes": "La prueba segura usa X-Forwarded-Host: receiver:8081, que es el único receptor local autorizado. Como la implementación antepone https://, el receptor HTTP puede no completar una carga TLS; esto no invalida la evidencia de que la URL fue construida y cacheada. No usar dominios externos, IPs internas arbitrarias ni payloads de SSRF/RFI."
+    },
+    {
+      "route": "/VulnerableApp/CachePoisoning/LEVEL_4",
+      "method": "GET",
+      "parameters": {
+        "query": {
+          "browserCache": "Opcional, por defecto true; la respuesta siempre se marca pública en este nivel.",
+          "banner": "No existe en el método Level 4 y se ignora si se envía."
+        },
+        "headers": {
+          "Cookie": "demo_user=VALOR opcional. Si falta, se usa guest. El valor solo debe ser un identificador sintético de laboratorio, por ejemplo va_lab_user.",
+          "X-Forwarded-Host": "No interviene en este nivel."
+        }
+      },
+      "behavior": "resolveDemoUser lee demo_user y buildLevel4ResponseForUser genera usuario, email derivado VALOR@vulnerableapp.local y una IP determinista 10.a.b.42. La respuesta se publica como public, max-age=60 y se guarda con requestURI solamente. Por tanto, la primera identidad que llena la entrada puede aparecer en una petición posterior sin cookie.",
+      "vulnerable": true,
+      "notes": "Es una demostración de exposición de contenido personalizado por política de caché, no un IDOR. Todos los datos utilizados en los ejercicios son sintéticos y derivados por el código; no se deben introducir secretos o datos reales. Un HTTP 200 no prueba IDOR ni fuga: hay que demostrar que un segundo contexto recibe el marcador del primer contexto y que la clave no contiene la cookie."
+    },
+    {
+      "route": "/VulnerableApp/CachePoisoning/LEVEL_5",
+      "method": "GET",
+      "parameters": {
+        "query": {
+          "banner": "Opcional; se normaliza y se escapa como HTML.",
+          "browserCache": "No es un parámetro del método Level 5."
+        },
+        "headers": {
+          "Cookie": "demo_user=VALOR opcional y sintético.",
+          "X-Forwarded-Host": "Se ignora para el activo; el host queda fijo en static.vulnerableapp.local."
+        }
+      },
+      "behavior": "La variante anotada Variant.SECURE genera contenido personalizado escapado, usa siempre https://static.vulnerableapp.local/assets/cache-poisoning-demo.js y llama a buildCachedResponse con private, no-store y storeInSharedCache=false. Cada petición responde MISS y no reutiliza la respuesta anterior en el mapa estático.",
+      "vulnerable": false,
+      "notes": "Es el control positivo de la corrección dentro de la familia: el cuerpo puede variar legítimamente con demo_user, pero no debe cruzar usuarios; el banner debe aparecer como entidades HTML y el header no confiable no debe cambiar el host. La política privada es una defensa de caché, no una garantía sobre proxies externos no controlados."
+    }
+  ],
+  "exercises": [
+    {
+      "title": "Restablecer una sola entrada de caché antes de una repetición",
+      "route": "/VulnerableApp/CachePoisoning/clearCache",
+      "method": "POST",
+      "params": {
+        "level": "LEVEL_1, LEVEL_2, LEVEL_3, LEVEL_4 o LEVEL_5; el ejemplo limpia LEVEL_1"
+      },
+      "headers": {},
+      "body": "level=LEVEL_1",
+      "content_type": "application/x-www-form-urlencoded",
+      "expected": "HTTP 200 con JSON válido, X-Cache-Status: -, X-Cache-Key: - y una respuesta por defecto del nivel pedido. La operación solo elimina entradas cuyo prefijo corresponde al nivel indicado; no limpia los demás niveles.",
+      "check": {
+        "kind": "header",
+        "value": "-",
+        "header": "X-Cache-Status"
+      },
+      "explanation": "El endpoint es el mecanismo de aislamiento que usa el propio test. Debe ejecutarse antes de comparar MISS/HIT para que una entrada de una corrida anterior no contamine la observación. Un check con '-' solo verifica la respuesta especial de limpieza, no demuestra por sí mismo que todas las instancias o proxies externos estén vacíos.",
+      "mitigation": "En producción, la invalidación debe estar protegida y coordinada con toda la capa de caché. La aplicación no debería exponer un borrado sin autorización.",
+      "steps": [
+        "Ejecutar desde Kali: curl -i -X POST http://target:9090/VulnerableApp/CachePoisoning/clearCache --data-urlencode 'level=LEVEL_1'",
+        "Repetir con level=LEVEL_2, LEVEL_3, LEVEL_4 o LEVEL_5 cuando corresponda al ejercicio; conservar la salida para inspeccionar X-Cache-Status y X-Cache-Key."
+      ],
+      "hints": [
+        "No añadas cookies ni X-Forwarded-Host a la limpieza.",
+        "Si la aplicación se reinició, el mapa estático también empieza vacío, pero limpiar explícitamente hace el procedimiento reproducible."
+      ]
+    },
+    {
+      "title": "LEVEL_1: envenenar una respuesta por ruta y observar el HIT del visitante",
+      "route": "/VulnerableApp/CachePoisoning/LEVEL_1",
+      "method": "GET",
+      "params": {
+        "banner": "VA_LAB_L1_MARKER",
+        "browserCache": "true"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "Después de limpiar LEVEL_1, la primera solicitud debe mostrar X-Cache-Status: MISS, X-Cache-Key: /VulnerableApp/CachePoisoning/LEVEL_1, Cache-Control: public, max-age=60 y el marcador VA_LAB_L1_MARKER en content. La segunda, sin banner, debe mostrar HIT y conservar el mismo marcador.",
+      "check": {
+        "kind": "header",
+        "value": "HIT",
+        "header": "X-Cache-Status"
+      },
+      "explanation": "La primera llamada representa al emisor que llena la entrada; la segunda representa a otro visitante. El check de header se aplica a la segunda salida, mientras que el cuerpo y X-Cache-Key deben revisarse manualmente o con un parser JSON sobre la propiedad content. Un HIT más el marcador repetido es evidencia de reutilización de contenido; no es una prueba de ejecución JavaScript.",
+      "mitigation": "Incluir en la clave cada entrada que cambie la representación, o no hacer pública una respuesta que dependa de entrada no indexada. Escapar la salida HTML con un contexto apropiado y usar una política CSP como defensa adicional.",
+      "steps": [
+        "Limpiar el nivel: curl -i -X POST http://target:9090/VulnerableApp/CachePoisoning/clearCache --data-urlencode 'level=LEVEL_1'",
+        "Llenar la caché con un marcador inocuo: curl -i --get http://target:9090/VulnerableApp/CachePoisoning/LEVEL_1 --data-urlencode 'banner=VA_LAB_L1_MARKER' --data-urlencode 'browserCache=true'",
+        "Simular al visitante sin parámetro: curl -i --get http://target:9090/VulnerableApp/CachePoisoning/LEVEL_1 --data-urlencode 'browserCache=true'",
+        "Comparar X-Cache-Status, X-Cache-Key, Cache-Control y la propiedad JSON content entre las dos respuestas; no puntuar por hacer clic en un botón de la UI."
+      ],
+      "hints": [
+        "La clave esperada no contiene banner ni la cadena VA_LAB_L1_MARKER.",
+        "La caché de la aplicación tiene TTL de 60 segundos; limpiar antes de la primera llamada evita depender de una entrada anterior."
+      ]
+    },
+    {
+      "title": "LEVEL_1: control negativo cambiando banner con la misma ruta",
+      "route": "/VulnerableApp/CachePoisoning/LEVEL_1",
+      "method": "GET",
+      "params": {
+        "primer_banner": "VA_LAB_FIRST",
+        "segundo_banner": "VA_LAB_SECOND"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "Tras limpiar, la petición con VA_LAB_FIRST debe ser MISS. La petición posterior con VA_LAB_SECOND debe ser HIT, conservar VA_LAB_FIRST en content y no contener VA_LAB_SECOND. Ambas deben informar exactamente la misma clave de ruta.",
+      "check": {
+        "kind": "contains",
+        "value": "VA_LAB_FIRST"
+      },
+      "explanation": "Este control separa el efecto de caché del valor concreto del primer payload: si cambiar el query no cambia la clave, la segunda respuesta sigue siendo la primera. El check de contenido se aplica a la segunda respuesta; también debe verificarse su header X-Cache-Status: HIT. No utilizar datos falsos de soporte, phishing ni órdenes para este control.",
+      "mitigation": "Usar una clave que incluya la representación normalizada de banner cuando realmente deba cachearse, o no reflejar entrada controlada por el usuario en una respuesta compartida.",
+      "steps": [
+        "Limpiar: curl -i -X POST http://target:9090/VulnerableApp/CachePoisoning/clearCache --data-urlencode 'level=LEVEL_1'",
+        "Primera variante: curl -i --get http://target:9090/VulnerableApp/CachePoisoning/LEVEL_1 --data-urlencode 'banner=VA_LAB_FIRST'",
+        "Segunda variante: curl -i --get http://target:9090/VulnerableApp/CachePoisoning/LEVEL_1 --data-urlencode 'banner=VA_LAB_SECOND'",
+        "En la última salida, comprobar que aparece VA_LAB_FIRST, que no aparece VA_LAB_SECOND, que X-Cache-Status es HIT y que X-Cache-Key sigue siendo /VulnerableApp/CachePoisoning/LEVEL_1."
+      ],
+      "hints": [
+        "No confundas la ausencia del segundo marcador con filtrado: la respuesta completa proviene de la entrada anterior.",
+        "Repite la prueba después de limpiar para distinguir una entrada nueva de una entrada ya existente."
+      ]
+    },
+    {
+      "title": "LEVEL_1: marcador DOM benigno reflejado y almacenado, sin cookies",
+      "route": "/VulnerableApp/CachePoisoning/LEVEL_1",
+      "method": "GET",
+      "params": {
+        "banner": "</p><svg onload=\"document.body.dataset.vaLab='VA_LAB_OK'\"></svg>",
+        "browserCache": "true"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "La respuesta del atacante y la repetición sin banner contienen la cadena VA_LAB_OK dentro del HTML cacheado. Solo en un navegador de laboratorio, si se decide hacer la comprobación manual, el efecto esperado es document.body.dataset.vaLab igual a VA_LAB_OK; no hay lectura ni envío de cookies.",
+      "check": {
+        "kind": "manual",
+        "value": "Revisar el segundo body para comprobar que contiene VA_LAB_OK; la ejecución solo se puede confirmar manualmente observando document.body.dataset.vaLab=VA_LAB_OK en un navegador aislado. La reflexión por curl no prueba ejecución XSS."
+      },
+      "explanation": "El payload usa un marcador de DOM sin alertas, sin document.cookie y sin red. El servidor de L1 no escapa banner, por lo que el HTML se guarda tal cual y se repite al visitante. El verificador honesto distingue tres hechos: cadena reflejada, cadena persistida por HIT y ejecución en un navegador; solo el último requiere revisión manual y nunca debe puntuarse por un click.",
+      "mitigation": "Aplicar escape HTML contextual antes de insertar datos en markup, evitar innerHTML para datos no confiables y acompañar con CSP y una clave/política de caché correcta.",
+      "steps": [
+        "Limpiar: curl -i -X POST http://target:9090/VulnerableApp/CachePoisoning/clearCache --data-urlencode 'level=LEVEL_1'",
+        "Enviar únicamente el marcador DOM seguro: curl -i --get http://target:9090/VulnerableApp/CachePoisoning/LEVEL_1 --data-urlencode \"banner=</p><svg onload=\\\"document.body.dataset.vaLab='VA_LAB_OK'\\\"></svg>\"",
+        "Repetir como visitante sin banner: curl -i --get http://target:9090/VulnerableApp/CachePoisoning/LEVEL_1",
+        "Comprobar por texto que el segundo content tiene VA_LAB_OK y X-Cache-Status: HIT. Solo si se requiere una revisión manual, abrir la ruta en un navegador aislado y observar el atributo DOM; no hacer click para otorgar puntaje ni usar cookies."
+      ],
+      "hints": [
+        "El check de curl puede demostrar bytes en la respuesta, no que el navegador los interprete.",
+        "Si el navegador conserva una respuesta local, deshabilitar su caché o usar una sesión nueva; la prueba del servidor sigue siendo X-Cache-Status y X-Cache-Key."
+      ]
+    },
+    {
+      "title": "LEVEL_2: filtro superficial no impide HTML benigno en la entrada compartida",
+      "route": "/VulnerableApp/CachePoisoning/LEVEL_2",
+      "method": "GET",
+      "params": {
+        "banner": "<b>VA_LAB_FILTERED</b>",
+        "browserCache": "true"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "La primera respuesta debe ser MISS y conservar <b>VA_LAB_FILTERED</b>; la segunda, sin banner, debe ser HIT y conservar el mismo fragmento. La clave debe ser solo /VulnerableApp/CachePoisoning/LEVEL_2. El método elimina etiquetas script obvias, pero no este HTML.",
+      "check": {
+        "kind": "header",
+        "value": "HIT",
+        "header": "X-Cache-Status"
+      },
+      "explanation": "Este ejercicio separa el fallo de la clave de caché del filtro. El marcador no es phishing ni código ejecutable, pero demuestra que la salida HTML controlada persiste para otra petición. Verificar además en content que la etiqueta b sobrevive y que el cache key no incluye banner.",
+      "mitigation": "No usar listas negras de etiquetas como control principal. Escapar o sanitizar con una política permitida y, sobre todo, hacer coincidir la política de compartición con las entradas que realmente determinan el cuerpo.",
+      "steps": [
+        "Limpiar: curl -i -X POST http://target:9090/VulnerableApp/CachePoisoning/clearCache --data-urlencode 'level=LEVEL_2'",
+        "Llenar con HTML inocuo: curl -i --get http://target:9090/VulnerableApp/CachePoisoning/LEVEL_2 --data-urlencode 'banner=<b>VA_LAB_FILTERED</b>' --data-urlencode 'browserCache=true'",
+        "Solicitar sin banner: curl -i --get http://target:9090/VulnerableApp/CachePoisoning/LEVEL_2 --data-urlencode 'browserCache=true'",
+        "Comprobar que la segunda respuesta es HIT y contiene el marcador; no usar enlaces de reautenticación, mensajes de pago ni etiquetas de phishing."
+      ],
+      "hints": [
+        "El test fuente confirma que los bloques script y el esquema javascript: se eliminan, pero <b> queda.",
+        "Un filtro que elimina un patrón no repara una clave de caché que sigue ignorando banner."
+      ]
+    },
+    {
+      "title": "LEVEL_2: bypass seguro del filtro con un marcador DOM local",
+      "route": "/VulnerableApp/CachePoisoning/LEVEL_2",
+      "method": "GET",
+      "params": {
+        "banner": "<img src=x onerror=\"document.body.dataset.vaLab='VA_LAB_OK'\">",
+        "browserCache": "true"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "La salida de la primera solicitud y la repetición cacheada deben contener VA_LAB_OK y el atributo onerror porque el filtro no lo elimina. Una comprobación de navegador aislado puede observar el marcador DOM, nunca cookies, red ni alertas.",
+      "check": {
+        "kind": "manual",
+        "value": "Confirmar por curl que VA_LAB_OK aparece en el segundo content y X-Cache-Status es HIT; la ejecución del manejador solo se puede confirmar manualmente con document.body.dataset.vaLab=VA_LAB_OK. No tratar la reflexión como prueba de ejecución."
+      },
+      "explanation": "La finalidad didáctica es mostrar el límite de la expresión regular, no ejecutar una acción peligrosa. El atributo solo escribe un valor fijo en el DOM. Como el body se inserta mediante innerHTML en la plantilla común, un navegador podría interpretar el evento; esa parte no se afirma a partir de curl y no debe verificarse con document.cookie.",
+      "mitigation": "Eliminar la inserción de HTML no confiable, usar textContent o un sanitizer de allow-list y ajustar la caché para que no comparta contenido dependiente de la entrada. Una CSP sin inline handlers reduce defensa en profundidad, pero no sustituye el escape.",
+      "steps": [
+        "Limpiar: curl -i -X POST http://target:9090/VulnerableApp/CachePoisoning/clearCache --data-urlencode 'level=LEVEL_2'",
+        "Enviar el marcador benigno: curl -i --get http://target:9090/VulnerableApp/CachePoisoning/LEVEL_2 --data-urlencode \"banner=<img src=x onerror=\\\"document.body.dataset.vaLab='VA_LAB_OK'\\\">\"",
+        "Repetir sin banner: curl -i --get http://target:9090/VulnerableApp/CachePoisoning/LEVEL_2",
+        "Verificar bytes y headers en la segunda salida. La revisión manual, si se hace, debe limitarse al marcador DOM en una sesión aislada y nunca al click de un botón o a una cookie."
+      ],
+      "hints": [
+        "No uses alert(1), alert(document.cookie), fetch ni imágenes que apunten fuera del laboratorio.",
+        "El parámetro javascript: sí se elimina, pero un evento HTML no; esto ilustra por qué la lista negra no es una sanitización completa."
+      ]
+    },
+    {
+      "title": "LEVEL_3: encabezado no indexado usando exclusivamente el receptor local",
+      "route": "/VulnerableApp/CachePoisoning/LEVEL_3",
+      "method": "GET",
+      "params": {
+        "banner": "VA_LAB_SHARED_HOST",
+        "browserCache": "true"
+      },
+      "headers": {
+        "primer_request": {
+          "X-Forwarded-Host": "receiver:8081"
+        },
+        "victim_request": "Sin X-Forwarded-Host"
+      },
+      "body": null,
+      "content_type": null,
+      "expected": "Tras limpiar, el primer request debe ser MISS y construir https://receiver:8081/assets/cache-poisoning-demo.js con X-Cache-Key /VulnerableApp/CachePoisoning/LEVEL_3|banner=VA_LAB_SHARED_HOST. El segundo request, sin header pero con el mismo banner, debe ser HIT y conservar la URL del receptor local. La observación demuestra que el header no participa en la clave; no demuestra SSRF.",
+      "check": {
+        "kind": "header",
+        "value": "HIT",
+        "header": "X-Cache-Status"
+      },
+      "explanation": "La clave del nivel 3 sí distingue banner, pero omite X-Forwarded-Host. El servidor almacena el HTML generado con el host recibido y lo devuelve para la misma clave. Se usa receiver:8081 en vez de un dominio o IP externo. El código construye un enlace/iframe; no realiza la conexión, por lo que cualquier carga del receptor depende del navegador y del esquema https generado.",
+      "mitigation": "No confiar en X-Forwarded-Host recibido directamente; establecer el host desde una configuración confiable o una allow-list y añadir todos los encabezados que alteren el cuerpo o la URL a la clave/Vary. Para un activo fijo, ignorar el header como hace L5.",
+      "steps": [
+        "Limpiar: curl -i -X POST http://target:9090/VulnerableApp/CachePoisoning/clearCache --data-urlencode 'level=LEVEL_3'",
+        "Envenenar solo con el receptor local: curl -i --get http://target:9090/VulnerableApp/CachePoisoning/LEVEL_3 -H 'X-Forwarded-Host: receiver:8081' --data-urlencode 'banner=VA_LAB_SHARED_HOST' --data-urlencode 'browserCache=true'",
+        "Simular al visitante sin el header: curl -i --get http://target:9090/VulnerableApp/CachePoisoning/LEVEL_3 --data-urlencode 'banner=VA_LAB_SHARED_HOST' --data-urlencode 'browserCache=true'",
+        "En la segunda salida, comprobar X-Cache-Status: HIT, la clave exacta con banner y la URL https://receiver:8081/assets/cache-poisoning-demo.js. No intentar un dominio externo ni interpretar la falta de TLS como SSRF."
+      ],
+      "hints": [
+        "El header es enviado solo en el primer curl; no se necesita una cookie.",
+        "Si se necesita observar tráfico, limitarse al receptor local autorizado; el resultado esencial ya está en el cuerpo y en X-Cache-Key."
+      ]
+    },
+    {
+      "title": "LEVEL_3: control positivo de la clave cambiando banner",
+      "route": "/VulnerableApp/CachePoisoning/LEVEL_3",
+      "method": "GET",
+      "params": {
+        "primer_banner": "VA_LAB_BANNER_A",
+        "segundo_banner": "VA_LAB_BANNER_B"
+      },
+      "headers": {
+        "primer_request": {
+          "X-Forwarded-Host": "receiver:8081"
+        },
+        "segundo_request": "Sin header"
+      },
+      "body": null,
+      "content_type": null,
+      "expected": "La primera solicitud debe ser MISS con clave terminada en |banner=VA_LAB_BANNER_A. La segunda, al cambiar el banner, debe ser MISS con clave terminada en |banner=VA_LAB_BANNER_B y debe usar el host por defecto cdn.vulnerableapp.local, no el host cacheado de la primera entrada.",
+      "check": {
+        "kind": "header",
+        "value": "MISS",
+        "header": "X-Cache-Status"
+      },
+      "explanation": "Este contraste evita atribuir todo el comportamiento a X-Forwarded-Host: banner sí es parte de la clave en L3. La vulnerabilidad queda acotada al caso donde se conserva el mismo banner pero cambia un header que sí cambia el cuerpo.",
+      "mitigation": "Mantener la clave coherente con todos los factores de representación y validar o ignorar encabezados de forwarding según la topología de confianza.",
+      "steps": [
+        "Limpiar: curl -i -X POST http://target:9090/VulnerableApp/CachePoisoning/clearCache --data-urlencode 'level=LEVEL_3'",
+        "Primera clave: curl -i --get http://target:9090/VulnerableApp/CachePoisoning/LEVEL_3 -H 'X-Forwarded-Host: receiver:8081' --data-urlencode 'banner=VA_LAB_BANNER_A'",
+        "Segunda clave: curl -i --get http://target:9090/VulnerableApp/CachePoisoning/LEVEL_3 --data-urlencode 'banner=VA_LAB_BANNER_B'",
+        "Verificar MISS en la segunda respuesta, X-Cache-Key con B y host por defecto cdn.vulnerableapp.local."
+      ],
+      "hints": [
+        "No reutilices el mismo banner en este control: el cambio debe aislar la dimensión que sí está indexada.",
+        "El host por defecto procede de DEFAULT_UNTRUSTED_HOST cuando falta el header; no es un receptor externo para la prueba."
+      ]
+    },
+    {
+      "title": "LEVEL_4: demostrar fuga de un identificador sintético personalizado entre solicitudes",
+      "route": "/VulnerableApp/CachePoisoning/LEVEL_4",
+      "method": "GET",
+      "params": {
+        "browserCache": "true"
+      },
+      "headers": {
+        "primera_solicitud": {
+          "Cookie": "demo_user=va_lab_user"
+        },
+        "segunda_solicitud": "Sin Cookie"
+      },
+      "body": null,
+      "content_type": null,
+      "expected": "Después de limpiar LEVEL_4, el primer request debe ser MISS, Cache-Control public, max-age=60 y contener va_lab_user, va_lab_user@vulnerableapp.local y una IP derivada 10.a.b.42. El segundo request sin cookie debe ser HIT con el mismo contenido personalizado, aunque su contexto no envía demo_user; X-Cache-Key debe ser solo la ruta.",
+      "check": {
+        "kind": "header",
+        "value": "HIT",
+        "header": "X-Cache-Status"
+      },
+      "explanation": "La cookie modifica el cuerpo pero no la clave. El segundo request es la comprobación de cruce de contexto: debe inspeccionarse su JSON content para encontrar el marcador sintético del primer request y su email derivado. No se trata de un IDOR y no basta con un 200; la evidencia es cookie ausente más HIT más datos sintéticos del primer contexto.",
+      "mitigation": "Marcar contenido personalizado como private, no-store, usar Vary: Cookie cuando sea apropiado y/o aislar la caché por identidad segura. No publicar respuestas con PII en una caché compartida por ruta.",
+      "steps": [
+        "Limpiar: curl -i -X POST http://target:9090/VulnerableApp/CachePoisoning/clearCache --data-urlencode 'level=LEVEL_4'",
+        "Llenar con una identidad ficticia: curl -i --get http://target:9090/VulnerableApp/CachePoisoning/LEVEL_4 --cookie 'demo_user=va_lab_user' --data-urlencode 'browserCache=true'",
+        "Solicitar como visitante sin cookie: curl -i --get http://target:9090/VulnerableApp/CachePoisoning/LEVEL_4 --data-urlencode 'browserCache=true'",
+        "En la segunda salida, comprobar HIT, la ausencia de Cookie enviada por el comando, va_lab_user y va_lab_user@vulnerableapp.local en content. No introducir nombres, emails o secretos reales."
+      ],
+      "hints": [
+        "La IP se deriva de SHA-256 del valor y no es una lectura de red; no hace falta calcularla para demostrar el cruce.",
+        "La clave esperada no contiene demo_user ni su valor."
+      ]
+    },
+    {
+      "title": "LEVEL_4: contraste de orden de llenado con el valor guest",
+      "route": "/VulnerableApp/CachePoisoning/LEVEL_4",
+      "method": "GET",
+      "params": {},
+      "headers": {
+        "primera_solicitud": "Sin Cookie",
+        "segunda_solicitud": {
+          "Cookie": "demo_user=va_lab_other"
+        }
+      },
+      "body": null,
+      "content_type": null,
+      "expected": "Tras limpiar, la primera petición sin cookie debe llenar guest con MISS. La segunda petición con demo_user=va_lab_other debe ser HIT y seguir mostrando guest en vez de va_lab_other. Esto es un control de orden, no una mitigación: confirma que la primera respuesta domina la entrada compartida.",
+      "check": {
+        "kind": "contains",
+        "value": "guest"
+      },
+      "explanation": "El contraste es útil para no confundir la dirección de la filtración: quien llena primero decide el contenido que reciben las siguientes solicitudes. El check de contenido debe aplicarse a la segunda salida junto con X-Cache-Status: HIT; la cookie del segundo request no fuerza una recomputación.",
+      "mitigation": "La misma que en el ejercicio anterior: no cachear públicamente cuerpos dependientes de cookie, o incluir de forma segura la dimensión de identidad en una política de caché bien diseñada.",
+      "steps": [
+        "Limpiar: curl -i -X POST http://target:9090/VulnerableApp/CachePoisoning/clearCache --data-urlencode 'level=LEVEL_4'",
+        "Llenar como invitado: curl -i --get http://target:9090/VulnerableApp/CachePoisoning/LEVEL_4",
+        "Pedir con otro identificador sintético: curl -i --get http://target:9090/VulnerableApp/CachePoisoning/LEVEL_4 --cookie 'demo_user=va_lab_other'",
+        "Comprobar que la última respuesta es HIT y conserva guest; no tratar este resultado como una autorización correcta ni como IDOR."
+      ],
+      "hints": [
+        "Limpia antes de invertir el orden; si no, una entrada anterior puede ocultar el contraste.",
+        "La cookie demo_user no llega a la clave aunque sí llega al método Java."
+      ]
+    },
+    {
+      "title": "LEVEL_5: control positivo seguro con host ignorado, escape y no-store",
+      "route": "/VulnerableApp/CachePoisoning/LEVEL_5",
+      "method": "GET",
+      "params": {
+        "banner": "<b>VA_LAB_SAFE</b>"
+      },
+      "headers": {
+        "Cookie": "demo_user=va_lab_admin",
+        "X-Forwarded-Host": "receiver:8081"
+      },
+      "body": null,
+      "content_type": null,
+      "expected": "La respuesta personalizada debe informar Cache-Control: private, no-store y X-Cache-Status: MISS; el body JSON content debe contener &lt;b&gt;VA_LAB_SAFE&lt;/b&gt;, va_lab_admin y https://static.vulnerableapp.local/assets/cache-poisoning-demo.js, y no debe contener receiver:8081. Una segunda petición sin cookie y sin header también debe ser MISS, mostrar guest y no mostrar va_lab_admin.",
+      "check": {
+        "kind": "header",
+        "value": "private, no-store",
+        "header": "Cache-Control"
+      },
+      "explanation": "L5 reúne los controles positivos de la familia. El header de forwarding local no puede cambiar el host fijo, el banner se escapa, y storeInSharedCache=false hace que cada llamada tenga MISS en este mapa. El check de política debe acompañarse de inspección de body y de una segunda solicitud sin cookie; no prometer que un proxy externo respetará la política sin observarlo.",
+      "mitigation": "Mantener private, no-store para contenido personalizado, escapar por contexto, ignorar headers no confiables y aplicar controles de caché en el proxy/CDN. Si se desea cachear, diseñar explícitamente la clave y la política de variación.",
+      "steps": [
+        "Enviar una solicitud personalizada con valores sintéticos y solo el receptor autorizado: curl -i --get http://target:9090/VulnerableApp/CachePoisoning/LEVEL_5 -H 'X-Forwarded-Host: receiver:8081' --cookie 'demo_user=va_lab_admin' --data-urlencode 'banner=<b>VA_LAB_SAFE</b>'",
+        "Solicitar como guest, sin cookie ni header: curl -i --get http://target:9090/VulnerableApp/CachePoisoning/LEVEL_5",
+        "Comprobar en ambas salidas X-Cache-Status: MISS; en la primera, private, no-store, entidades &lt;b&gt;...&lt;/b&gt;, va_lab_admin y static.vulnerableapp.local; en la segunda, guest y ausencia de va_lab_admin.",
+        "No usar receiver para intentar una conexión desde el servidor: este nivel, igual que L3, solo devuelve HTML y headers; el objetivo es verificar que el valor no altera el resultado."
+      ],
+      "hints": [
+        "El X-Cache-Key puede aparecer como /VulnerableApp/CachePoisoning/LEVEL_5|private-response, pero la entrada no se almacena aunque se emita ese diagnóstico.",
+        "No hace falta llamar a clearCache para L5, pero hacerlo no perjudica el control y ayuda a mantener la corrida aislada."
+      ]
+    }
+  ],
+  "limitations": [
+    "Este documento es una verificación estática del commit 4df80bbcd42682ecf26334f12c568e0f4a326c1a y de su test específico; no afirma que los ejercicios hayan sido ejecutados con éxito contra target:9090.",
+    "La caché observada es un ConcurrentHashMap estático dentro de una instancia JVM, con TTL de 60 segundos. Un reinicio, varias réplicas, un proxy delante de la aplicación o una política de navegador pueden producir MISS/HIT distintos. X-Cache-Status y X-Cache-Key son headers diagnósticos generados por la aplicación, no una prueba completa del comportamiento de un CDN real.",
+    "Un reflejo de texto, la presencia de HTML en JSON o un HTTP 200 no prueban ejecución XSS. La única comprobación manual sugerida usa el marcador fijo document.body.dataset.vaLab=VA_LAB_OK, sin cookies, alertas, red ni clicks; no se debe atribuir puntaje por hacer click.",
+    "En general, un HTTP 200 no prueba IDOR. Para L4 la prueba debe demostrar un cambio de contexto: segundo request sin Cookie, X-Cache-Status HIT, misma clave de ruta y marcador sintético del primer usuario. No se deben introducir secretos ni datos personales reales.",
+    "L3 no implementa SSRF, RFI ni una lectura remota: buildAssetUrl solo concatena https:// con el header y lo inserta en HTML. Las demostraciones usan exclusivamente receiver:8081; el esquema https generado puede no ser compatible con un receptor HTTP y no se debe suplir esa limitación con hosts externos.",
+    "El endpoint clearCache se documenta como ayuda de laboratorio y no como control de acceso. Limpia solo claves que empiezan por el prefijo del nivel indicado; no invalida caches intermedias ni otros procesos.",
+    "El nivel 5 es un control positivo a nivel de código: garantiza private, no-store, host fijo, escape y storeInSharedCache=false en esta implementación, pero no garantiza que una infraestructura externa mal configurada respete o no sobrescriba sus headers.",
+    "No se utilizaron Mailpit ni otros receptores porque esta familia no envía correo. Ningún ejercicio requiere comandos externos peligrosos, reverse shells, lectura de secretos del host, DoS, borrado de datos o contacto con dominios de terceros."
+  ]
+}

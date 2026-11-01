@@ -1,0 +1,600 @@
+{
+  "id": "pathTraversal",
+  "title": "Path Traversal: niveles originales, filtros progresivos y ejercicios seguros",
+  "concept": "La clase PathTraversalVulnerability expone 15 endpoints GET bajo /VulnerableApp/PathTraversal/LEVEL_N. Cada método obtiene el parámetro de consulta fileName y lo concatena a /scripts/PathTraversal/ para llamar a Class.getResourceAsStream. readFile devuelve HTTP 200 tanto si encuentra un recurso como si lo rechaza o no lo encuentra: en el primer caso el JSON tiene isValid=true y content con el recurso (sin saltos de línea), y en el segundo isValid=false y content=null. Los niveles 1 a 12 llevan la variante UNSECURE por defecto y ensayan filtros incompletos (listas negras aplicadas a la URL cruda, codificación de puntos/barras y truncamiento en byte NUL); los niveles 13 a 15 llevan Variant.SECURE y muestran, respectivamente, lista blanca exacta, normalización léxica dentro del directorio base y una expresión regular de nombres seguros. El prefijo público se obtiene del nombre de la clase anotada (PathTraversal) y del nivel de @VulnerableAppRequestMapping; el proveedor central concatena appUrl + nombre + / + nivel. La fuente de datos inocua documentada aquí es /tmp/va-training.txt con el marcador VA_LAB_FILE si la imagen de laboratorio la ha creado y el classloader del despliegue permite resolverla; no se usan /etc/passwd, secretos del host, comandos ni payloads destructivos.",
+  "source_files": [
+    "src/main/java/org/sasanlabs/service/vulnerability/pathTraversal/PathTraversalVulnerability.java (controlador, validadores y 15 niveles)",
+    "src/test/java/org/sasanlabs/service/vulnerability/pathTraversal/PathTraversalTest.java (controles unitarios y expectativas de isValid/content)",
+    "src/main/resources/scripts/PathTraversal/UserInfo.json (recurso permitido de control positivo)",
+    "src/main/resources/scripts/PathTraversal/OwaspAppInfo.json (segundo recurso permitido de control positivo)",
+    "src/main/resources/scripts/PathTraversal/secret.json (recurso dummy mencionado por los comentarios del reto; no se solicita en los ejercicios)",
+    "src/main/resources/static/templates/PathTraversal/LEVEL_1/PathTraversal.html (campo fileName y botón)",
+    "src/main/resources/static/templates/PathTraversal/LEVEL_1/PathTraversal.js (invocación GET y forma de renderizar la respuesta)",
+    "src/main/java/org/sasanlabs/internal/utility/annotations/VulnerableAppRequestMapping.java (valor de nivel y GET por defecto)",
+    "src/main/java/org/sasanlabs/service/impl/EndPointsInformationProvider.java (construcción de appUrl + nombre + / + nivel)",
+    "src/main/java/org/sasanlabs/service/vulnerability/bean/GenericVulnerabilityResponseBean.java (claves JSON content e isValid)",
+    "src/main/java/org/sasanlabs/internal/utility/LevelConstants.java (LEVEL_1 a LEVEL_15)",
+    "src/main/java/org/sasanlabs/vulnerability/utils/Constants.java (carácter NUL usado por los niveles 7 a 11 y 12)"
+  ],
+  "levels": [
+    {
+      "route": "/VulnerableApp/PathTraversal/LEVEL_1",
+      "method": "GET",
+      "parameters": {
+        "query": ["fileName"],
+        "type": "String"
+      },
+      "behavior": "Si fileName no es null, lo concatena directamente a /scripts/PathTraversal/ y entrega el recurso que el classloader pueda resolver. No hay validación de ruta.",
+      "vulnerable": true,
+      "notes": "@AttackVector describe inyección directa en el parámetro URL y la anotación no establece Variant.SECURE. El test también comprueba que ../ produce una respuesta válida en la implementación del commit, aunque el contenido exacto depende del classloader. UserInfo.json y OwaspAppInfo.json son controles positivos seguros."
+    },
+    {
+      "route": "/VulnerableApp/PathTraversal/LEVEL_2",
+      "method": "GET",
+      "parameters": {
+        "query": ["fileName"],
+        "type": "String"
+      },
+      "behavior": "Recibe RequestEntity y rechaza solamente si requestEntity.getUrl().toString() contiene la secuencia literal ../; después usa fileName sin normalizar.",
+      "vulnerable": true,
+      "notes": "Una representación codificada de puntos y barras puede no contener ../ en la URL cruda aunque el parámetro decodificado sí lo contenga. El resultado real debe confirmarse con el JSON y el marcador, no con el 200."
+    },
+    {
+      "route": "/VulnerableApp/PathTraversal/LEVEL_3",
+      "method": "GET",
+      "parameters": {
+        "query": ["fileName"],
+        "type": "String"
+      },
+      "behavior": "Rechaza solo la secuencia literal .. en la representación textual de la URL; fileName se emplea directamente al resolver el recurso.",
+      "vulnerable": true,
+      "notes": "El filtro es más amplio que LEVEL_2 solo para texto literal, pero sigue inspeccionando la URL cruda y no la ruta normalizada. La codificación de cada punto es la variante relevante del laboratorio."
+    },
+    {
+      "route": "/VulnerableApp/PathTraversal/LEVEL_4",
+      "method": "GET",
+      "parameters": {
+        "query": ["fileName"],
+        "type": "String"
+      },
+      "behavior": "Rechaza .. literal y la secuencia minúscula %2f en la URL; no hace la comprobación de barra codificada de forma insensible a mayúsculas.",
+      "vulnerable": true,
+      "notes": "Una barra codificada como %2F puede evitar el segundo chequeo textual, mientras el framework entrega al parámetro la ruta decodificada. La diferencia entre URL cruda y parámetro decodificado es una incertidumbre dependiente del contenedor."
+    },
+    {
+      "route": "/VulnerableApp/PathTraversal/LEVEL_5",
+      "method": "GET",
+      "parameters": {
+        "query": ["fileName"],
+        "type": "String"
+      },
+      "behavior": "Rechaza .. literal y comprueba %2f después de toLowerCase(); continúa usando fileName sin una resolución segura dentro de la base.",
+      "vulnerable": true,
+      "notes": "Corrige el caso de mayúsculas de %2F, pero todavía inspecciona la URL en vez de validar una ruta normalizada. Una codificación de los puntos con barras literales es la variante representativa."
+    },
+    {
+      "route": "/VulnerableApp/PathTraversal/LEVEL_6",
+      "method": "GET",
+      "parameters": {
+        "query": ["fileName"],
+        "type": "String"
+      },
+      "behavior": "Ya no recibe RequestEntity: comprueba fileName después del binding y rechaza si contiene ..; no aplica lista blanca, normalización ni comprobación de que el destino permanezca bajo la base.",
+      "vulnerable": true,
+      "notes": "El test confirma que el fileName literal .. se rechaza, por lo que un intento directo debe ser un control negativo. La etiqueta original sigue siendo UNSECURE; cualquier bypass adicional depende de cuántas decodificaciones haga el servidor y el classloader, y no se debe afirmar solo por la etiqueta."
+    },
+    {
+      "route": "/VulnerableApp/PathTraversal/LEVEL_7",
+      "method": "GET",
+      "parameters": {
+        "query": ["fileName"],
+        "type": "String"
+      },
+      "behavior": "Busca uno de los nombres permitidos (UserInfo.json u OwaspAppInfo.json) en el valor original, corta fileName en el primer carácter NUL y resuelve solo la parte anterior al NUL.",
+      "vulnerable": true,
+      "notes": "El nombre permitido puede quedar después del NUL para satisfacer la condición mientras la parte previa es la ruta candidata. No hay filtro de ../ en la URL. El comentario original muestra precisamente la idea de sufijar UserInfo.json; este informe sustituye el objetivo por /tmp/va-training.txt."
+    },
+    {
+      "route": "/VulnerableApp/PathTraversal/LEVEL_8",
+      "method": "GET",
+      "parameters": {
+        "query": ["fileName"],
+        "type": "String"
+      },
+      "behavior": "Mantiene el truncamiento NUL y la condición de nombre permitido de LEVEL_7, pero añade un bloqueo de ../ literal en la URL cruda.",
+      "vulnerable": true,
+      "notes": "El filtro no inspecciona una ruta ya decodificada/normalizada; una representación codificada de puntos y barras es la variante a observar. El test solo cubre el caso URL literal ../ como control negativo."
+    },
+    {
+      "route": "/VulnerableApp/PathTraversal/LEVEL_9",
+      "method": "GET",
+      "parameters": {
+        "query": ["fileName"],
+        "type": "String"
+      },
+      "behavior": "Mantiene NUL y la lista de nombres de LEVEL_7, y bloquea .. literal en requestEntity.getUrl().toString().",
+      "vulnerable": true,
+      "notes": "Una codificación de los puntos puede ocultar .. de la comprobación textual de la URL; el parámetro decodificado podría seguir siendo una ruta de traversal. La prueba unitaria verifica el rechazo del texto literal."
+    },
+    {
+      "route": "/VulnerableApp/PathTraversal/LEVEL_10",
+      "method": "GET",
+      "parameters": {
+        "query": ["fileName"],
+        "type": "String"
+      },
+      "behavior": "Mantiene NUL y la lista de nombres, bloquea .. literal y bloquea %2f minúsculo en la URL cruda.",
+      "vulnerable": true,
+      "notes": "La barra codificada en mayúsculas y los puntos codificados son la variante de filtro relevante. La descripción del recurso secret.json dice que este nivel y LEVEL_5 exponen ese dummy, pero el ejercicio usa exclusivamente el marcador de laboratorio."
+    },
+    {
+      "route": "/VulnerableApp/PathTraversal/LEVEL_11",
+      "method": "GET",
+      "parameters": {
+        "query": ["fileName"],
+        "type": "String"
+      },
+      "behavior": "Mantiene NUL y la lista de nombres, bloquea .. y comprueba %2f después de convertir toda la URL a minúsculas.",
+      "vulnerable": true,
+      "notes": "Cierra el bypass de mayúsculas de %2F, pero todavía usa listas negras sobre la URL cruda. Una ruta con puntos codificados y separadores literales sirve para contrastar el filtro con LEVEL_10; el resultado depende del binding del contenedor."
+    },
+    {
+      "route": "/VulnerableApp/PathTraversal/LEVEL_12",
+      "method": "GET",
+      "parameters": {
+        "query": ["fileName"],
+        "type": "String"
+      },
+      "behavior": "Mantiene NUL y la lista de nombres, pero aplica fileName.contains(\"..\") sobre el valor ya ligado, sin RequestEntity.",
+      "vulnerable": true,
+      "notes": "El test confirma que .. literal se rechaza. Añadir el nombre permitido después del NUL no evita por sí mismo el chequeo de ..; este nivel es un buen control negativo para no confundir una condición UNSECURE con un bypass demostrado."
+    },
+    {
+      "route": "/VulnerableApp/PathTraversal/LEVEL_13",
+      "method": "GET",
+      "parameters": {
+        "query": ["fileName"],
+        "type": "String"
+      },
+      "behavior": "Solo acepta exactamente UserInfo.json u OwaspAppInfo.json mediante ALLOWED_FILE_NAMES.contains(fileName). Los nombres con prefijo de traversal, NUL o cualquier otro texto se rechazan.",
+      "vulnerable": false,
+      "notes": "Está marcado Variant.SECURE y no tiene @AttackVector. El test cubre null, .., un intento con %00 y el positivo UserInfo.json. Es una lista blanca pequeña, no una lectura arbitraria del directorio."
+    },
+    {
+      "route": "/VulnerableApp/PathTraversal/LEVEL_14",
+      "method": "GET",
+      "parameters": {
+        "query": ["fileName"],
+        "type": "String"
+      },
+      "behavior": "Construye Paths.get(BASE_RESOURCE_PATH + fileName).normalize() y continúa solo si el objetivo normalizado empieza por la base normalizada; InvalidPathException, incluido un NUL, da false.",
+      "vulnerable": false,
+      "notes": "Está marcado Variant.SECURE. A diferencia de LEVEL_13 permite cualquier recurso que permanezca léxicamente dentro de /scripts/PathTraversal/, pero bloquea ../secret.json, traversal profundo y NUL según los tests. La comprobación es léxica; no pretende resolver symlinks de un filesystem real."
+    },
+    {
+      "route": "/VulnerableApp/PathTraversal/LEVEL_15",
+      "method": "GET",
+      "parameters": {
+        "query": ["fileName"],
+        "type": "String"
+      },
+      "behavior": "Solo acepta ^[A-Za-z0-9_-]+\\.[A-Za-z0-9]{2,5}$: un nombre, un punto y una extensión corta. Rechaza separadores, .., backslash y NUL antes de leer.",
+      "vulnerable": false,
+      "notes": "Está marcado Variant.SECURE. El test cubre traversal, NUL y el positivo UserInfo.json. La expresión permite nombres adicionales que cumplan el patrón si existen como recursos, pero no permite construir segmentos de ruta."
+    }
+  ],
+  "exercises": [
+    {
+      "title": "Control positivo y negativo de un recurso permitido",
+      "route": "/VulnerableApp/PathTraversal/LEVEL_1",
+      "method": "GET",
+      "params": {
+        "fileName": "UserInfo.json"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "La primera petición debe devolver HTTP 200 con JSON isValid=true y content que contiene NirraIshq. La segunda, con un nombre inexistente, debe conservar HTTP 200 pero devolver isValid=false y content=null. Esto separa existencia del recurso de código de estado.",
+      "check": {
+        "kind": "json",
+        "value": true,
+        "path": "isValid"
+      },
+      "explanation": "LEVEL_1 no valida fileName. El recurso UserInfo.json es un control positivo conocido en el classpath; does-not-exist.json es un control negativo seguro. No se solicita ningún archivo del host.",
+      "mitigation": "Usar una lista blanca de nombres o resolver una ruta normalizada bajo un directorio base; no concatenar entrada no confiable a una ruta de recursos.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/PathTraversal/LEVEL_1 --data-urlencode 'fileName=UserInfo.json'",
+        "curl -i --get http://target:9090/VulnerableApp/PathTraversal/LEVEL_1 --data-urlencode 'fileName=does-not-exist.json'",
+        "Comparar el cuerpo JSON: un 200 no distingue por sí solo el positivo del negativo; revisar isValid y content."
+      ],
+      "hints": [
+        "La clave se llama fileName y se envía en la query string.",
+        "El bean serializa exactamente las claves content e isValid."
+      ]
+    },
+    {
+      "title": "LEVEL_1: lectura inocua del marcador fuera de la base lógica",
+      "route": "/VulnerableApp/PathTraversal/LEVEL_1",
+      "method": "GET",
+      "params": {
+        "fileName": "../../../../../../../../../../../../tmp/va-training.txt"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "Si la imagen expone ese archivo al classloader con la profundidad usada, el cuerpo debe contener VA_LAB_FILE e isValid=true. Si el classloader está limitado al classpath, puede responder isValid=false; esa incertidumbre es parte de la verificación y no debe reportarse como éxito ni como fallo de la vulnerabilidad.",
+      "check": {
+        "kind": "contains",
+        "value": "VA_LAB_FILE"
+      },
+      "explanation": "La función pasa el nombre sin ningún filtro. El objetivo es únicamente /tmp/va-training.txt creado para el laboratorio, no un secreto ni un archivo del sistema. La cadena de once segmentos ../ se mantiene fija para hacer reproducible el intento, pero la resolución efectiva pertenece al classloader del despliegue.",
+      "mitigation": "No aceptar rutas arbitrarias; aplicar allowlist o normalización con startsWith de una base confiable antes de abrir el recurso.",
+      "steps": [
+        "Precondición del laboratorio: /tmp/va-training.txt existe dentro de la imagen target y contiene exactamente o incluye VA_LAB_FILE.",
+        "curl -i --get http://target:9090/VulnerableApp/PathTraversal/LEVEL_1 --data-urlencode 'fileName=../../../../../../../../../../../../tmp/va-training.txt'",
+        "Verificar el marcador dentro de content; no inferir lectura solo de HTTP 200."
+      ],
+      "hints": [
+        "La salida se serializa como JSON y el contenido del recurso se concatena sin saltos de línea.",
+        "Si no aparece el marcador, documentar el límite del classloader en vez de sustituir el objetivo por /etc/passwd."
+      ]
+    },
+    {
+      "title": "LEVEL_2: contraste de ../ literal frente a puntos y barras codificados",
+      "route": "/VulnerableApp/PathTraversal/LEVEL_2",
+      "method": "GET",
+      "params": {
+        "fileName": "../../../../../../../../../../../../tmp/va-training.txt"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "La forma literal ../ debe ser bloqueada por el filtro de la URL; la variante con %2E%2E%2F solo puede alcanzar el marcador si el servidor liga la query decodificada a fileName y conserva la URL cruda codificada para RequestEntity. No afirmar éxito sin VA_LAB_FILE.",
+      "check": {
+        "kind": "manual",
+        "value": "Comparar isValid/content del intento literal y del codificado; considerar vulnerable solo si el segundo contiene VA_LAB_FILE."
+      },
+      "explanation": "El filtro de LEVEL_2 busca la cadena literal ../ en requestEntity.getUrl().toString(), mientras que el nombre usado por readFile proviene de @RequestParam. La separación entre representación cruda y valor decodificado es el punto didáctico.",
+      "mitigation": "Validar el valor decodificado y normalizado, no una representación textual parcial de la URL; restringirlo a una base conocida.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/PathTraversal/LEVEL_2 --data-urlencode 'fileName=../../../../../../../../../../../../tmp/va-training.txt'",
+        "curl -i --get http://target:9090/VulnerableApp/PathTraversal/LEVEL_2 --data-raw 'fileName=%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2Ftmp%2Fva-training.txt'",
+        "Revisar isValid y la presencia de VA_LAB_FILE; no usar el código de estado como prueba."
+      ],
+      "hints": [
+        "--data-raw conserva los porcentajes escritos en la query; --data-urlencode vuelve a codificar el valor.",
+        "La prueba es de parsing y validación, no requiere ningún comando ejecutado por el servidor."
+      ]
+    },
+    {
+      "title": "LEVEL_3: el bloqueo de .. literal también depende de la URL cruda",
+      "route": "/VulnerableApp/PathTraversal/LEVEL_3",
+      "method": "GET",
+      "params": {
+        "fileName": "../../../../../../../../../../../../tmp/va-training.txt"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "La entrada literal con .. debe resultar en isValid=false. La variante con ambos puntos codificados es solo un candidato de bypass y requiere que content contenga VA_LAB_FILE para considerarse evidencia.",
+      "check": {
+        "kind": "manual",
+        "value": "Confirmar rechazo del literal y evaluar el candidato codificado únicamente por isValid y VA_LAB_FILE."
+      },
+      "explanation": "LEVEL_3 amplía el texto bloqueado desde ../ a .., pero sigue inspeccionando requestEntity.getUrl().toString() y no hace canonicalización de fileName.",
+      "mitigation": "Canonicalizar una vez el valor ya decodificado y verificar que el destino permanezca dentro de una raíz permitida.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/PathTraversal/LEVEL_3 --data-urlencode 'fileName=../../../../../../../../../../../../tmp/va-training.txt'",
+        "curl -i --get http://target:9090/VulnerableApp/PathTraversal/LEVEL_3 --data-raw 'fileName=%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2Ftmp%2Fva-training.txt'",
+        "Registrar el cuerpo JSON completo de ambas respuestas, sin reemplazarlo por una conclusión basada en HTTP 200."
+      ],
+      "hints": [
+        "El nombre ligado puede estar decodificado aunque la cadena inspeccionada por el filtro siga codificada.",
+        "La respuesta negativa normal es {\"content\":null,\"isValid\":false}."
+      ]
+    },
+    {
+      "title": "LEVEL_4: barra codificada en mayúsculas como contraste de filtro textual",
+      "route": "/VulnerableApp/PathTraversal/LEVEL_4",
+      "method": "GET",
+      "params": {
+        "fileName": "../../../../../../../../../../../../tmp/va-training.txt"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "La candidata con %2E%2E%2F oculta tanto .. como %2f minúsculo en la URL cruda. Solo se debe marcar como alcanzable si el cuerpo incluye VA_LAB_FILE; de lo contrario informar el rechazo o la limitación del contenedor.",
+      "check": {
+        "kind": "contains",
+        "value": "VA_LAB_FILE"
+      },
+      "explanation": "El cuarto nivel agrega una comparación literal de %2f sin hacerla insensible a mayúsculas. La entrada no solicita secretos y el resultado se valida por el marcador de entrenamiento.",
+      "mitigation": "Evitar listas negras de codificaciones; decodificar de forma canónica, rechazar caracteres de ruta no permitidos o usar un identificador de recurso en vez de una ruta.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/PathTraversal/LEVEL_4 --data-raw 'fileName=%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2Ftmp%2Fva-training.txt'",
+        "Verificar el JSON y buscar exactamente VA_LAB_FILE en content."
+      ],
+      "hints": [
+        "La comparación de LEVEL_4 busca la forma minúscula %2f.",
+        "El parámetro lógico después del binding sigue representando separadores de ruta."
+      ]
+    },
+    {
+      "title": "LEVEL_5: puntos codificados y separadores literales contra el filtro insensible",
+      "route": "/VulnerableApp/PathTraversal/LEVEL_5",
+      "method": "GET",
+      "params": {
+        "fileName": "../../../../../../../../../../../../tmp/va-training.txt"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "La forma %2E%2E/ evita .. literal y no contiene la secuencia %2f, incluso después de toLowerCase(), porque los separadores se enviaron literales. Solo VA_LAB_FILE en content sería una observación positiva.",
+      "check": {
+        "kind": "contains",
+        "value": "VA_LAB_FILE"
+      },
+      "explanation": "LEVEL_5 corrige la sensibilidad a mayúsculas de la barra codificada, pero no deja de basarse en un filtro sobre la URL cruda. Se contrasta con LEVEL_4 sin cambiar el objetivo inocuo.",
+      "mitigation": "Aplicar una única decodificación canónica y una validación estructural de nombre, o resolver con Path.normalize y comprobar la raíz permitida.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/PathTraversal/LEVEL_5 --data-raw 'fileName=%2E%2E/%2E%2E/%2E%2E/%2E%2E/%2E%2E/%2E%2E/%2E%2E/%2E%2E/%2E%2E/%2E%2E/%2E%2E/tmp/va-training.txt'",
+        "Revisar isValid y content; no atribuir hallazgo por observar solo HTTP 200."
+      ],
+      "hints": [
+        "Los puntos están codificados en mayúsculas, mientras que las barras permanecen como /.",
+        "El control positivo UserInfo.json de LEVEL_5 debe seguir funcionando independientemente del candidato."
+      ]
+    },
+    {
+      "title": "LEVEL_6: control negativo de validación sobre el parámetro ya ligado",
+      "route": "/VulnerableApp/PathTraversal/LEVEL_6",
+      "method": "GET",
+      "params": {
+        "fileName": "../../../../../../../../../../../../tmp/va-training.txt"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "El intento literal debe devolver isValid=false y content=null porque fileName contiene ... No se debe presentar un doble encoding especulativo como bypass confirmado sin observar VA_LAB_FILE.",
+      "check": {
+        "kind": "json",
+        "value": false,
+        "path": "isValid"
+      },
+      "explanation": "Este nivel permite enseñar una distinción importante: la clase está etiquetada UNSECURE, pero su comprobación se hace sobre el valor ligado y el intento directo está bloqueado. El informe no convierte la etiqueta en una afirmación de explotación efectiva.",
+      "mitigation": "Mantener la defensa en profundidad con allowlist y base normalizada; rechazar también separadores y bytes inválidos antes de cualquier apertura.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/PathTraversal/LEVEL_6 --data-urlencode 'fileName=../../../../../../../../../../../../tmp/va-training.txt'",
+        "Confirmar JSON con isValid=false; el HTTP 200 es normal en esta aplicación."
+      ],
+      "hints": [
+        "@RequestParam entrega al método el valor decodificado.",
+        "No es necesario ni está permitido usar archivos del sistema como objetivo."
+      ]
+    },
+    {
+      "title": "LEVEL_7: truncamiento NUL con objetivo inocuo y sufijo de control",
+      "route": "/VulnerableApp/PathTraversal/LEVEL_7",
+      "method": "GET",
+      "params": {
+        "fileName": "../../../../../../../../../../../../tmp/va-training.txt%00UserInfo.json"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "Si el contenedor acepta %00 y el classloader resuelve el objetivo, el valor anterior al NUL se leerá y content contendrá VA_LAB_FILE; UserInfo.json después del NUL solo satisface ALLOWED_FILE_NAMES. Un rechazo del servidor o isValid=false debe documentarse como resultado/limitación, no como éxito.",
+      "check": {
+        "kind": "contains",
+        "value": "VA_LAB_FILE"
+      },
+      "explanation": "El método comprueba la presencia de un nombre permitido en queryFileName y luego corta en el primer carácter NUL. La prueba es segura porque el prefijo apunta solo al archivo de entrenamiento y no al host ni a un secreto.",
+      "mitigation": "Rechazar bytes NUL antes de cualquier procesamiento y aplicar una allowlist exacta o resolución normalizada que no admita sufijos de validación separados del destino.",
+      "steps": [
+        "Precondición: /tmp/va-training.txt existe en target y contiene VA_LAB_FILE.",
+        "curl -i --get http://target:9090/VulnerableApp/PathTraversal/LEVEL_7 --data-raw 'fileName=../../../../../../../../../../../../tmp/va-training.txt%00UserInfo.json'",
+        "Comprobar content/isValid y registrar si el proxy, Tomcat o Spring rechaza el byte NUL antes de llegar al método."
+      ],
+      "hints": [
+        "--data-raw conserva el texto %00 como escape HTTP; no se debe introducir un byte NUL literal en la shell.",
+        "El sufijo UserInfo.json es un nombre de recurso permitido, no un objetivo de lectura."
+      ]
+    },
+    {
+      "title": "LEVEL_8: NUL más filtro ../ en URL cruda",
+      "route": "/VulnerableApp/PathTraversal/LEVEL_8",
+      "method": "GET",
+      "params": {
+        "fileName": "../../../../../../../../../../../../tmp/va-training.txt%00UserInfo.json"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "La forma codificada de puntos y barras evita la secuencia ../ literal en la URL cruda si el contenedor mantiene esa representación para RequestEntity; la evidencia positiva sigue siendo únicamente VA_LAB_FILE en content.",
+      "check": {
+        "kind": "contains",
+        "value": "VA_LAB_FILE"
+      },
+      "explanation": "Contrasta con LEVEL_7: se conserva la lógica de NUL pero se añade un filtro textual que no examina la ruta normalizada. Se usan los mismos controles inocuos.",
+      "mitigation": "Eliminar la dependencia de la URL cruda, rechazar NUL y validar el valor decodificado mediante base normalizada o allowlist.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/PathTraversal/LEVEL_8 --data-raw 'fileName=%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2Ftmp%2Fva-training.txt%00UserInfo.json'",
+        "Verificar si la respuesta JSON contiene VA_LAB_FILE y anotar cualquier rechazo por NUL o normalización del servidor."
+      ],
+      "hints": [
+        "La condición ALLOWED_FILE_NAMES se evalúa sobre queryFileName antes de truncar.",
+        "No confundir un 200 de error lógico con una lectura positiva."
+      ]
+    },
+    {
+      "title": "LEVEL_10: contraste NUL con barra codificada en mayúsculas",
+      "route": "/VulnerableApp/PathTraversal/LEVEL_10",
+      "method": "GET",
+      "params": {
+        "fileName": "../../../../../../../../../../../../tmp/va-training.txt%00UserInfo.json"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "La candidatura usa %2E%2E%2F y el sufijo %00UserInfo.json. El filtro de LEVEL_10 no debe ver .. literal, pero sí puede ver %2f tras toLowerCase(); solo el marcador en content demostraría acceso.",
+      "check": {
+        "kind": "manual",
+        "value": "Comparar con LEVEL_4 y documentar si el filtro de %2f minúsculo bloquea antes del truncamiento; exigir VA_LAB_FILE para cualquier resultado positivo."
+      },
+      "explanation": "Este ejercicio hace visible la diferencia entre la defensa añadida en LEVEL_10 y el bypass de mayúsculas de LEVEL_4: convertir la URL a minúsculas neutraliza ese cambio de casing.",
+      "mitigation": "No usar filtros por substrings; validar el valor canónico, rechazar NUL y limitar el resultado normalizado al directorio base.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/PathTraversal/LEVEL_10 --data-raw 'fileName=%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2F%2E%2E%2Ftmp%2Fva-training.txt%00UserInfo.json'",
+        "Observar isValid/content y compararlo con LEVEL_4, sin emplear archivos reales del sistema."
+      ],
+      "hints": [
+        "El check de LEVEL_10 hace toLowerCase() antes de buscar %2f.",
+        "El sufijo permitido no convierte el resultado en una lectura válida por sí solo."
+      ]
+    },
+    {
+      "title": "LEVEL_11: filtro insensible a mayúsculas con separadores literales",
+      "route": "/VulnerableApp/PathTraversal/LEVEL_11",
+      "method": "GET",
+      "params": {
+        "fileName": "../../../../../../../../../../../../tmp/va-training.txt%00UserInfo.json"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "La variante %2E%2E/ no contiene .. literal ni %2f codificado en la URL cruda, aunque el valor ligado puede representar ../; si además pasa el manejo de NUL y la resolución del classloader, VA_LAB_FILE sería la única evidencia positiva.",
+      "check": {
+        "kind": "contains",
+        "value": "VA_LAB_FILE"
+      },
+      "explanation": "LEVEL_11 cierra la diferencia de mayúsculas de %2F, pero no comprueba una ruta normalizada. Se utilizan puntos codificados y slash literal para no presentar la secuencia prohibida en la representación que inspecciona el método.",
+      "mitigation": "Validar después de decodificar, normalizar y comprobar la raíz; eliminar el patrón de aceptar un nombre permitido después de NUL.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/PathTraversal/LEVEL_11 --data-raw 'fileName=%2E%2E/%2E%2E/%2E%2E/%2E%2E/%2E%2E/%2E%2E/%2E%2E/%2E%2E/%2E%2E/%2E%2E/%2E%2E/tmp/va-training.txt%00UserInfo.json'",
+        "Confirmar el marcador en content y registrar por separado cualquier rechazo de %00 del stack HTTP."
+      ],
+      "hints": [
+        "El filtro usa requestEntity.getUrl().toString().toLowerCase().contains(\"%2f\").",
+        "Una respuesta isValid=false no prueba que el filtro sea seguro en general; solo documenta este caso."
+      ]
+    },
+    {
+      "title": "LEVEL_12: control negativo de NUL frente a validación del parámetro",
+      "route": "/VulnerableApp/PathTraversal/LEVEL_12",
+      "method": "GET",
+      "params": {
+        "fileName": "../../../../../../../../../../../../tmp/va-training.txt%00UserInfo.json"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "El valor ligado contiene .. antes de cualquier sufijo y debe resultar en isValid=false; añadir UserInfo.json después de %00 no elimina esa comprobación. Este ejercicio no afirma un bypass adicional por doble encoding.",
+      "check": {
+        "kind": "json",
+        "value": false,
+        "path": "isValid"
+      },
+      "explanation": "LEVEL_12 combina truncamiento NUL con comprobación de .. sobre el parámetro ya ligado, por lo que es un control negativo útil frente a los niveles que filtran la URL cruda.",
+      "mitigation": "Aplicar allowlist/normalización sobre el valor decodificado y rechazar byte NUL antes de cualquier transformación.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/PathTraversal/LEVEL_12 --data-raw 'fileName=../../../../../../../../../../../../tmp/va-training.txt%00UserInfo.json'",
+        "Comprobar que el JSON mantiene HTTP 200 pero isValid=false y content=null."
+      ],
+      "hints": [
+        "La condición de LEVEL_12 es !queryFileName.contains(\"..\") además de la búsqueda del nombre permitido.",
+        "La condición original UNSECURE no sustituye una prueba del comportamiento concreto."
+      ]
+    },
+    {
+      "title": "LEVEL_13: lista blanca exacta como control positivo/negativo",
+      "route": "/VulnerableApp/PathTraversal/LEVEL_13",
+      "method": "GET",
+      "params": {
+        "fileName": "../../../../../../../../../../../../tmp/va-training.txt"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "UserInfo.json debe ser isValid=true; el intento de ruta al marcador debe ser isValid=false/content=null. Ambos pueden ser HTTP 200. La lista blanca no debe aceptar el nombre del marcador aunque el archivo exista.",
+      "check": {
+        "kind": "json",
+        "value": false,
+        "path": "isValid"
+      },
+      "explanation": "LEVEL_13 no intenta bloquear cada variante de traversal: solo compara igualdad exacta con dos nombres. Es la primera variante segura del controlador y el test incluye el control de NUL.",
+      "mitigation": "Conservar una lista blanca de identificadores o nombres exactos; si se amplía a una carpeta, usar resolución normalizada y controles de symlink según el backend.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/PathTraversal/LEVEL_13 --data-urlencode 'fileName=UserInfo.json'",
+        "curl -i --get http://target:9090/VulnerableApp/PathTraversal/LEVEL_13 --data-urlencode 'fileName=../../../../../../../../../../../../tmp/va-training.txt'",
+        "Comparar isValid/content; no interpretar el 200 del rechazo como lectura."
+      ],
+      "hints": [
+        "Variant.SECURE aparece en la anotación del método.",
+        "El positive control también verifica que la defensa no rompe el recurso permitido."
+      ]
+    },
+    {
+      "title": "LEVEL_14: normalización léxica y permanencia bajo la base",
+      "route": "/VulnerableApp/PathTraversal/LEVEL_14",
+      "method": "GET",
+      "params": {
+        "fileName": "../../../../../../../../../../../../tmp/va-training.txt"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "OwaspAppInfo.json debe ser aceptado como control positivo; la ruta normalizada hacia /tmp/va-training.txt debe dejar de empezar por /scripts/PathTraversal/ y devolver isValid=false. Un NUL inválido también se rechaza según el test.",
+      "check": {
+        "kind": "manual",
+        "value": "Confirmar positivo OwaspAppInfo.json y negativo de traversal mediante isValid/content; el marcador no debe ser necesario para demostrar el bloqueo."
+      },
+      "explanation": "El nivel resuelve lexicalmente base y objetivo y compara startsWith. El objetivo de entrenamiento permite probar la frontera sin leer un secreto; el rechazo se puede verificar con isValid=false.",
+      "mitigation": "Mantener la comparación con una base absoluta normalizada y, si se usa filesystem real, considerar realpath/symlink y permisos además de la comprobación léxica.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/PathTraversal/LEVEL_14 --data-urlencode 'fileName=OwaspAppInfo.json'",
+        "curl -i --get http://target:9090/VulnerableApp/PathTraversal/LEVEL_14 --data-urlencode 'fileName=../../../../../../../../../../../../tmp/va-training.txt'",
+        "Verificar JSON isValid/content en ambos casos y no usar el status HTTP como único criterio."
+      ],
+      "hints": [
+        "El método no se limita a los dos nombres permitidos, pero sí exige que el target normalizado empiece por la base.",
+        "El objetivo inocuo está fuera de esa base lógica; no lo sustituyas por un archivo del host."
+      ]
+    },
+    {
+      "title": "LEVEL_15: patrón de nombre seguro y control de separadores",
+      "route": "/VulnerableApp/PathTraversal/LEVEL_15",
+      "method": "GET",
+      "params": {
+        "fileName": "../../../../../../../../../../../../tmp/va-training.txt"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "UserInfo.json debe ser isValid=true; el candidato con ../, separadores y extensión del marcador no coincide con el patrón y debe ser isValid=false/content=null. Un NUL embebido también debe rechazarse.",
+      "check": {
+        "kind": "manual",
+        "value": "Comparar el positivo UserInfo.json y el negativo de traversal por isValid/content; no atribuir puntuación a un click de la interfaz."
+      },
+      "explanation": "La expresión regular permite letras, dígitos, guion bajo, guion, un punto y una extensión de 2 a 5 caracteres. Al no aceptar /, \\, .. ni NUL, no deja construir segmentos de traversal.",
+      "mitigation": "Preferir identificadores opacos o una allowlist; si la aplicación necesita nombres dinámicos, conservar la validación estructural y la comprobación de la base normalizada.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/PathTraversal/LEVEL_15 --data-urlencode 'fileName=UserInfo.json'",
+        "curl -i --get http://target:9090/VulnerableApp/PathTraversal/LEVEL_15 --data-urlencode 'fileName=../../../../../../../../../../../../tmp/va-training.txt'",
+        "Revisar los dos cuerpos JSON: positivo content no nulo y negativo content=null."
+      ],
+      "hints": [
+        "La validación ocurre antes de readFile y usa matcher.matches(), no una búsqueda parcial.",
+        "El status 200 es uniforme; la evidencia está en el cuerpo JSON."
+      ]
+    }
+  ],
+  "limitations": [
+    "Este informe es una verificación estática del commit 4df80bbcd42682ecf26334f12c568e0f4a326c1a; no afirma que se hayan ejecutado las peticiones contra target ni que una imagen concreta resuelva /tmp/va-training.txt mediante Class.getResourceAsStream.",
+    "El classloader puede limitarse a recursos del classpath, normalizar porcentajes antes de RequestEntity o rechazar %00 en el proxy, Tomcat o Spring. Por eso los ejercicios con codificación y NUL tienen incertidumbre explícita y exigen comprobar el cuerpo y el marcador.",
+    "Un HTTP 200 no prueba lectura, bypass ni vulnerabilidad: readFile devuelve 200 también con isValid=false y content=null. El verificador sugerido debe inspeccionar JSON.isValid y, para la prueba inocua, buscar VA_LAB_FILE en content.",
+    "El reflejo de un valor no prueba ejecución XSS, un 200 no prueba IDOR y no se atribuye puntaje por hacer clic en la interfaz. En esta familia no se usan payloads XSS, command injection, SSRF, RFI o XXE.",
+    "Los niveles 1 a 12 se clasifican vulnerables por su código y sus anotaciones UNSECURE/originales, pero un payload concreto puede ser bloqueado por capas HTTP o por la resolución de recursos. LEVEL_6 y LEVEL_12 se documentan además con controles negativos porque sus chequeos sobre el parámetro ligado rechazan el intento directo.",
+    "No se solicita secret.json, /etc/passwd, credenciales, archivos del host ni destinos externos. El único objetivo fuera del directorio lógico es /tmp/va-training.txt con el marcador VA_LAB_FILE creado para entrenamiento.",
+    "La plantilla JavaScript inserta datos de recursos en innerHTML, pero este informe no convierte ese detalle de presentación en una prueba de XSS ni lo usa para validar path traversal.",
+    "El chequeo manual debe conservar una respuesta positiva y su control negativo. La ausencia del marcador puede significar rechazo correcto, classloader aislado, normalización intermedia o archivo de entrenamiento no montado; debe registrarse la causa observable sin sobreafirmar."
+  ]
+}

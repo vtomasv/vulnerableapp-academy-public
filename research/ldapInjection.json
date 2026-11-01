@@ -1,0 +1,316 @@
+{
+  "id": "ldapInjection",
+  "title": "Inyección LDAP: manipulación de filtros y autenticación en VulnerableApp",
+  "concept": "La clase LDAPInjectionVulnerability construye filtros LDAP sobre la base dc=sasanlabs,dc=org a partir de parámetros de consulta recibidos por GET. En los niveles inseguros concatena username directamente en filtros como (uid=...), (|(uid=...)(mail=...)), (&(uid=...)(uid=*)) o (&(uid=...)); los caracteres LDAP de control pueden cambiar la estructura del filtro, ampliar la búsqueda o alterar la selección de usuarios. Los niveles 4 y 6 aplican Filter.encodeValue y están marcados Variant.SECURE. La anotación de clase usa el nombre LDAPInjectionVulnerability y el controlador central expone cada anotación VulnerableAppRequestMapping como /VulnerableApp/LDAPInjectionVulnerability/{LEVEL}. Todas estas anotaciones dejan requestMethod en su valor predeterminado GET. Las respuestas HTTP usan status 200 incluso para credenciales inválidas o errores controlados; la decisión didáctica se expresa dentro del JSON mediante isValid y content.",
+  "source_files": [
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/ldapInjection/LDAPInjectionVulnerability.java",
+    "/home/ubuntu/workshop-research/upstream/src/test/java/org/sasanlabs/service/vulnerability/ldapInjection/LDAPInjectionVulnerabilityTest.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/attackvectors/LDAPInjectionVulnerabilityPayload.properties",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/internal/utility/LevelConstants.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/internal/utility/annotations/VulnerableAppRequestMapping.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/bean/GenericVulnerabilityResponseBean.java"
+  ],
+  "levels": [
+    {
+      "route": "/VulnerableApp/LDAPInjectionVulnerability/LEVEL_1",
+      "method": "GET",
+      "parameters": {
+        "username": {
+          "location": "query",
+          "required": false,
+          "type": "string"
+        }
+      },
+      "behavior": "Si falta username devuelve content=Provide username e isValid=false. En otro caso construye ldapQuery=(uid={username}) sin codificar, busca bajo dc=sasanlabs,dc=org y devuelve content.filter junto con content.users si hay resultados. Si no hay usuarios devuelve No users found; si hay una excepción, devuelve el texto de error controlado.",
+      "vulnerable": true,
+      "notes": "@AttackVector description=LDAP_LEVEL_1_BASIC_INJECTION y payload=LDAP_PAYLOAD_LEVEL_1. El test invoca level1(\"*\") y espera el filtro (uid=*) y al menos tres usuarios; el wildcard LDAP convierte la búsqueda en una enumeración amplia. La anotación de ruta no declara Variant.SECURE y usa htmlTemplate=LEVEL_1/LDAP. Un filtro reflejado en la respuesta no es por sí solo prueba de que el servidor LDAP lo haya interpretado como una inyección: debe compararse con un caso nominal y con el resultado de búsqueda permitido por el laboratorio."
+    },
+    {
+      "route": "/VulnerableApp/LDAPInjectionVulnerability/LEVEL_2",
+      "method": "GET",
+      "parameters": {
+        "username": {
+          "location": "query",
+          "required": false,
+          "type": "string"
+        }
+      },
+      "behavior": "Si falta username devuelve content=Provide username e isValid=false. En otro caso concatena el valor dos veces en ldapQuery=(|(uid={username})(mail={username})), ejecuta la búsqueda y devuelve el filtro y la lista de uid cuando hay resultados; una lista vacía produce No users found.",
+      "vulnerable": true,
+      "notes": "@AttackVector description=LDAP_LEVEL_2_OR_BYPASS y payload=LDAP_PAYLOAD_LEVEL_2. El test usa username=* y solo comprueba que el filtro contiene (| y que se recuperan al menos tres entradas. El wildcard hace que ambas ramas OR sean muy amplias; el problema es la concatenación antes de la búsqueda, no el hecho de que la respuesta tenga HTTP 200. No hay Variant.SECURE en la anotación."
+    },
+    {
+      "route": "/VulnerableApp/LDAPInjectionVulnerability/LEVEL_3",
+      "method": "GET",
+      "parameters": {
+        "username": {
+          "location": "query",
+          "required": false,
+          "type": "string"
+        },
+        "password": {
+          "location": "query",
+          "required": false,
+          "type": "string"
+        }
+      },
+      "behavior": "Exige ambos parámetros. Construye ldapQuery=(&(uid={username})(uid=*)) sin codificar, devuelve false si la búsqueda está vacía, y para cada entrada encontrada verifica la contraseña almacenada con PasswordHashingUtils. La primera entrada cuya contraseña coincida se considera autenticada y devuelve content.filter, content.users e isValid=true; de lo contrario devuelve Invalid credentials.",
+      "vulnerable": true,
+      "notes": "@AttackVector description=LDAP_LEVEL_3_AUTH_BYPASS y payload=LDAP_PAYLOAD_LEVEL_3. El test usa username=*)(uid=* y password=alicePass123, que transforma la estructura en (&(uid=*)(uid=*)) y espera una única identidad autenticada en el fixture. El bypass no elimina la verificación de contraseña: amplía la selección de entradas y permite que una contraseña válida de una cuenta de laboratorio autentique una búsqueda manipulada. El código también puede incluir el filtro en un mensaje de error."
+    },
+    {
+      "route": "/VulnerableApp/LDAPInjectionVulnerability/LEVEL_4",
+      "method": "GET",
+      "parameters": {
+        "username": {
+          "location": "query",
+          "required": false,
+          "type": "string"
+        }
+      },
+      "behavior": "Exige username y aplica Filter.encodeValue(username) antes de formar (uid={sanitizedInput}). Una entrada que contiene wildcard, paréntesis o barras no conserva la estructura LDAP original. Si no coincide devuelve un objeto con filter, users vacío, message=No users found e isValid=false; si coincide devuelve usuarios e isValid=true.",
+      "vulnerable": false,
+      "notes": "@AttackVector description=LDAP_LEVEL_4_INPUT_SANITIZATION y payload=LDAP_PAYLOAD_LEVEL_4. Está marcado Variant.SECURE. El test confirma que para * )(uid=* el filtro no conserva )(uid=* ni | y que sigue comenzando por (uid=. La salida 200 no debe contarse como éxito: en este nivel el indicador útil es la codificación observable del filtro y la ausencia de resultados manipulados."
+    },
+    {
+      "route": "/VulnerableApp/LDAPInjectionVulnerability/LEVEL_5",
+      "method": "GET",
+      "parameters": {
+        "username": {
+          "location": "query",
+          "required": false,
+          "type": "string"
+        },
+        "password": {
+          "location": "query",
+          "required": false,
+          "type": "string"
+        }
+      },
+      "behavior": "Exige username y password, forma ldapQuery=(&(uid={username})) sin codificar, y solo expone Login successful o Invalid credentials. Recorre todas las entradas devueltas y acepta si alguna contraseña almacenada coincide; no devuelve el filtro ni la identidad, por lo que el resultado es ciego respecto de los detalles de la búsqueda.",
+      "vulnerable": true,
+      "notes": "@AttackVector description=LDAP_LEVEL_5_BLIND_INJECTION y payload=LDAP_PAYLOAD_LEVEL_5. El test usa username=*)(uid=* y password=antrikshPass123 y comprueba Login successful. El payload convierte el filtro en (&(uid=*)(uid=*)); el alcance observable es únicamente el mensaje de login. Esto no implica una garantía de éxito en otra imagen: depende de que el fixture contenga la contraseña de laboratorio usada por el test."
+    },
+    {
+      "route": "/VulnerableApp/LDAPInjectionVulnerability/LEVEL_6",
+      "method": "GET",
+      "parameters": {
+        "username": {
+          "location": "query",
+          "required": false,
+          "type": "string"
+        },
+        "password": {
+          "location": "query",
+          "required": false,
+          "type": "string"
+        }
+      },
+      "behavior": "Rechaza parámetros ausentes o vacíos. Codifica username con Filter.encodeValue, busca un único filtro (uid={sanitizedInput}), toma la primera entrada y verifica su contraseña. Devuelve Login successful solo para credenciales válidas y, en todos los demás casos o excepciones, Invalid credentials, siempre dentro de HTTP 200.",
+      "vulnerable": false,
+      "notes": "@AttackVector description=LDAP_LEVEL_6_SECURE y payload=LDAP_PAYLOAD_LEVEL_6. Está marcado Variant.SECURE. El test confirma credenciales válidas alice/alicePass123, rechaza alice/wrongPass, rechaza username=* y no filtra LDAP/Exception para un username malformado. La codificación evita que username=*)(uid=* convierta la consulta en una conjunción amplia."
+    }
+  ],
+  "exercises": [
+    {
+      "title": "Nivel 1: observar enumeración por wildcard y compararla con una búsqueda nominal",
+      "route": "/VulnerableApp/LDAPInjectionVulnerability/LEVEL_1",
+      "method": "GET",
+      "params": {
+        "username": "*"
+      },
+      "headers": {
+        "Accept": "application/json"
+      },
+      "body": null,
+      "content_type": "query parameters; GET sin cuerpo",
+      "expected": "El código concatena * en el filtro y, en el fixture de los tests, la respuesta contiene content.filter=(uid=*) y varias entradas en content.users con isValid=true. Como control nominal, username=alice debe limitar la búsqueda a esa identidad si existe en el fixture. No se debe tratar la cantidad exacta de usuarios como garantía fuera de la imagen de laboratorio.",
+      "check": {
+        "kind": "json",
+        "path": "content.filter",
+        "value": "(uid=*)"
+      },
+      "explanation": "El wildcard es un metacarácter de filtro LDAP. Al construir el filtro con concatenación, el valor deja de representar un nombre literal. La diferencia entre el control wildcard y el control alice ilustra el efecto de selección, pero el campo filter también es un reflejo construido por la aplicación y no sustituye la inspección de users.",
+      "mitigation": "Codificar cada valor con la rutina de escape LDAP apropiada, como Filter.encodeValue, y mantener una consulta con estructura fija. Validar además el formato de username y limitar los atributos devueltos al mínimo necesario.",
+      "steps": [
+        "Desde Kali, ejecutar el caso de laboratorio: curl -i --get http://target:9090/VulnerableApp/LDAPInjectionVulnerability/LEVEL_1 --data-urlencode 'username=*' -H 'Accept: application/json'",
+        "Ejecutar el control nominal, sin caracteres LDAP de control: curl -i --get http://target:9090/VulnerableApp/LDAPInjectionVulnerability/LEVEL_1 --data-urlencode 'username=alice' -H 'Accept: application/json'",
+        "Comparar el JSON de ambas respuestas: revisar content.filter, content.users e isValid; no asignar éxito solo por el código HTTP."
+      ],
+      "hints": [
+        "--data-urlencode es importante para que curl transmita literalmente el wildcard.",
+        "El test de repositorio usa level1(\"*\") y comprueba el filtro (uid=*), pero no fija una lista universal de usuarios.",
+        "La lista de usuarios y el filtro deben interpretarse juntos; una reflexión del parámetro aislada no prueba explotación."
+      ]
+    },
+    {
+      "title": "Nivel 2: ampliar una consulta OR con un wildcard controlado",
+      "route": "/VulnerableApp/LDAPInjectionVulnerability/LEVEL_2",
+      "method": "GET",
+      "params": {
+        "username": "*"
+      },
+      "headers": {
+        "Accept": "application/json"
+      },
+      "body": null,
+      "content_type": "query parameters; GET sin cuerpo",
+      "expected": "La respuesta del fixture de tests puede mostrar content.filter=(|(uid=*)(mail=*)) y una lista amplia en content.users con isValid=true. El control username=alice conserva la plantilla OR, pero restringe cada rama a alice; comparar ambos resultados es la comprobación representativa.",
+      "check": {
+        "kind": "json",
+        "path": "content.filter",
+        "value": "(|(uid=*)(mail=*))"
+      },
+      "explanation": "El endpoint inserta el mismo dato no escapado en dos ramas OR. El wildcard hace que la rama uid y la rama mail puedan coincidir ampliamente. La comprobación de código identifica la plantilla vulnerable; la comparación de users evita confundir el reflejo del filtro con evidencia suficiente.",
+      "mitigation": "Escapar username antes de interpolarlo en ambas ramas o usar una API de construcción de filtros que trate el dato como valor, no como sintaxis. Aplicar autorización y minimización de resultados aunque el filtro sea válido.",
+      "steps": [
+        "Ejecutar el caso de wildcard: curl -i --get http://target:9090/VulnerableApp/LDAPInjectionVulnerability/LEVEL_2 --data-urlencode 'username=*' -H 'Accept: application/json'",
+        "Ejecutar el control nominal: curl -i --get http://target:9090/VulnerableApp/LDAPInjectionVulnerability/LEVEL_2 --data-urlencode 'username=alice' -H 'Accept: application/json'",
+        "Verificar que la respuesta JSON expone el filtro en content.filter y comparar el tamaño/contenido de content.users sin asumir que el fixture desplegado es idéntico al de los tests."
+      ],
+      "hints": [
+        "El test original solo exige que el filtro contenga (| y que haya al menos tres usuarios para username=*.",
+        "No hace falta probar caracteres fuera del filtro LDAP ni consultar ningún host externo.",
+        "HTTP 200 es la envoltura común de la aplicación y no es el criterio de vulnerabilidad."
+      ]
+    },
+    {
+      "title": "Nivel 3: demostrar selección LDAP manipulada usando únicamente una credencial de fixture",
+      "route": "/VulnerableApp/LDAPInjectionVulnerability/LEVEL_3",
+      "method": "GET",
+      "params": {
+        "username": "*)(uid=*",
+        "password": "alicePass123"
+      },
+      "headers": {
+        "Accept": "application/json"
+      },
+      "body": null,
+      "content_type": "query parameters; GET sin cuerpo",
+      "expected": "El test del repositorio usa exactamente username=*)(uid=* con password=alicePass123 y espera que la consulta construida contenga (&(uid=*)(uid=*)) y que una entrada de laboratorio pueda autenticar. El control username=alice con password=wrongPass debe producir Invalid credentials. El resultado depende de que la imagen ejecutada tenga el mismo fixture de cuentas; este informe no afirma que una ejecución remota haya tenido éxito.",
+      "check": {
+        "kind": "json",
+        "path": "content.filter",
+        "value": "(&(uid=*)(uid=*))"
+      },
+      "explanation": "La entrada cierra el valor uid y agrega otro componente uid=*. El bucle posterior no autentica con una contraseña arbitraria: prueba la contraseña recibida contra cada entrada devuelta. Por eso se usa solo la contraseña pública del test de laboratorio y se incluye un control de contraseña errónea.",
+      "mitigation": "Codificar username antes de formar el filtro y asociar la verificación de contraseña a una identidad única ya validada. No iterar sobre una colección amplia para decidir autenticación; devolver un mensaje uniforme y aplicar rate limiting en un despliegue real.",
+      "steps": [
+        "Ejecutar el caso representativo, limitado al LDAP embebido: curl -i --get http://target:9090/VulnerableApp/LDAPInjectionVulnerability/LEVEL_3 --data-urlencode 'username=*)(uid=*' --data-urlencode 'password=alicePass123' -H 'Accept: application/json'",
+        "Ejecutar el control negativo con identidad nominal y contraseña incorrecta: curl -i --get http://target:9090/VulnerableApp/LDAPInjectionVulnerability/LEVEL_3 --data-urlencode 'username=alice' --data-urlencode 'password=wrongPass' -H 'Accept: application/json'",
+        "En el primer JSON, comprobar content.filter y revisar manualmente isValid/content.users; en el control, comprobar que el contenido sea Invalid credentials. No inferir bypass solo por un 200."
+      ],
+      "hints": [
+        "El valor de username contiene paréntesis y debe viajar con --data-urlencode; no lo pegues sin comillas en la shell.",
+        "alicePass123 aparece en LDAPInjectionVulnerabilityTest como dato de fixture, no como secreto del host.",
+        "La evidencia más fuerte es la comparación entre filtro construido, identidad devuelta y control con contraseña incorrecta."
+      ]
+    },
+    {
+      "title": "Nivel 4: verificar que Filter.encodeValue neutraliza la estructura del filtro",
+      "route": "/VulnerableApp/LDAPInjectionVulnerability/LEVEL_4",
+      "method": "GET",
+      "params": {
+        "username": ")(uid=*"
+      },
+      "headers": {
+        "Accept": "application/json"
+      },
+      "body": null,
+      "content_type": "query parameters; GET sin cuerpo",
+      "expected": "El filtro resultante debe contener la representación escapada producida por Filter.encodeValue, no la subestructura literal )(uid=*. Normalmente no habrá coincidencias y el envoltorio tendrá isValid=false con content.message=No users found. El control username=alice permite verificar que una entrada normal todavía puede buscarse.",
+      "check": {
+        "kind": "json",
+        "path": "isValid",
+        "value": false
+      },
+      "explanation": "Este es el control positivo de la mitigación: los mismos metacaracteres que alteran los niveles inseguros se convierten en valor literal LDAP. El check de isValid=false debe complementarse con inspección de content.filter para confirmar el escape; por sí solo solo demuestra que no hubo una autenticación/listado exitoso.",
+      "mitigation": "Conservar el escape de valores en toda entrada LDAP y cubrirlo con tests de caracteres *, (, ), \\, NUL y barras. Usar una librería de filtros en lugar de concatenar sintaxis y registrar errores sin exponer filtros sensibles.",
+      "steps": [
+        "Ejecutar la entrada estructural como valor de prueba: curl -i --get http://target:9090/VulnerableApp/LDAPInjectionVulnerability/LEVEL_4 --data-urlencode 'username=*)(uid=*' -H 'Accept: application/json'",
+        "Ejecutar el control nominal: curl -i --get http://target:9090/VulnerableApp/LDAPInjectionVulnerability/LEVEL_4 --data-urlencode 'username=alice' -H 'Accept: application/json'",
+        "Comparar content.filter de ambos JSON y confirmar que el payload no aparece como )(uid=* sin escapar; no interpretar HTTP 200 como indicio de vulnerabilidad."
+      ],
+      "hints": [
+        "El test del repositorio comprueba que el filtro no contiene )(uid=* ni | y que comienza por (uid=.",
+        "La serialización JSON puede mostrar barras escapadas; evalúa el valor JSON decodificado, no solo la representación textual.",
+        "La ausencia de usuarios es esperable para el valor escapado y no es un error del ejercicio."
+      ]
+    },
+    {
+      "title": "Nivel 5: observar una condición de autenticación ciega con resultado mínimo",
+      "route": "/VulnerableApp/LDAPInjectionVulnerability/LEVEL_5",
+      "method": "GET",
+      "params": {
+        "username": ")(uid=*",
+        "password": "antrikshPass123"
+      },
+      "headers": {
+        "Accept": "application/json"
+      },
+      "body": null,
+      "content_type": "query parameters; GET sin cuerpo",
+      "expected": "El test usa username=*)(uid=* y password=antrikshPass123 y espera content=Login successful e isValid=true, sin que el endpoint devuelva el filtro. Debe ejecutarse también el control antriksh/wrongPass, que debe ser Invalid credentials. La expectativa positiva está condicionada al fixture LDAP del test y no es una promesa sobre una instancia no verificada.",
+      "check": {
+        "kind": "json",
+        "path": "content",
+        "value": "Login successful"
+      },
+      "explanation": "La respuesta es ciega: solo informa si cualquier entrada seleccionada tiene una contraseña coincidente. La inyección cambia (&(uid={username})) a una conjunción que puede seleccionar muchas entradas; el bucle acepta la primera coincidencia de contraseña. La ausencia de filter en la respuesta impide usar la reflexión como evidencia única.",
+      "mitigation": "Escapar el identificador antes de construir el filtro, exigir una identidad única y no usar una búsqueda amplia como parte de la decisión de login. Devolver mensajes uniformes, auditar intentos y limitar frecuencia en el sistema real.",
+      "steps": [
+        "Ejecutar el caso representativo del test: curl -i --get http://target:9090/VulnerableApp/LDAPInjectionVulnerability/LEVEL_5 --data-urlencode 'username=*)(uid=*' --data-urlencode 'password=antrikshPass123' -H 'Accept: application/json'",
+        "Ejecutar el control negativo con identidad nominal y contraseña errónea: curl -i --get http://target:9090/VulnerableApp/LDAPInjectionVulnerability/LEVEL_5 --data-urlencode 'username=antriksh' --data-urlencode 'password=wrongPass' -H 'Accept: application/json'",
+        "Comparar content e isValid entre ambas respuestas; no buscar headers especiales ni atribuir resultado a un click de la interfaz."
+      ],
+      "hints": [
+        "antrikshPass123 es el valor usado por LDAPInjectionVulnerabilityTest para el fixture, no una instrucción para obtener contraseñas.",
+        "El endpoint no devuelve content.filter en éxito; esa falta de detalle es parte del comportamiento blind.",
+        "Si el fixture de la imagen difiere, registra la incertidumbre y no reemplaces la verificación por un intento contra otros servicios."
+      ]
+    },
+    {
+      "title": "Nivel 6: contrastar la implementación segura con controles de credenciales",
+      "route": "/VulnerableApp/LDAPInjectionVulnerability/LEVEL_6",
+      "method": "GET",
+      "params": {
+        "username": ")(uid=*",
+        "password": "anything"
+      },
+      "headers": {
+        "Accept": "application/json"
+      },
+      "body": null,
+      "content_type": "query parameters; GET sin cuerpo",
+      "expected": "El payload LDAP debe ser tratado como valor codificado y devolver Invalid credentials/isValid=false. Como control positivo independiente, alice/alicePass123 aparece en el test y debe devolver Login successful/isValid=true si el fixture coincide; alice/wrongPass debe devolver Invalid credentials. El control positivo prueba que la mitigación no rompe una credencial normal, no que el payload haya sido ejecutado.",
+      "check": {
+        "kind": "json",
+        "path": "isValid",
+        "value": false
+      },
+      "explanation": "El nivel 6 codifica username y toma solo la primera entrada de una búsqueda exacta. El mismo payload que amplía los niveles 3 y 5 deja de formar operadores LDAP. Se contrastan ataque, credencial válida y contraseña incorrecta para separar mitigación de una caída general del endpoint.",
+      "mitigation": "Mantener Filter.encodeValue, la consulta exacta y la política de respuesta uniforme. Añadir tests de regresión para wildcards, paréntesis, OR y valores vacíos, y no exponer excepciones o filtros internos a clientes.",
+      "steps": [
+        "Ejecutar el caso de entrada manipulada: curl -i --get http://target:9090/VulnerableApp/LDAPInjectionVulnerability/LEVEL_6 --data-urlencode 'username=*)(uid=*' --data-urlencode 'password=anything' -H 'Accept: application/json'",
+        "Ejecutar el control positivo del test: curl -i --get http://target:9090/VulnerableApp/LDAPInjectionVulnerability/LEVEL_6 --data-urlencode 'username=alice' --data-urlencode 'password=alicePass123' -H 'Accept: application/json'",
+        "Ejecutar el control negativo: curl -i --get http://target:9090/VulnerableApp/LDAPInjectionVulnerability/LEVEL_6 --data-urlencode 'username=alice' --data-urlencode 'password=wrongPass' -H 'Accept: application/json'",
+        "Revisar isValid y content en los tres JSON; un 200 común a todos los casos no demuestra bypass, y ningún click de la interfaz debe generar puntaje."
+      ],
+      "hints": [
+        "El test verifica explícitamente que username=* y username=)(uid=* no autentican en este nivel.",
+        "La contraseña válida alicePass123 solo sirve como control del fixture citado por el test.",
+        "Comprueba ausencia de LDAP/Exception en respuestas de error, pero no confundas esa higiene con una prueba adicional de autenticación."
+      ]
+    }
+  ],
+  "limitations": [
+    "El documento es una verificación estática del commit 4df80bbcd42682ecf26334f12c568e0f4a326c1a y de sus tests; no afirma que se hayan ejecutado las llamadas HTTP ni que el contenedor target esté disponible.",
+    "Las contraseñas alicePass123 y antrikshPass123 aparecen en LDAPInjectionVulnerabilityTest como datos del fixture embebido. Si la imagen desplegada usa otro directorio, los ejercicios de autenticación pueden devolver Invalid credentials aun cuando el código conserve el comportamiento descrito.",
+    "La presencia de HTTP 200 no prueba una vulnerabilidad: response(...) fija HttpStatus.OK tanto para resultados positivos como negativos. Debe inspeccionarse el JSON, en especial isValid y content, y compararse con controles.",
+    "Un filtro devuelto en content.filter es un valor generado por la aplicación; su reflejo no prueba por sí solo que se haya ejecutado una inyección contra LDAP. Para los niveles de autenticación, el criterio honesto combina filtro, identidad/resultado, credenciales de fixture y control negativo.",
+    "Esta familia no implementa XSS, IDOR, SSRF ni ejecución de comandos. Por analogía de verificación: un reflejo nunca probaría ejecución XSS, un 200 nunca probaría IDOR y no se debe atribuir puntaje por hacer clic en la interfaz. Aquí no se usan clicks como evidencia.",
+    "Los checks kind=json suponen que el verificador parsea el cuerpo JSON y resuelve paths con puntos, como content.filter, content o isValid. contains/not_contains deberían inspeccionar el cuerpo HTTP sin normalizar; header debe inspeccionar solo cabeceras; manual requiere revisión humana. Si el verificador no documenta esa semántica, reportar el resultado como inconcluso en vez de convertirlo en pass.",
+    "Los ejemplos son consultas de lectura contra el LDAP embebido y no incluyen comandos externos, reverse shells, acceso a secretos del host, denegación de servicio, borrado de datos, receptores externos ni navegación fuera de la familia ldapInjection.",
+    "La ruta depende de que el perfil public y el controlador central estén activos; la fuente de la anotación confirma GET por defecto y los nombres de nivel, pero la disponibilidad efectiva debe comprobarse únicamente en el laboratorio autorizado."
+  ]
+}

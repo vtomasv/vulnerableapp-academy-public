@@ -1,0 +1,382 @@
+{
+  "id": "cryptographicFailures",
+  "title": "Cryptographic Failures (Fallos criptográficos)",
+  "concept": "Familia que demuestra almacenamiento o protección inadecuada de contraseñas: texto plano, codificación reversible, cifrados débiles o caseros, hashes obsoletos/rápidos/sin salt, una clave AES derivada de la propia contraseña y, como control seguro, BCrypt adaptativo. El controlador de la familia está anotado como CryptographicFailures y cada método usa VulnerableAppRequestMapping con el nivel correspondiente; por ello el controlador central expone /VulnerableApp/{nombre}/{LEVEL}, es decir, /VulnerableApp/CryptographicFailures/LEVEL_N. Las operaciones son GET por defecto y reciben un mapa de parámetros de consulta; solo se utiliza password. El JSON de respuesta contiene content e isValid. En LEVEL_1 a LEVEL_10 isValid refleja si la conjetura coincide; en LEVEL_11 el caso sin password devuelve isValid=true para señalar la variante segura, no porque se haya validado una contraseña.",
+  "source_files": [
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/cryptographicFailures/CryptographicFailuresVulnerability.java (commit 4df80bbcd42682ecf26334f12c568e0f4a326c1a)",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/cryptographicFailures/repo/CryptographicFailuresVaultRepository.java (commit 4df80bbcd42682ecf26334f12c568e0f4a326c1a)",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/cryptographicFailures/repo/VaultEntity.java (commit 4df80bbcd42682ecf26334f12c568e0f4a326c1a)",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/cryptographicFailures/repo/CryptographicFailuresSeeder.java (commit 4df80bbcd42682ecf26334f12c568e0f4a326c1a)",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/scripts/CryptographicFailures/db/schema.sql (commit 4df80bbcd42682ecf26334f12c568e0f4a326c1a)",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/static/templates/CryptographicFailures/LEVEL_1/CryptographicFailures.html (commit 4df80bbcd42682ecf26334f12c568e0f4a326c1a)",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/static/templates/CryptographicFailures/LEVEL_1/CryptographicFailures.js (commit 4df80bbcd42682ecf26334f12c568e0f4a326c1a)",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/static/templates/CryptographicFailures/LEVEL_1/CryptographicFailures.css (commit 4df80bbcd42682ecf26334f12c568e0f4a326c1a)",
+    "/home/ubuntu/workshop-research/upstream/src/test/java/org/sasanlabs/service/vulnerability/cryptographicFailures/CryptographicFailuresVulnerabilityTest.java (commit 4df80bbcd42682ecf26334f12c568e0f4a326c1a)",
+    "/home/ubuntu/workshop-research/upstream/src/test/java/org/sasanlabs/service/vulnerability/cryptographicFailures/repo/CryptographicFailuresSeederTest.java (commit 4df80bbcd42682ecf26334f12c568e0f4a326c1a)",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/i18n/messages.properties (claves CRYPTOGRAPHIC_FAILURES, líneas 511-566 en el commit autorizado)",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/attackvectors/GeneralVulnerabilityPayload.properties (recurso compartido relevante; no existe un archivo de payload exclusivo de esta familia en el árbol inspeccionado)",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/scanner/sast/expectedIssues.csv (entradas Cryptographic Failures, líneas 22-32 en el commit autorizado)",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/internal/utility/annotations/VulnerableAppRestController.java (contrato de nombre del controlador)",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/internal/utility/annotations/VulnerableAppRequestMapping.java (nivel, variante y método GET por defecto)",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/controller/VulnerableAppRestController.java (construcción de URLs de sitemap con nombre/nivel)",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/bean/GenericVulnerabilityResponseBean.java (campos JSON content e isValid)",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/internal/utility/LevelConstants.java (LEVEL_1 a LEVEL_11 usados por la familia)"
+  ],
+  "levels": [
+    {
+      "route": "/VulnerableApp/CryptographicFailures/LEVEL_1",
+      "method": "GET",
+      "parameters": {
+        "password": "opcional; si falta o es vacío se devuelve la instrucción del reto; si coincide con el valor claro almacenado, isValid=true"
+      },
+      "behavior": "Consulta el secreto de level 1 y compara directamente password con el valor guardado en VaultEntity. Sin parámetro devuelve un reto genérico que no incluye el secreto; con una conjetura incorrecta devuelve Incorrect; con el texto exacto almacenado devuelve Correct.",
+      "vulnerable": true,
+      "notes": "El seeder genera una contraseña aleatoria de 10 caracteres y la guarda como CLEARTEXT. El esquema concede SELECT a cryptographic_failures_user para exploración del laboratorio. El test confirma que la respuesta sin password no contiene la contraseña y que una contraseña conocida del repositorio resuelve el reto; no se debe interpretar el 200 como protección."
+    },
+    {
+      "route": "/VulnerableApp/CryptographicFailures/LEVEL_2",
+      "method": "GET",
+      "parameters": {
+        "password": "opcional; el valor enviado se codifica con Base64 y se compara con el valor guardado"
+      },
+      "behavior": "Sin password concatena en content el valor Base64 almacenado. Con password calcula EncodingUtils.encodeBase64(password), por lo que la comprobación es reversible y no es cifrado.",
+      "vulnerable": true,
+      "notes": "El seeder genera una contraseña aleatoria de 10 caracteres y almacena solo su Base64. El valor mostrado es un reto del propio laboratorio, no un secreto del host; decodificarlo localmente no requiere atacar otro servicio. No hay test unitario de controlador específico para este nivel en los archivos inspeccionados."
+    },
+    {
+      "route": "/VulnerableApp/CryptographicFailures/LEVEL_3",
+      "method": "GET",
+      "parameters": {
+        "password": "opcional; se transforma con Caesar shift 3 antes de comparar"
+      },
+      "behavior": "Sin password muestra el ciphertext Caesar. Con password calcula EncryptionUtils.caesarCipher(password, 3) y compara el resultado con lo almacenado.",
+      "vulnerable": true,
+      "notes": "El seeder genera una contraseña alfanumérica aleatoria de 10 caracteres y aplica CAESAR. El espacio de búsqueda es pequeño y determinista; el reto de messages.properties indica revertir el desplazamiento. No hay test unitario de controlador específico para este nivel en los archivos inspeccionados."
+    },
+    {
+      "route": "/VulnerableApp/CryptographicFailures/LEVEL_4",
+      "method": "GET",
+      "parameters": {
+        "password": "opcional; se transforma mediante customCipher antes de comparar"
+      },
+      "behavior": "Sin password muestra el valor producido por la lógica custom. Con password calcula EncryptionUtils.customCipher(password) y compara el resultado.",
+      "vulnerable": true,
+      "notes": "El seeder genera una contraseña aleatoria de 12 caracteres y la almacena como CUSTOM. Las pistas del recurso i18n describen una transformación familiar seguida de otra transformación simple, pero la implementación de EncryptionUtils está fuera de la familia solicitada y no se ha inferido aquí más allá de su llamada. Es seguridad por obscuridad, no una construcción criptográfica revisable en este controlador; no hay test unitario específico de este nivel."
+    },
+    {
+      "route": "/VulnerableApp/CryptographicFailures/LEVEL_5",
+      "method": "GET",
+      "parameters": {
+        "password": "opcional; se calcula MD4(password) y se compara con el hash almacenado"
+      },
+      "behavior": "Sin password muestra el MD4. Con password calcula PasswordHashingUtils.md4Hex(password), devuelve el hash calculado en caso incorrecto y marca isValid=true si coincide.",
+      "vulnerable": true,
+      "notes": "El seeder selecciona aleatoriamente una contraseña de COMMON_PASSWORDS y guarda MD4 sin salt. El test de seeder confirma que el hash coincide con al menos una candidata de esa lista; el test de controlador confirma acierto con riverside123! y rechazo de wrong. El ejercicio no necesita servicios externos de búsqueda."
+    },
+    {
+      "route": "/VulnerableApp/CryptographicFailures/LEVEL_6",
+      "method": "GET",
+      "parameters": {
+        "password": "opcional; se calcula MD5(password) y se compara con el hash almacenado"
+      },
+      "behavior": "Sin password muestra el MD5. Con password calcula PasswordHashingUtils.md5Hex(password), expone el hash de la conjetura cuando falla y devuelve isValid=true cuando coincide.",
+      "vulnerable": true,
+      "notes": "El seeder elige una contraseña común de la lista fija y la guarda como MD5 sin salt. Los tests de seeder y controlador confirman el patrón con una candidata conocida. MD5 no debe usarse para almacenamiento de contraseñas aunque un resultado HTTP 200 sea normal."
+    },
+    {
+      "route": "/VulnerableApp/CryptographicFailures/LEVEL_7",
+      "method": "GET",
+      "parameters": {
+        "password": "opcional; se calcula SHA-1(password) y se compara con el hash almacenado"
+      },
+      "behavior": "Sin password muestra el SHA-1. Con password calcula PasswordHashingUtils.sha1Hex(password), retorna el hash de la entrada incorrecta y valida la coincidencia exacta.",
+      "vulnerable": true,
+      "notes": "El seeder guarda SHA-1 sin salt de una contraseña común elegida al azar. Los tests confirman que una candidata de COMMON_PASSWORDS puede producir el hash guardado y que riverside123! funciona en el escenario mockeado. SHA-1 está obsoleto para contraseñas."
+    },
+    {
+      "route": "/VulnerableApp/CryptographicFailures/LEVEL_8",
+      "method": "GET",
+      "parameters": {
+        "password": "opcional; se calcula LM(password) y se compara con el hash almacenado"
+      },
+      "behavior": "Sin password muestra el LM hash. Con password calcula PasswordHashingUtils.lmHash(password) y compara; la propia función LM hace que el caso de la contraseña no aporte seguridad en el escenario probado.",
+      "vulnerable": true,
+      "notes": "El método se llama getSecurePayloadLevel5, pero el mapping es LEVEL_8 y su variante por defecto sigue siendo UNSECURE. El seeder elige una contraseña común de hasta 14 caracteres. El test confirma que la misma contraseña en mayúsculas también valida, además del caso correcto y el incorrecto."
+    },
+    {
+      "route": "/VulnerableApp/CryptographicFailures/LEVEL_9",
+      "method": "GET",
+      "parameters": {
+        "password": "opcional; se calcula SHA-256 sin salt y se compara con el hash almacenado"
+      },
+      "behavior": "Sin password muestra el hash SHA-256. Con password calcula PasswordHashingUtils.unsaltedSha256Hex(password), devuelve el hash de la entrada si falla y valida igualdad si acierta.",
+      "vulnerable": true,
+      "notes": "SHA-256 no está roto como función general, pero en este uso es rápido, sin salt y no es un KDF de contraseñas. El seeder utiliza una contraseña común aleatoria; el test de seeder confirma que es candidata a la lista fija y el test de controlador cubre acierto y fallo."
+    },
+    {
+      "route": "/VulnerableApp/CryptographicFailures/LEVEL_10",
+      "method": "GET",
+      "parameters": {
+        "password": "opcional; se usa a la vez como texto plano y como material para derivar la clave AES-128"
+      },
+      "behavior": "Sin password muestra el ciphertext. Con password calcula EncryptionUtils.encrypt(password, EncryptionUtils.getKeyFromPassword(password)) y compara con el valor guardado.",
+      "vulnerable": true,
+      "notes": "Aunque AES-128 es un algoritmo fuerte en abstracto, el seeder fija level10Secret en aa123456 y cifra ese texto con una clave derivada de la misma contraseña. La debilidad es la reutilización/derivación predecible de la clave y el almacenamiento reversible, no AES por sí mismo. El código aporta un valor positivo determinista; no hay test unitario de controlador de este nivel en los archivos inspeccionados."
+    },
+    {
+      "route": "/VulnerableApp/CryptographicFailures/LEVEL_11",
+      "method": "GET",
+      "parameters": {
+        "password": "opcional; si existe se valida con isValidBcrypt contra el hash almacenado"
+      },
+      "behavior": "Sin password devuelve un mensaje SECURE CHALLENGE, el hash y el work factor, con isValid=true para marcar la variante segura. Con password usa PasswordHashingUtils.isValidBcrypt; acierto devuelve Correct y fallo devuelve Incorrect con explicación del coste adaptativo.",
+      "vulnerable": false,
+      "notes": "El mapping declara variant=Variant.SECURE. El seeder genera una contraseña aleatoria de 15 caracteres y un hash BCrypt con salt y factor de trabajo de la utilidad. El test de controlador inspeccionado no cubre LEVEL_11; el valor isValid=true sin password no es una contraseña aceptada y no debe puntuarse como tal."
+    }
+  ],
+  "exercises": [
+    {
+      "title": "LEVEL_1 — comprobar el reto de texto plano sin exponer un secreto en la respuesta",
+      "route": "/VulnerableApp/CryptographicFailures/LEVEL_1",
+      "method": "GET",
+      "params": {},
+      "headers": {"Accept": "application/json"},
+      "body": null,
+      "content_type": null,
+      "expected": "La petición sin parámetro debe devolver JSON 200 con el texto de reto sobre almacenamiento en texto plano y isValid=false; la petición de control con VA_LAB_WRONG también debe ser rechazada. El código no devuelve el texto plano en la primera respuesta, aunque el diseño inseguro permite que exista en el almacén del módulo.",
+      "check": {"kind": "json", "path": "/isValid", "value": false},
+      "explanation": "El handler compara directamente contra VaultEntity.password. El control negativo solo verifica el contrato de rechazo; la evidencia de la vulnerabilidad es el almacenamiento CLEARTEXT del seeder/esquema y no el estado HTTP.",
+      "mitigation": "No almacenar contraseñas reversibles ni en texto plano. Usar un KDF adaptativo moderno como Argon2id, scrypt o BCrypt con salt único por contraseña, y restringir la cuenta de base de datos a los permisos mínimos.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/CryptographicFailures/LEVEL_1 -H 'Accept: application/json'",
+        "curl -i --get http://target:9090/VulnerableApp/CryptographicFailures/LEVEL_1 -H 'Accept: application/json' --data-urlencode 'password=VA_LAB_WRONG'",
+        "Compara content con el marcador del reto e inspecciona /isValid. No infieras una vulnerabilidad solo por HTTP 200; la evidencia está en el código y el seeder. Si el laboratorio proporciona explícitamente un valor de entrenamiento de la base de datos de la aplicación, una comprobación positiva separada puede enviarlo con --data-urlencode 'password=VALOR_DEL_LAB', pero este informe no lo inventa porque la semilla es aleatoria."
+      ],
+      "hints": [
+        "El valor de LEVEL_1 se genera aleatoriamente en cada seed; no uses un valor hard-coded como supuesto positivo.",
+        "La prueba de código afirma que la respuesta sin password no contiene la contraseña; no conviertas la ausencia de reflejo en prueba de almacenamiento seguro."
+      ]
+    },
+    {
+      "title": "LEVEL_2 — distinguir Base64 de cifrado",
+      "route": "/VulnerableApp/CryptographicFailures/LEVEL_2",
+      "method": "GET",
+      "params": {},
+      "headers": {"Accept": "application/json"},
+      "body": null,
+      "content_type": null,
+      "expected": "La respuesta sin password debe incluir el reto y un valor Base64 almacenado, con isValid=false. Un control con VA_LAB_WRONG debe seguir siendo false; una contraseña decodificada del valor del reto, si se obtiene solo dentro del laboratorio, sería la comprobación positiva prevista por el código.",
+      "check": {"kind": "contains", "value": "CHALLENGE: The system 'encodes' passwords."},
+      "explanation": "El servidor concatena el valor codificado en content y después vuelve a codificar cada conjetura con EncodingUtils.encodeBase64. Base64 es reversible y no aporta confidencialidad.",
+      "mitigation": "Usar un KDF adaptativo con salt para contraseñas; si se necesita cifrar un secreto recuperable, usar un AEAD moderno con claves separadas y gestionadas fuera del dato protegido.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/CryptographicFailures/LEVEL_2 -H 'Accept: application/json'",
+        "curl -i --get http://target:9090/VulnerableApp/CryptographicFailures/LEVEL_2 -H 'Accept: application/json' --data-urlencode 'password=VA_LAB_WRONG'",
+        "Decodifica localmente, sin contactar servicios externos, únicamente el valor Base64 mostrado por la respuesta de este laboratorio; después, si lo deseas, pruébalo con curl -i --get http://target:9090/VulnerableApp/CryptographicFailures/LEVEL_2 --data-urlencode 'password=VALOR_DECODIFICADO_DEL_LAB'. El informe no afirma que el marcador de posición sea un valor exitoso."
+      ],
+      "hints": [
+        "El seeder aplica EncodingUtils.encodeBase64(genPassword(10)); no hay salt ni clave secreta.",
+        "Un 200 y el texto reflejado no prueban por sí solos una vulnerabilidad; aquí el indicio verificable es la operación Base64 en el código y el valor codificado entregado por el propio reto."
+      ]
+    },
+    {
+      "title": "LEVEL_3 — observar un cifrado Caesar determinista",
+      "route": "/VulnerableApp/CryptographicFailures/LEVEL_3",
+      "method": "GET",
+      "params": {},
+      "headers": {"Accept": "application/json"},
+      "body": null,
+      "content_type": null,
+      "expected": "La petición sin password debe mostrar el ciphertext del reto y isValid=false. La conjetura VA_LAB_WRONG debe devolver isValid=false. El valor correcto depende de la semilla aleatoria; no se promete una coincidencia sin recuperar/revertir el ciphertext del mismo laboratorio.",
+      "check": {"kind": "contains", "value": "CHALLENGE: A user's password is encrypted using an insecure cipher:"},
+      "explanation": "El código solo aplica un desplazamiento Caesar de 3 a la entrada y compara una salida determinista. La cantidad de desplazamientos posibles es pequeña y el propio reto pide revertir el corrimiento.",
+      "mitigation": "Eliminar cifrados caseros o de sustitución. Para contraseñas usar un KDF adaptativo con salt; para datos recuperables usar una biblioteca AEAD mantenida, con claves independientes y gestión de claves adecuada.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/CryptographicFailures/LEVEL_3 -H 'Accept: application/json'",
+        "curl -i --get http://target:9090/VulnerableApp/CryptographicFailures/LEVEL_3 -H 'Accept: application/json' --data-urlencode 'password=VA_LAB_WRONG'",
+        "Revierte localmente el desplazamiento fijo sobre el ciphertext mostrado por este laboratorio y, solo si obtienes una candidata, pruébala con curl -i --get http://target:9090/VulnerableApp/CryptographicFailures/LEVEL_3 --data-urlencode 'password=CANDIDATO_LOCAL_DEL_LAB'."
+      ],
+      "hints": [
+        "El método usa exactamente caesarCipher(password, 3); la semilla de LEVEL_3 no es fija en CryptographicFailuresSeeder.",
+        "La comprobación positiva depende del ciphertext actual y debe ser reportada como resultado observado, no como promesa previa."
+      ]
+    },
+    {
+      "title": "LEVEL_4 — identificar seguridad por obscuridad en el cifrado custom",
+      "route": "/VulnerableApp/CryptographicFailures/LEVEL_4",
+      "method": "GET",
+      "params": {},
+      "headers": {"Accept": "application/json"},
+      "body": null,
+      "content_type": null,
+      "expected": "La respuesta sin password debe incluir el reto y el valor transformado, con isValid=false; VA_LAB_WRONG debe fallar. La recuperación positiva queda condicionada a invertir localmente la transformación exacta usada por EncryptionUtils y a usar la semilla del laboratorio.",
+      "check": {"kind": "contains", "value": "CHALLENGE: A user's password is stored using custom logic:"},
+      "explanation": "La verificación depende de una función customCipher y la semilla guarda solo su salida. Ocultar el algoritmo no sustituye una construcción criptográfica segura; el detalle de la transformación debe tratarse como incertidumbre de implementación fuera del controlador de esta familia.",
+      "mitigation": "No diseñar criptografía propia. Separar hashing de contraseñas de cifrado de datos y adoptar primitivas auditadas, claves independientes, almacenamiento seguro de claves y rotación.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/CryptographicFailures/LEVEL_4 -H 'Accept: application/json'",
+        "curl -i --get http://target:9090/VulnerableApp/CryptographicFailures/LEVEL_4 -H 'Accept: application/json' --data-urlencode 'password=VA_LAB_WRONG'",
+        "Trata el valor transformado mostrado solo como dato del laboratorio. Si conoces la inversa local exacta de la compilación autorizada, envía la candidata resultante con curl -i --get http://target:9090/VulnerableApp/CryptographicFailures/LEVEL_4 --data-urlencode 'password=CANDIDATO_LOCAL_DEL_LAB'; no infieras éxito solo por el status."
+      ],
+      "hints": [
+        "messages.properties sugiere probar primero Base64 y después una transformación simple, pero este informe no afirma una implementación de EncryptionUtils no inspeccionada.",
+        "Un reflejo del ciphertext o un 200 no demuestra que se haya recuperado la contraseña."
+      ]
+    },
+    {
+      "title": "LEVEL_5 — control seguro de solicitud y evidencia de MD4 débil",
+      "route": "/VulnerableApp/CryptographicFailures/LEVEL_5",
+      "method": "GET",
+      "params": {"password": "VA_LAB_WRONG"},
+      "headers": {"Accept": "application/json"},
+      "body": null,
+      "content_type": null,
+      "expected": "La petición inicial sin password expone el formato/hash MD4 del reto y isValid=false; la conjetura VA_LAB_WRONG devuelve el hash de esa entrada y también isValid=false. El valor correcto es aleatorio entre COMMON_PASSWORDS y no se afirma aquí.",
+      "check": {"kind": "json", "path": "/isValid", "value": false},
+      "explanation": "El seeder selecciona una contraseña de una lista corta y la transforma con MD4 sin salt. El test de seeder verifica que el hash pertenece a esa lista, y el test de controlador verifica un acierto/fracaso en un escenario mockeado.",
+      "mitigation": "Migrar a Argon2id, scrypt o BCrypt con salt único y factor de trabajo calibrado; invalidar y rehashear credenciales antiguas tras autenticación o forzar rotación.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/CryptographicFailures/LEVEL_5 -H 'Accept: application/json'",
+        "curl -i --get http://target:9090/VulnerableApp/CryptographicFailures/LEVEL_5 -H 'Accept: application/json' --data-urlencode 'password=VA_LAB_WRONG'",
+        "Inspecciona /isValid y confirma que la respuesta de entrada incorrecta contiene el MD4 del marcador enviado; es un control negativo, no una afirmación de que se haya crackeado MD4."
+      ],
+      "hints": [
+        "La lista de candidatas está en CryptographicFailuresSeeder.COMMON_PASSWORDS; no uses herramientas externas ni listas de terceros.",
+        "La respuesta 200 es normal para el diseño y no es evidencia suficiente por sí misma."
+      ]
+    },
+    {
+      "title": "LEVEL_6 — control negativo frente a MD5 sin salt",
+      "route": "/VulnerableApp/CryptographicFailures/LEVEL_6",
+      "method": "GET",
+      "params": {"password": "VA_LAB_WRONG"},
+      "headers": {"Accept": "application/json"},
+      "body": null,
+      "content_type": null,
+      "expected": "Sin password se observa el reto que identifica MD5 y un hash; con VA_LAB_WRONG la respuesta debe ser isValid=false y mostrar el MD5 calculado de la entrada. La selección positiva real depende de la semilla del laboratorio.",
+      "check": {"kind": "json", "path": "/isValid", "value": false},
+      "explanation": "MD5 es rápido, sin salt y criptográficamente inadecuado para contraseñas. El seeder usa una candidata común aleatoria y el test confirma que una candidata de la lista puede resolver el hash en el fixture correspondiente.",
+      "mitigation": "Reemplazar MD5 por un KDF adaptativo con salt por registro y límites de intento; no reutilizar un hash rápido aunque el hash no sea directamente reversible en todos los casos.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/CryptographicFailures/LEVEL_6 -H 'Accept: application/json'",
+        "curl -i --get http://target:9090/VulnerableApp/CryptographicFailures/LEVEL_6 -H 'Accept: application/json' --data-urlencode 'password=VA_LAB_WRONG'",
+        "Usa la primera respuesta solo para identificar el reto/hash y la segunda como control negativo; no llames servicios externos de consulta de hashes."
+      ],
+      "hints": [
+        "El comportamiento positivo se prueba con una candidata de COMMON_PASSWORDS solo si se conoce cuál salió en el seed actual.",
+        "No otorgar crédito por ver un hash hexadecimal o por recibir HTTP 200: la comprobación debe leer el JSON y relacionarlo con el código."
+      ]
+    },
+    {
+      "title": "LEVEL_7 — observar SHA-1 sin salt y su control de fallo",
+      "route": "/VulnerableApp/CryptographicFailures/LEVEL_7",
+      "method": "GET",
+      "params": {"password": "VA_LAB_WRONG"},
+      "headers": {"Accept": "application/json"},
+      "body": null,
+      "content_type": null,
+      "expected": "La respuesta inicial identifica SHA1 y entrega el hash del reto con isValid=false; la petición con VA_LAB_WRONG debe devolver isValid=false y el hash de la entrada. El código no fija cuál de las contraseñas comunes fue sembrada.",
+      "check": {"kind": "json", "path": "/isValid", "value": false},
+      "explanation": "El handler usa sha1Hex directamente y el seeder no añade salt. Los tests cubren una candidata de ejemplo y validan que el hash proviene de la lista común.",
+      "mitigation": "No usar SHA-1 para contraseñas. Migrar a Argon2id/scrypt/BCrypt con salt único, factor de trabajo y política de rehash.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/CryptographicFailures/LEVEL_7 -H 'Accept: application/json'",
+        "curl -i --get http://target:9090/VulnerableApp/CryptographicFailures/LEVEL_7 -H 'Accept: application/json' --data-urlencode 'password=VA_LAB_WRONG'",
+        "Compara /isValid entre la conjetura incorrecta controlada y cualquier candidata elegida intencionadamente en el laboratorio; no declares que hubo coincidencia salvo que la respuesta diga realmente Correct."
+      ],
+      "hints": [
+        "SHA-1 está deprecado para almacenamiento de contraseñas por ser rápido y no tener salt en este diseño.",
+        "El texto de error expone el hash de la entrada, pero esa reflexión no prueba una ejecución adicional ni una lectura externa."
+      ]
+    },
+    {
+      "title": "LEVEL_8 — comprobar el comportamiento de LM y la pérdida de sensibilidad a mayúsculas",
+      "route": "/VulnerableApp/CryptographicFailures/LEVEL_8",
+      "method": "GET",
+      "params": {"password": "VA_LAB_WRONG"},
+      "headers": {"Accept": "application/json"},
+      "body": null,
+      "content_type": null,
+      "expected": "Sin password se muestra el reto LM con isValid=false; VA_LAB_WRONG debe fallar. Si se dispone de la misma candidata de COMMON_PASSWORDS en el seed actual, compararla en forma original y en mayúsculas es un control positivo/negativo del comportamiento case-insensitive, pero no se inventa aquí una coincidencia.",
+      "check": {"kind": "json", "path": "/isValid", "value": false},
+      "explanation": "LM tiene límites históricos de longitud y divide el material en mitades; el test del repositorio verifica específicamente que password y password.toUpperCase() sean válidos para el mismo hash mockeado.",
+      "mitigation": "Eliminar LM y cualquier formato heredado. Al migrar, forzar restablecimiento o validar contra un KDF moderno con salt, longitud completa y sensibilidad de contraseña definida explícitamente.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/CryptographicFailures/LEVEL_8 -H 'Accept: application/json'",
+        "curl -i --get http://target:9090/VulnerableApp/CryptographicFailures/LEVEL_8 -H 'Accept: application/json' --data-urlencode 'password=VA_LAB_WRONG'",
+        "Solo cuando conozcas una candidata legítima de la semilla de este laboratorio, envíala y envía su forma en mayúsculas con curl -i --get http://target:9090/VulnerableApp/CryptographicFailures/LEVEL_8 --data-urlencode 'password=CANDIDATO_DEL_LAB' y después --data-urlencode 'password=CANDIDATO_DEL_LAB_EN_MAYUSCULAS'."
+      ],
+      "hints": [
+        "El nombre Java getSecurePayloadLevel5 es un nombre engañoso; la anotación es LEVEL_8 y no tiene variant=SECURE.",
+        "No pruebes contraseñas fuera de la lista controlada ni hagas ráfagas; el objetivo es verificar el algoritmo descrito y el caso de mayúsculas."
+      ]
+    },
+    {
+      "title": "LEVEL_9 — distinguir SHA-256 general de un KDF de contraseñas",
+      "route": "/VulnerableApp/CryptographicFailures/LEVEL_9",
+      "method": "GET",
+      "params": {"password": "VA_LAB_WRONG"},
+      "headers": {"Accept": "application/json"},
+      "body": null,
+      "content_type": null,
+      "expected": "La respuesta sin password debe mostrar el reto y un SHA-256 sin salt; la conjetura VA_LAB_WRONG debe producir isValid=false y devolver el hash de la conjetura. La fortaleza de SHA-256 como hash general no convierte este uso rápido en almacenamiento seguro.",
+      "check": {"kind": "json", "path": "/isValid", "value": false},
+      "explanation": "El seeder usa unsaltedSha256Hex sobre una contraseña común. El test verifica tanto la pertenencia a COMMON_PASSWORDS como el resultado correcto/incorrecto en el handler.",
+      "mitigation": "Usar Argon2id, scrypt o BCrypt con salt único y coste adaptativo; nunca usar SHA-256 directo como función de derivación de contraseñas.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/CryptographicFailures/LEVEL_9 -H 'Accept: application/json'",
+        "curl -i --get http://target:9090/VulnerableApp/CryptographicFailures/LEVEL_9 -H 'Accept: application/json' --data-urlencode 'password=VA_LAB_WRONG'",
+        "Usa la respuesta solo como control negativo a nivel de aplicación. Un resultado positivo requiere una candidata real de la semilla actual y solo debe registrarse si /isValid es true."
+      ],
+      "hints": [
+        "La ausencia de salt hace iguales las salidas para iguales contraseñas y facilita tablas/precomputación; la lentitud adaptativa es la propiedad que falta.",
+        "No atribuir un hallazgo por el status code: comprobar content e isValid."
+      ]
+    },
+    {
+      "title": "LEVEL_10 — control positivo determinista de clave AES derivada de la propia contraseña",
+      "route": "/VulnerableApp/CryptographicFailures/LEVEL_10",
+      "method": "GET",
+      "params": {"password": "aa123456"},
+      "headers": {"Accept": "application/json"},
+      "body": null,
+      "content_type": null,
+      "expected": "Con password=aa123456 el código del seeder y del handler deben producir la misma comparación positiva, con isValid=true y content que indica que la contraseña fue aa123456. El control VA_LAB_WRONG debe devolver isValid=false; no se afirma ejecución en el target, solo lo que se deriva del código.",
+      "check": {"kind": "json", "path": "/isValid", "value": true},
+      "explanation": "El seeder fija level10Secret=aa123456 y cifra el propio secreto con getKeyFromPassword(level10Secret). El verificador vuelve a cifrar cada conjetura usando esa misma conjetura como clave derivada; esto hace trivial probar el valor conocido y demuestra un diseño reversible con clave débil/predecible.",
+      "mitigation": "No cifrar contraseñas: usar un KDF adaptativo. Para otros secretos recuperables, usar claves aleatorias independientes del plaintext, AEAD, almacenamiento de claves separado y parámetros/nonce gestionados de forma segura.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/CryptographicFailures/LEVEL_10 -H 'Accept: application/json' --data-urlencode 'password=aa123456'",
+        "curl -i --get http://target:9090/VulnerableApp/CryptographicFailures/LEVEL_10 -H 'Accept: application/json' --data-urlencode 'password=VA_LAB_WRONG'",
+        "Para el control positivo exige tanto /isValid=true como el mensaje de content que nombra aa123456; HTTP 200 por sí solo no es suficiente."
+      ],
+      "hints": [
+        "aa123456 es el único secreto de esta familia fijado literalmente en el seeder inspeccionado.",
+        "La lección es implementación de clave y almacenamiento reversible, no que AES-128 sea intrínsecamente débil."
+      ]
+    },
+    {
+      "title": "LEVEL_11 — control seguro BCrypt y semántica especial de isValid",
+      "route": "/VulnerableApp/CryptographicFailures/LEVEL_11",
+      "method": "GET",
+      "params": {},
+      "headers": {"Accept": "application/json"},
+      "body": null,
+      "content_type": null,
+      "expected": "Sin password la variante segura debe devolver el mensaje SECURE CHALLENGE, un hash BCrypt y isValid=true como indicador de configuración segura; con VA_LAB_WRONG debe devolver isValid=false e indicar el coste de trabajo. No se debe interpretar el primer true como contraseña aceptada.",
+      "check": {"kind": "contains", "value": "SECURE CHALLENGE:"},
+      "explanation": "La ruta declara variant=SECURE y el hash se genera con BCrypt, salt y work factor. El valor de la contraseña es aleatorio de 15 caracteres, por lo que el positivo no es reproducible a partir del código sin una observación autorizada del seed; el control de fallo sí es inocuo.",
+      "mitigation": "Mantener un KDF adaptativo como BCrypt/Argon2id, calibrar el factor según el entorno, usar salt por hash y rehash cuando suban los parámetros. No revelar el hash a clientes en producción aunque el reto lo haga deliberadamente.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/CryptographicFailures/LEVEL_11 -H 'Accept: application/json'",
+        "curl -i --get http://target:9090/VulnerableApp/CryptographicFailures/LEVEL_11 -H 'Accept: application/json' --data-urlencode 'password=VA_LAB_WRONG'",
+        "Verifica que la primera respuesta contiene SECURE CHALLENGE y que la segunda tiene /isValid=false. No otorgues crédito solo por hacer clic en la UI, observar un retraso o ver un 200; inspecciona la semántica JSON."
+      ],
+      "hints": [
+        "El test de controlador inspeccionado no cubre LEVEL_11; esta verificación se basa en la anotación variant=SECURE y en el seeder/código del handler.",
+        "El work factor hace cada intento más costoso, pero este ejercicio no mide tiempos ni debe generar muchas solicitudes."
+      ]
+    }
+  ],
+  "limitations": "Informe estático del commit 4df80bbcd42682ecf26334f12c568e0f4a326c1a; no se ejecutaron llamadas contra target, mailpit ni receiver y por tanto no se afirma que ningún ejercicio haya funcionado en el despliegue actual. Los niveles 1-4 y 11, y la contraseña aleatoria de level 1-4/11, dependen de la semilla en tiempo de arranque; los niveles 5-9 eligen aleatoriamente una candidata de COMMON_PASSWORDS; solo level 10 fija aa123456 en el código. Los tests inspeccionados cubren explícitamente level 1 y 5-9, pero no contienen pruebas de controlador para 2-4, 10 u 11. Los valores `isValid` y `content` son el contrato del bean: en LEVEL_11 el true inicial significa variante segura, no autenticación válida. Un reflejo de texto, un hash visible, un retraso, un clic en la UI o un status 200 no prueba por sí solo una vulnerabilidad ni una explotación; el verificador sugerido debe contrastar el JSON con la ruta, el parámetro y el comportamiento del código. No se incluyen payloads de CommandInjection, XXE, path traversal, SSRF/RFI ni XSS porque no pertenecen a esta familia; en consecuencia no se contactan servicios externos, no se leen secretos del host, no se ejecutan comandos sobre el target y no se realizan acciones destructivas o de denegación de servicio."
+}

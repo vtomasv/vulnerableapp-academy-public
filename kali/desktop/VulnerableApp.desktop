@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=VulnerableApp — aplicación del taller
+Comment=Abre solo el target local; no comparte origen con el portal
+Exec=firefox-esr http://target:9090/VulnerableApp/
+Icon=web-browser
+Terminal=false
+Categories=Education;

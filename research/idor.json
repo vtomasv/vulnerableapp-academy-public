@@ -1,0 +1,325 @@
+{
+  "id": "idor",
+  "title": "IDOR (Insecure Direct Object Reference): cinco niveles de autorización sobre perfiles",
+  "concept": "Esta familia modela referencias directas a objetos de usuario (el parámetro id o el identificador guardado en una cookie) y muestra la diferencia entre autenticar una sesión y autorizar cada objeto solicitado. La base de datos de la imagen contiene, según data.sql, los perfiles 1=Alice (USER, salario 50000), 2=Bob (USER, salario 60000) y 3=Charlie (ADMIN, salario 70000). El flujo de login es POST sobre la misma ruta de cada nivel, con username y password como formulario; el servicio genera JWT HS256 firmado con un secreto aleatorio de vida de la instancia y lo valida antes de atender el GET. El envoltorio JSON tiene content e isValid. Los niveles 1 a 4 devuelven HTTP 200 incluso para varios rechazos; el nivel 5 diferencia 401, 403, 404 y 200. El objetivo de laboratorio es observar autorización a nivel de objeto, no modificar datos ni ejecutar comandos.",
+  "source_files": [
+    "src/main/java/org/sasanlabs/service/vulnerability/idor/IDORVulnerability.java",
+    "src/main/java/org/sasanlabs/service/vulnerability/idor/IDORLoginController.java",
+    "src/main/java/org/sasanlabs/service/vulnerability/idor/IDORLoginService.java",
+    "src/main/java/org/sasanlabs/service/vulnerability/idor/IDORLoginDetails.java",
+    "src/main/java/org/sasanlabs/service/vulnerability/idor/User.java",
+    "src/main/resources/attackvectors/IDORVulnerabilityPayload.properties",
+    "src/main/resources/scripts/IDOR/db/schema.sql",
+    "src/main/resources/scripts/IDOR/db/data.sql",
+    "src/main/resources/static/templates/IDORVulnerability/LEVEL_1/IDOR.html",
+    "src/main/resources/static/templates/IDORVulnerability/LEVEL_1/IDOR.js",
+    "src/main/resources/static/templates/IDORVulnerability/LEVEL_1/IDOR.css",
+    "src/main/resources/static/templates/IDORVulnerability/LEVEL_2/IDOR.html",
+    "src/main/resources/static/templates/IDORVulnerability/LEVEL_2/IDOR.js",
+    "src/main/resources/static/templates/IDORVulnerability/LEVEL_2/IDOR.css",
+    "src/main/resources/static/templates/IDORVulnerability/LEVEL_3/IDOR.html",
+    "src/main/resources/static/templates/IDORVulnerability/LEVEL_3/IDOR.js",
+    "src/main/resources/static/templates/IDORVulnerability/LEVEL_3/IDOR.css",
+    "src/main/resources/static/templates/IDORVulnerability/LEVEL_4/IDOR.html",
+    "src/main/resources/static/templates/IDORVulnerability/LEVEL_4/IDOR.js",
+    "src/main/resources/static/templates/IDORVulnerability/LEVEL_4/IDOR.css",
+    "src/main/resources/static/templates/IDORVulnerability/LEVEL_5/IDOR.html",
+    "src/main/resources/static/templates/IDORVulnerability/LEVEL_5/IDOR.js",
+    "src/main/resources/static/templates/IDORVulnerability/LEVEL_5/IDOR.css",
+    "src/test/java/org/sasanlabs/service/vulnerability/idor/IDORVulnerabilityTest.java",
+    "src/test/java/org/sasanlabs/service/vulnerability/idor/IDORLoginServiceTest.java",
+    "src/main/java/org/sasanlabs/internal/utility/annotations/VulnerableAppRestController.java",
+    "src/main/java/org/sasanlabs/internal/utility/annotations/VulnerableAppRequestMapping.java",
+    "src/main/java/org/sasanlabs/internal/utility/LevelConstants.java",
+    "src/main/java/org/sasanlabs/controller/VulnerableAppRestController.java",
+    "src/main/java/org/sasanlabs/service/vulnerability/bean/GenericVulnerabilityResponseBean.java"
+  ],
+  "levels": [
+    {
+      "route": "/VulnerableApp/IDORVulnerability/LEVEL_1",
+      "method": "GET para perfil; POST para login",
+      "parameters": {
+        "GET": {
+          "id": "Integer opcional; el valor seleccionado se envía como id=1, 2 o 3",
+          "cookie": "token_level1: JWT firmado obligatorio para entrar al método"
+        },
+        "POST": {
+          "username": "Alice, Bob o Charlie en la semilla mostrada",
+          "password": "Formulario application/x-www-form-urlencoded; la plantilla y las pruebas usan P@ssw0rd!2026",
+          "response_cookie": "token_level1, HttpOnly, válido durante 3600 segundos"
+        }
+      },
+      "behavior": "El GET valida que el token sea válido y luego consulta id directamente con SELECT ... WHERE id. No compara el id solicitado con el userId del token. Con un token de Alice, id=2 puede devolver el objeto de Bob y su salario; id=3 puede devolver el de Charlie.",
+      "vulnerable": true,
+      "notes": "Es el caso base de IDOR por ausencia de autorización a nivel de objeto. Sin cookie devuelve el mensaje Provide login or token en HTTP 200; un id inexistente devuelve User not found en HTTP 200. El test unitario level1_ShouldAllowAccessToAnyId usa un token válido y un perfil con id distinto, pero no sustituye una prueba HTTP integrada. La UI usa textContent para presentar el JSON; no es un ejercicio de XSS."
+    },
+    {
+      "route": "/VulnerableApp/IDORVulnerability/LEVEL_2",
+      "method": "GET para perfil; POST para login",
+      "parameters": {
+        "GET": {
+          "query": "No usa id; toma el identificador de la cookie userId_level2",
+          "cookies": "token_level2 (JWT firmado) y userId_level2 (Integer controlado por el cliente)"
+        },
+        "POST": {
+          "username": "Alice, Bob o Charlie",
+          "password": "Formulario application/x-www-form-urlencoded",
+          "response_cookies": "token_level2 HttpOnly y userId_level2 sin HttpOnly, ambos con vida de 3600 segundos"
+        }
+      },
+      "behavior": "El GET verifica la firma del token, pero no ata userId_level2 al subject del token. Por eso una sesión autenticada como Alice puede conservar su token y cambiar userId_level2 de 1 a 2 para consultar a Bob. El método no recibe un parámetro id.",
+      "vulnerable": true,
+      "notes": "La debilidad es la confianza en una identidad de objeto almacenada del lado cliente. Sin ambas cookies devuelve Please login first. en HTTP 200. Un valor no entero para userId_level2 puede ser rechazado por la conversión de Spring antes de entrar al método; no es necesario para el ejercicio."
+    },
+    {
+      "route": "/VulnerableApp/IDORVulnerability/LEVEL_3",
+      "method": "GET para perfil; POST para login",
+      "parameters": {
+        "GET": {
+          "id": "Integer opcional; si falta, usa el userId del JWT",
+          "cookies": "token_level3 (JWT firmado) y role_level3 (texto no firmado; si falta se usa el rol del JWT)"
+        },
+        "POST": {
+          "username": "Alice, Bob o Charlie",
+          "password": "Formulario application/x-www-form-urlencoded",
+          "response_cookies": "token_level3 HttpOnly y role_level3 modificable por el cliente"
+        }
+      },
+      "behavior": "El token firmado proporciona tokenUserId, pero la decisión de privilegios toma role_level3 si existe. Con role_level3=ADMIN, la condición de administrador permite cualquier id; la respuesta incluso sobrescribe el rol presentado en el perfil con el valor de la cookie. Con role_level3=USER, pedir un id ajeno produce Access Denied - Insufficient privileges en HTTP 200 con isValid=false.",
+      "vulnerable": true,
+      "notes": "El payload original describe el escalamiento por cookie de rol. No hace falta ni es seguro intentar alterar el JWT: el servicio valida su firma y la prueba de servicio confirma que un payload manipulado falla. El control positivo de autorización es pedir el propio id con role_level3=USER; el control negativo para la vulnerabilidad es pedir id=3 después de establecer role_level3=ADMIN."
+    },
+    {
+      "route": "/VulnerableApp/IDORVulnerability/LEVEL_4",
+      "method": "GET para perfil; POST para login",
+      "parameters": {
+        "GET": {
+          "id": "Integer opcional; si falta, usa el userId del JWT",
+          "cookies": "token_level4 (JWT firmado) y role_level4 (Base64 URL-safe sin padding, no firmado)"
+        },
+        "POST": {
+          "username": "Alice, Bob o Charlie",
+          "password": "Formulario application/x-www-form-urlencoded",
+          "response_cookies": "token_level4 HttpOnly y role_level4 codificado con Base64 URL-safe sin padding"
+        }
+      },
+      "behavior": "La aplicación decodifica role_level4 con Base64.getUrlDecoder y después aplica la misma condición administrativa del nivel 3. El valor codificado para USER es VVNFUg y el valor codificado para ADMIN es QURNSU4. La cookie no está firmada, por lo que un usuario autenticado puede sustituir la representación por QURNSU4 y acceder a otro id.",
+      "vulnerable": true,
+      "notes": "Codificar no es autenticar ni integrar autorización: Base64 es reversible y no aporta integridad. Una codificación inválida hace que el rol decodificado sea null y normalmente impide el bypass, pero no debe usarse como prueba principal. Los tests level4_ShouldAllowOpaqueIdAccess y level4_ShouldAllowAccessToAnyOpaqueIdRegardlessOfRole cubren el caso tamperable."
+    },
+    {
+      "route": "/VulnerableApp/IDORVulnerability/LEVEL_5",
+      "method": "GET para perfil; POST para login",
+      "parameters": {
+        "GET": {
+          "id": "Integer obligatorio para obtener un perfil",
+          "cookie": "token_level5 (JWT firmado); el rol del token no se toma como autoridad"
+        },
+        "POST": {
+          "username": "Alice, Bob o Charlie",
+          "password": "Formulario application/x-www-form-urlencoded",
+          "response_cookie": "token_level5 HttpOnly, válido durante 3600 segundos"
+        }
+      },
+      "behavior": "El servidor valida el JWT, obtiene tokenUserId y consulta de nuevo el rol real de ese usuario en idor_users. Solo permite el objeto propio o cualquier objeto si el rol real almacenado es ADMIN. Usuario normal contra objeto ajeno devuelve HTTP 403 con Access Denied - Proper RBAC enforced; token ausente o inválido devuelve HTTP 401; un administrador sembrado como Charlie puede consultar Bob con HTTP 200.",
+      "vulnerable": false,
+      "notes": "Es el nivel original marcado Variant.SECURE y el único que consulta el rol en la base de datos antes de autorizar. No debe etiquetarse como vulnerabilidad porque un administrador pueda leer perfiles ajenos: ese es el permiso explícito del modelo RBAC. Los tests verifican tanto el bloqueo de una escalada como el acceso legítimo del administrador."
+    }
+  ],
+  "exercises": [
+    {
+      "title": "Nivel 1: comparar el objeto propio con un id ajeno usando el mismo token",
+      "route": "/VulnerableApp/IDORVulnerability/LEVEL_1",
+      "method": "GET (con login POST previo en la misma ruta)",
+      "params": {
+        "id": "1 para control propio y 2 para el objeto de Bob"
+      },
+      "headers": {
+        "Cookie": "token_level1=<TOKEN_DE_ALICE>"
+      },
+      "body": null,
+      "content_type": null,
+      "expected": "Expectativa derivada del código, no resultado observado: tras autenticar Alice, id=1 debería devolver content.username=Alice e isValid=true; id=2 debería devolver content.username=Bob e isValid=true, ambos con HTTP 200. La pareja de requests es importante: comprobar solamente un 200 o solamente un nombre no establece por sí mismo que hubo IDOR.",
+      "check": {
+        "kind": "json",
+        "path": "$.content.username",
+        "value": "Bob"
+      },
+      "explanation": "El servicio solo valida la firma del token y el controlador pasa el Integer id directamente a fetchUserById. La identidad del subject no participa en la autorización, de modo que la misma sesión de Alice puede consultar otro registro.",
+      "mitigation": "Derivar la autorización del sujeto autenticado y comprobar en servidor que puede leer el objeto solicitado; para un usuario normal comparar tokenUserId con id y devolver una respuesta de denegación uniforme. No confiar en identificadores enviados por cookie o query string.",
+      "steps": [
+        "curl -i -c /tmp/va-idor-l1.cookies -X POST http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_1 --data-urlencode 'username=Alice' --data-urlencode 'password=P@ssw0rd!2026'",
+        "curl -i --get http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_1 --data-urlencode 'id=1' -b /tmp/va-idor-l1.cookies",
+        "curl -i --get http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_1 --data-urlencode 'id=2' -b /tmp/va-idor-l1.cookies"
+      ],
+      "hints": [
+        "Con -c se conserva el token que el servidor emita; -b lo reenvía sin exponerlo al navegador.",
+        "El control propio y la consulta ajena deben usar el mismo cookie jar y cambiar únicamente id.",
+        "No uses ids fuera de 1, 2 y 3 ni intentes payloads de inyección."
+      ]
+    },
+    {
+      "title": "Nivel 2: alterar solo userId_level2, no el JWT",
+      "route": "/VulnerableApp/IDORVulnerability/LEVEL_2",
+      "method": "GET (con login POST previo en la misma ruta)",
+      "params": {},
+      "headers": {
+        "Cookie": "token_level2=<TOKEN_DE_ALICE>; userId_level2=2"
+      },
+      "body": null,
+      "content_type": null,
+      "expected": "Expectativa derivada del código, no resultado observado: la cookie token_level2 de Alice debería seguir siendo válida mientras userId_level2=2 hace que content.username sea Bob, content.userId sea 2 e isValid sea true. Con userId_level2=1 como control, el resultado esperado es Alice.",
+      "check": {
+        "kind": "json",
+        "path": "$.content.username",
+        "value": "Bob"
+      },
+      "explanation": "El controlador verifica el JWT, pero usa loggedInUser, obtenido de una cookie cliente, como única entrada de fetchUserById. No compara esa cookie con el subject firmado. El ejercicio demuestra manipulación de referencia, no falsificación criptográfica.",
+      "mitigation": "Eliminar userId_level2 como autoridad: extraer siempre el userId del token o de una sesión del servidor y comprobar autorización de objeto en el backend. Marcar cookies sensibles Secure, HttpOnly y SameSite es complementario, no reemplaza la autorización.",
+      "steps": [
+        "curl -i -c /tmp/va-idor-l2.cookies -X POST http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_2 --data-urlencode 'username=Alice' --data-urlencode 'password=P@ssw0rd!2026'",
+        "curl -i http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_2 -b /tmp/va-idor-l2.cookies",
+        "Copiar el valor token_level2 de la cabecera Set-Cookie de la respuesta anterior y usarlo sin modificar en el siguiente control de laboratorio:",
+        "curl -i http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_2 -H 'Cookie: token_level2=<TOKEN_DE_ALICE>; userId_level2=2'"
+      ],
+      "hints": [
+        "El primer GET con el jar comprueba el comportamiento normal con el userId emitido por login.",
+        "En la última orden sustituye únicamente <TOKEN_DE_ALICE> por el valor recibido; no edites ningún JWT.",
+        "El check Bob es una señal útil, pero debe interpretarse junto al control Alice y la identidad con la que se inició sesión."
+      ]
+    },
+    {
+      "title": "Nivel 3: cambiar role_level3 a ADMIN para probar el bypass de autorización",
+      "route": "/VulnerableApp/IDORVulnerability/LEVEL_3",
+      "method": "GET (con login POST previo en la misma ruta)",
+      "params": {
+        "id": "1 como control propio y 3 como objeto de Charlie"
+      },
+      "headers": {
+        "Cookie": "token_level3=<TOKEN_DE_ALICE>; role_level3=ADMIN"
+      },
+      "body": null,
+      "content_type": null,
+      "expected": "Expectativa derivada del código, no resultado observado: con role_level3=USER y id=3 se espera HTTP 200, isValid=false y Access Denied - Insufficient privileges; con el mismo token y role_level3=ADMIN se espera HTTP 200, isValid=true y content.username=Charlie.",
+      "check": {
+        "kind": "json",
+        "path": "$.content.username",
+        "value": "Charlie"
+      },
+      "explanation": "El subject del JWT sigue identificando a Alice, pero la condición ROLE_ADMIN.equalsIgnoreCase(role) toma precedencia y role es la cookie no firmada si está presente. Así, un dato controlado por el cliente decide si puede leer cualquier id.",
+      "mitigation": "Calcular el rol en el servidor desde una sesión o desde claims firmados validados, y aplicar autorización de objeto en backend. Nunca permitir que una cookie de rol no autenticada reemplace la autoridad del servidor.",
+      "steps": [
+        "curl -i -c /tmp/va-idor-l3.cookies -X POST http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_3 --data-urlencode 'username=Alice' --data-urlencode 'password=P@ssw0rd!2026'",
+        "Copiar el valor token_level3 de Set-Cookie y ejecutar el control no privilegiado: curl -i --get http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_3 --data-urlencode 'id=3' -H 'Cookie: token_level3=<TOKEN_DE_ALICE>; role_level3=USER'",
+        "Con el mismo token, ejecutar la variante de laboratorio que cambia solo la cookie de rol: curl -i --get http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_3 --data-urlencode 'id=3' -H 'Cookie: token_level3=<TOKEN_DE_ALICE>; role_level3=ADMIN'"
+      ],
+      "hints": [
+        "La prueba positiva no requiere modificar el token; la firma debe permanecer intacta.",
+        "El control USER contra id=3 distingue denegación de autorización de error de autenticación.",
+        "No atribuyas éxito a un click de la UI: compara el JSON del control y de la variante con el mismo token."
+      ]
+    },
+    {
+      "title": "Nivel 4: sustituir el rol Base64 por QURNSU4",
+      "route": "/VulnerableApp/IDORVulnerability/LEVEL_4",
+      "method": "GET (con login POST previo en la misma ruta)",
+      "params": {
+        "id": "1 como control y 2 como objeto ajeno"
+      },
+      "headers": {
+        "Cookie": "token_level4=<TOKEN_DE_ALICE>; role_level4=QURNSU4"
+      },
+      "body": null,
+      "content_type": null,
+      "expected": "Expectativa derivada del código, no resultado observado: role_level4=VVNFUg (USER) con id=2 debería devolver HTTP 200, isValid=false y Access Denied - Insufficient privileges; el mismo token con role_level4=QURNSU4 (ADMIN) debería devolver HTTP 200, isValid=true y content.username=Bob.",
+      "check": {
+        "kind": "json",
+        "path": "$.content.username",
+        "value": "Bob"
+      },
+      "explanation": "El controlador decodifica el texto Base64 URL-safe y usa el resultado como rol confiable. QURNSU4 es solamente la codificación sin padding de ADMIN; no es una firma ni un mecanismo de autorización.",
+      "mitigation": "No almacenar la autoridad de rol en un valor cliente modificable. Usar una sesión de servidor o claims firmados y revalidar permisos en cada acceso al objeto; tratar Base64 solo como representación, nunca como protección.",
+      "steps": [
+        "curl -i -c /tmp/va-idor-l4.cookies -X POST http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_4 --data-urlencode 'username=Alice' --data-urlencode 'password=P@ssw0rd!2026'",
+        "Copiar el valor token_level4 de Set-Cookie y ejecutar el control con rol codificado USER: curl -i --get http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_4 --data-urlencode 'id=2' -H 'Cookie: token_level4=<TOKEN_DE_ALICE>; role_level4=VVNFUg'",
+        "Repetir cambiando solo la representación Base64 URL-safe del rol: curl -i --get http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_4 --data-urlencode 'id=2' -H 'Cookie: token_level4=<TOKEN_DE_ALICE>; role_level4=QURNSU4'"
+      ],
+      "hints": [
+        "VVNFUg representa USER y QURNSU4 representa ADMIN en Base64 URL-safe sin padding.",
+        "El token copiado debe ser exactamente el del login de Alice y no debe editarse.",
+        "Un HTTP 200 se usa en este nivel tanto para el control denegado como para el bypass; lee isValid y content además del status."
+      ]
+    },
+    {
+      "title": "Nivel 5: control negativo, usuario normal no puede consultar otro perfil",
+      "route": "/VulnerableApp/IDORVulnerability/LEVEL_5",
+      "method": "GET (con login POST previo en la misma ruta)",
+      "params": {
+        "id": "2, solicitado por Alice"
+      },
+      "headers": {
+        "Cookie": "token_level5=<TOKEN_DE_ALICE>"
+      },
+      "body": null,
+      "content_type": null,
+      "expected": "Expectativa derivada del código, no resultado observado: el token de Alice y id=2 deberían producir HTTP 403, isValid=false y content=Access Denied - Proper RBAC enforced. El código no usa el rol declarado en el JWT para elevar permisos; consulta el rol real de id=1 en la base.",
+      "check": {
+        "kind": "manual",
+        "path": "$.content",
+        "value": "Confirmar conjuntamente HTTP 403, $.isValid=false y $.content='Access Denied - Proper RBAC enforced'; un único 200 o un texto aislado no es una prueba suficiente"
+      },
+      "explanation": "Este es el control negativo del nivel seguro: Alice solo puede leer su propio objeto. El servidor reconsulta el rol persistido mediante SQL_ROLE_BY_ID y rechaza el id de Bob antes de fetchUserById.",
+      "mitigation": "Mantener autorización de objeto en servidor, usar el sujeto autenticado como fuente de identidad y separar claramente permisos de usuario y de administrador. Registrar denegaciones sin revelar datos del objeto protegido.",
+      "steps": [
+        "curl -i -c /tmp/va-idor-l5-alice.cookies -X POST http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_5 --data-urlencode 'username=Alice' --data-urlencode 'password=P@ssw0rd!2026'",
+        "curl -i --get http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_5 --data-urlencode 'id=2' -b /tmp/va-idor-l5-alice.cookies"
+      ],
+      "hints": [
+        "El status 403 es significativo en este nivel, a diferencia de los niveles 1 a 4.",
+        "No confundas el campo isValid del cuerpo con el estado HTTP: inspecciona ambos con -i.",
+        "Esta prueba no necesita cambiar cookies ni decodificar tokens."
+      ]
+    },
+    {
+      "title": "Nivel 5: control positivo, administrador real puede consultar Bob",
+      "route": "/VulnerableApp/IDORVulnerability/LEVEL_5",
+      "method": "GET (con login POST previo en la misma ruta)",
+      "params": {
+        "id": "2, solicitado por Charlie"
+      },
+      "headers": {
+        "Cookie": "token_level5=<TOKEN_DE_CHARLIE>"
+      },
+      "body": null,
+      "content_type": null,
+      "expected": "Expectativa derivada del código, no resultado observado: si la semilla indicada está activa, el login de Charlie (id=3, rol ADMIN en la base) seguido de id=2 debería producir HTTP 200, isValid=true y content.username=Bob. Esto es autorización legítima y no debe contarse como IDOR.",
+      "check": {
+        "kind": "json",
+        "path": "$.content.username",
+        "value": "Bob"
+      },
+      "explanation": "El contraste con Alice demuestra por qué ver un objeto ajeno no basta para etiquetar una vulnerabilidad: el nivel 5 permite explícitamente al rol ADMIN persistido acceder a otros perfiles y no confía en un rol cliente alterado.",
+      "mitigation": "Conservar la comprobación de rol en la base o una fuente de autoridad equivalente, documentar la matriz RBAC y probar tanto denegaciones de usuarios normales como accesos autorizados de administradores.",
+      "steps": [
+        "curl -i -c /tmp/va-idor-l5-charlie.cookies -X POST http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_5 --data-urlencode 'username=Charlie' --data-urlencode 'password=P@ssw0rd!2026'",
+        "curl -i --get http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_5 --data-urlencode 'id=2' -b /tmp/va-idor-l5-charlie.cookies"
+      ],
+      "hints": [
+        "Compara este resultado con el control negativo de Alice; la identidad de login es la única variable que cambia.",
+        "No edites el token ni role cookies: el nivel 5 no recibe una cookie de rol autorizante.",
+        "Si el entorno no tiene la semilla indicada, registra esa incertidumbre en vez de inferir que falló la regla."
+      ]
+    }
+  ],
+  "limitations": [
+    "La revisión se limitó al commit 4df80bbcd42682ecf26334f12c568e0f4a326c1a y a la familia idor, más las anotaciones/controlador central y el bean necesarios para resolver las rutas. No se inspeccionaron ni se ejercitaron otras familias de vulnerabilidades.",
+    "No se ejecutaron los comandos curl contra target:9090 en esta revisión. Los expected son predicciones derivadas de código, plantillas, semillas, anotaciones y tests unitarios; no son una afirmación de que el contenedor, el perfil public, la base o las credenciales estén disponibles en el momento del ejercicio.",
+    "P@ssw0rd!2026 aparece en las plantillas y pruebas; data.sql contiene hashes, no contraseñas en claro. Si la imagen de laboratorio fue resembrada o cambió la configuración, el login puede no aceptar esa contraseña aunque el código leído la use como valor de entrenamiento.",
+    "El JWT se firma con un secreto aleatorio por instancia. Un token de otra instancia, de una ejecución anterior o de otro cookie jar no es un control válido; cada ejercicio debe hacer login y consultar en la misma instancia target.",
+    "Un HTTP 200 no demuestra IDOR. En los niveles 1 a 4 hay que comparar identidad autenticada, objeto propio y objeto ajeno, y verificar el contenido de la respuesta; una coincidencia JSON aislada tampoco prueba el contexto de sesión. En el nivel 5 hay que mirar a la vez HTTP status, isValid y content.",
+    "El reflejo de un valor en una respuesta no prueba ejecución de JavaScript, no hay que atribuir puntaje por hacer click en la UI y esta familia no requiere ni autoriza payloads XSS. La UI usa textContent para los campos de perfil, por lo que el verificador propuesto debe ser HTTP/JSON y no visual.",
+    "Los tests IDORVulnerabilityTest usan mocks y llamadas directas a métodos; IDORLoginServiceTest verifica firma, expiración y rechazo de tokens manipulados. No constituyen una prueba de integración HTTP con cookies, routing, H2 y serialización simultáneos.",
+    "El acceso de Charlie a Bob en LEVEL_5 es una autorización administrativa esperada por el código y la semilla, no una vulnerabilidad. Si un despliegue cambia los roles, deben actualizarse los controles antes de interpretar el resultado.",
+    "Los comandos están restringidos a los endpoints inocuos del laboratorio y a los datos de los tres usuarios sembrados. No incluyen comandos externos, inyección, lectura de secretos del host, reverse shells, solicitudes a Mailpit/receiver ni operaciones destructivas."
+  ]
+}

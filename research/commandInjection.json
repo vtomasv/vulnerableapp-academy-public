@@ -1,0 +1,426 @@
+{
+  "id": "commandInjection",
+  "title": "Command Injection: niveles 1–6 y verificación segura con marcador",
+  "concept": "La familia expone el controlador @VulnerableAppRestController(value = \"CommandInjection\") bajo el contexto autorizado /VulnerableApp. Cada método lleva @VulnerableAppRequestMapping con LEVEL_1 a LEVEL_6 y, al no sobrescribir requestMethod, todos son GET. En LEVEL_1–LEVEL_5 el código valida parcialmente la URL, pero cuando la validación pasa concatena ipaddress en \"ping -c 2 <ipaddress>\" y lo ejecuta mediante \"sh -c\" en Unix (o \"cmd /c\" en Windows); por tanto un separador de shell que sobreviva al filtro puede ejecutar el marcador inocuo \"printf VA_LAB_OK\". LEVEL_6 conserva la llamada a ping, pero solo permite una dirección IPv4 según IP_ADDRESS_PATTERN o el texto exacto \"localhost\" y está anotado variant = SECURE. Las respuestas son JSON GenericVulnerabilityResponseBean con content y isValid; el controlador pasa isValid=true incluso cuando el validator impide ejecutar y content queda vacío, así que ese booleano y un HTTP 200 no son pruebas de explotación.",
+  "source_files": [
+    "src/main/java/org/sasanlabs/service/vulnerability/commandInjection/CommandInjection.java",
+    "src/test/java/org/sasanlabs/service/vulnerability/commandInjection/CommandInjectionTest.java",
+    "src/main/resources/static/templates/CommandInjection/LEVEL_1/CI_Level1.html",
+    "src/main/resources/static/templates/CommandInjection/LEVEL_1/CI_Level1.js",
+    "src/main/resources/static/templates/CommandInjection/LEVEL_1/CI_Level1.css",
+    "src/main/java/org/sasanlabs/internal/utility/annotations/VulnerableAppRequestMapping.java",
+    "src/main/java/org/sasanlabs/internal/utility/annotations/VulnerableAppRestController.java",
+    "src/main/java/org/sasanlabs/internal/utility/LevelConstants.java",
+    "src/main/java/org/sasanlabs/service/vulnerability/bean/GenericVulnerabilityResponseBean.java",
+    "src/main/resources/scanner/sast/expectedIssues.csv"
+  ],
+  "levels": [
+    {
+      "route": "/VulnerableApp/CommandInjection/LEVEL_1",
+      "method": "GET",
+      "parameters": {
+        "ipaddress": "Parámetro de consulta obligatorio; se recibe como String"
+      },
+      "behavior": "Si ipaddress no está en blanco, ejecuta el comando de ping mediante una shell con el texto de ipaddress concatenado sin filtrado. En Unix la forma es sh -c 'ping -c 2 ' + ipaddress; captura stdout y stderr combinados en content. Si está vacío, no crea el proceso y content es una cadena vacía.",
+      "vulnerable": true,
+      "notes": "La ruta usa la plantilla común LEVEL_1/CI_Level1; el JavaScript concatena el valor del input en ?ipaddress= y coloca data.content con innerHTML. Para el laboratorio, el separador | seguido de printf VA_LAB_OK es suficiente y no requiere leer archivos ni contactar otra red. El wrapper responde isValid=true tanto si hubo ejecución como si el validator fue falso."
+    },
+    {
+      "route": "/VulnerableApp/CommandInjection/LEVEL_2",
+      "method": "GET",
+      "parameters": {
+        "ipaddress": "Parámetro de consulta obligatorio; además se inyecta RequestEntity para inspeccionar la URL original"
+      },
+      "behavior": "Exige ipaddress no vacío y rechaza si requestEntity.getUrl().toString() contiene cualquiera de ;, &, o un espacio literal mediante SEMICOLON_SPACE_LOGICAL_AND_PATTERN = [;& ]. Si pasa, concatena el valor decodificado en sh -c 'ping -c 2 ' + ipaddress. La inspección de la URL no bloquea separadores codificados que no sean esos tres caracteres literales.",
+      "vulnerable": true,
+      "notes": "El test dedicado demuestra que ; y & en la URL producen content vacío, mientras que un pipe codificado como %7C puede pasar. curl --data-urlencode realiza la codificación necesaria; no se debe convertir el ejercicio en una orden adicional ni sustituir el marcador."
+    },
+    {
+      "route": "/VulnerableApp/CommandInjection/LEVEL_3",
+      "method": "GET",
+      "parameters": {
+        "ipaddress": "Parámetro de consulta obligatorio; RequestEntity se usa como fuente de las comprobaciones de codificación"
+      },
+      "behavior": "Mantiene el filtro [;& ] de LEVEL_2 y añade comprobaciones exactas, sensibles a mayúsculas, para %26 y %3B en la URL. Por ello las variantes minúsculas %3b no son equivalentes a %3B para este código. Si pasa, vuelve a ejecutar el valor de ipaddress dentro de sh -c.",
+      "vulnerable": true,
+      "notes": "El comentario de la clase dice Case Insensitive, pero la implementación real de LEVEL_3 usa contains(\"%26\") y contains(\"%3B\") sin toUpperCase; los casos del test reflejan esa diferencia. %7C no es bloqueado por ninguna comprobación de este nivel."
+    },
+    {
+      "route": "/VulnerableApp/CommandInjection/LEVEL_4",
+      "method": "GET",
+      "parameters": {
+        "ipaddress": "Parámetro de consulta obligatorio; RequestEntity se usa como fuente de las comprobaciones de codificación"
+      },
+      "behavior": "Mantiene [;& ] y comprueba requestEntity.getUrl().toString().toUpperCase() contra %26 y %3B, bloqueando las mayúsculas y minúsculas de esas codificaciones. No comprueba %7C ni separadores de línea. Cuando pasa, concatena ipaddress en sh -c.",
+      "vulnerable": true,
+      "notes": "El test dedicado muestra que %3B y %3b quedan bloqueados, pero la propia lógica todavía deja pasar un pipe codificado. El ejemplo histórico del código usa cat /etc/passwd; no se reproduce aquí: el único payload autorizado en este informe es printf VA_LAB_OK."
+    },
+    {
+      "route": "/VulnerableApp/CommandInjection/LEVEL_5",
+      "method": "GET",
+      "parameters": {
+        "ipaddress": "Parámetro de consulta obligatorio; RequestEntity se usa como fuente de las comprobaciones de codificación"
+      },
+      "behavior": "Mantiene los filtros de LEVEL_4 y añade requestEntity.getUrl().toString().toUpperCase().contains(\"%7C\"). El pipe ya no atraviesa ese filtro, pero no se comprueba %0A: un salto de línea codificado puede separar la orden de ping del printf cuando el valor se concatena en sh -c.",
+      "vulnerable": true,
+      "notes": "El comentario fuente identifica explícitamente el payload de salto de línea. El ejercicio usa Bash $'...' para que curl envíe un salto de línea real que --data-urlencode codifica; solo se añade el marcador VA_LAB_OK y no se usan órdenes de inspección, redirección, red, secretos, shell inversa, DoS ni borrado."
+    },
+    {
+      "route": "/VulnerableApp/CommandInjection/LEVEL_6",
+      "method": "GET",
+      "parameters": {
+        "ipaddress": "Parámetro de consulta obligatorio; debe coincidir con una IPv4 completa según IP_ADDRESS_PATTERN o ser exactamente localhost"
+      },
+      "behavior": "Está anotado variant = SECURE. El validator exige texto no vacío y que ipaddress coincida con la expresión de IPv4 o sea exactamente localhost. Para entradas válidas ejecuta el ping permitido; para una entrada con metacaracteres, como 127.0.0.1|printf VA_LAB_OK, no crea proceso y content queda vacío. La respuesta sigue llevando isValid=true por la construcción fija del bean.",
+      "vulnerable": false,
+      "notes": "La seguridad observada es la lista permitida, no la eliminación del shell: el código aún usa sh -c para la entrada ya validada. Una validación de código no sustituye una prueba de integración; conviene reforzarla ejecutando ProcessBuilder con argumentos separados y timeout. La clase completa está bajo @Profile(\"unsafe\"), por lo que la disponibilidad depende del perfil del despliegue."
+    }
+  ],
+  "exercises": [
+    {
+      "title": "LEVEL_1 — control negativo con una dirección local permitida",
+      "route": "/VulnerableApp/CommandInjection/LEVEL_1",
+      "method": "GET",
+      "params": {
+        "ipaddress": "127.0.0.1"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "Respuesta 200 JSON con isValid=true y content dependiente de la salida de ping. El contenido exacto puede variar según la imagen; no debe contener VA_LAB_OK.",
+      "check": {
+        "kind": "not_contains",
+        "value": "VA_LAB_OK",
+        "path": "$.content"
+      },
+      "explanation": "Es el control negativo de LEVEL_1: ipaddress es una IPv4 ordinaria y no contiene un separador. Sirve para distinguir la salida normal de la salida del marcador; un 200 por sí solo no demuestra nada sobre la ejecución de una segunda orden.",
+      "mitigation": "No concatenar datos en una shell. Si el proceso de ping es imprescindible, usar ProcessBuilder con una lista de argumentos separados, validar una IPv4 con una biblioteca o allowlist y aplicar timeout; no depender de un filtro de caracteres.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/CommandInjection/LEVEL_1 --data-urlencode 'ipaddress=127.0.0.1'",
+        "Revisar únicamente el JSON devuelto y comprobar que $.content no contiene VA_LAB_OK; no puntuar por abrir o hacer clic en la interfaz."
+      ],
+      "hints": [
+        "Mantén el parámetro como una IPv4 simple para el control.",
+        "La salida de ping y el estado de red del contenedor no son una cadena fija; usa solo la ausencia del marcador como control.",
+        "El campo isValid se fija a true en el wrapper y no es un indicador de ejecución de órdenes."
+      ]
+    },
+    {
+      "title": "LEVEL_1 — marcador seguro de ejecución de la shell",
+      "route": "/VulnerableApp/CommandInjection/LEVEL_1",
+      "method": "GET",
+      "params": {
+        "ipaddress": "127.0.0.1|printf VA_LAB_OK"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "Si el laboratorio está desplegado con esta implementación, content debe contener VA_LAB_OK porque la entrada llega a sh -c. El resto de la salida puede contener errores o salida de ping; no se exige texto exacto.",
+      "check": {
+        "kind": "contains",
+        "value": "VA_LAB_OK",
+        "path": "$.content"
+      },
+      "explanation": "El pipe separa el ping del builtin printf después de la concatenación insegura. El marcador no lee datos, no abre conexiones y no altera el estado; demuestra solo que esa composición alcanzó la segunda etapa del pipeline.",
+      "mitigation": "Eliminar la shell y pasar la dirección como un único argumento a ProcessBuilder; aplicar allowlist de IP/hostname antes de ejecutar y no devolver stdout sin necesidad.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/CommandInjection/LEVEL_1 --data-urlencode 'ipaddress=127.0.0.1|printf VA_LAB_OK'",
+        "Parsear la respuesta JSON y verificar que $.content contiene VA_LAB_OK; no inferir ejecución arbitraria más allá del marcador."
+      ],
+      "hints": [
+        "--data-urlencode codifica el pipe y el espacio para transporte HTTP, mientras Spring entrega el valor del parámetro a la lógica.",
+        "No agregues otra orden, archivo, redirección ni destino de red: el payload permitido termina en printf VA_LAB_OK.",
+        "La presencia del marcador es la señal; el código HTTP 200 y isValid=true no sustituyen ese check."
+      ]
+    },
+    {
+      "title": "LEVEL_2 — control negativo frente al filtro de separadores",
+      "route": "/VulnerableApp/CommandInjection/LEVEL_2",
+      "method": "GET",
+      "params": {
+        "ipaddress": "127.0.0.1"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "Respuesta 200 JSON; content puede contener ping normal y no debe contener VA_LAB_OK.",
+      "check": {
+        "kind": "not_contains",
+        "value": "VA_LAB_OK",
+        "path": "$.content"
+      },
+      "explanation": "El caso base confirma que la dirección ordinaria sigue el flujo normal. Como el filtro inspecciona la URL completa, no debe usarse el booleano isValid como resultado del control.",
+      "mitigation": "Usar ejecución sin shell y validación positiva de una dirección, no una exclusión de ;, &, espacio u otros caracteres en la URL.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/CommandInjection/LEVEL_2 --data-urlencode 'ipaddress=127.0.0.1'",
+        "Comprobar que $.content no contiene VA_LAB_OK y conservar la respuesta para compararla con el positivo."
+      ],
+      "hints": [
+        "La ruta es LEVEL_2 y el único parámetro es ipaddress.",
+        "No conviertas este control en un test de disponibilidad exacta de ping; la imagen puede devolver texto diferente.",
+        "Compara el contenido, no solo el código de estado."
+      ]
+    },
+    {
+      "title": "LEVEL_2 — pipe codificado que sobrevive al filtro",
+      "route": "/VulnerableApp/CommandInjection/LEVEL_2",
+      "method": "GET",
+      "params": {
+        "ipaddress": "127.0.0.1|printf VA_LAB_OK"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "El pipe transportado como %7C no coincide con [;& ] ni con los caracteres codificados que LEVEL_2 revisa; en el código observado content debe contener VA_LAB_OK si la petición llega sin normalización intermedia.",
+      "check": {
+        "kind": "contains",
+        "value": "VA_LAB_OK",
+        "path": "$.content"
+      },
+      "explanation": "LEVEL_2 pretende bloquear separadores sencillos mirando la URL, pero no incluye el pipe. curl codifica el payload y el servidor decodifica ipaddress antes de construir la orden; el marcador solo prueba la ejecución de esa segunda etapa.",
+      "mitigation": "Sustituir la composición de shell por ProcessBuilder(List.of(\"ping\", \"-c\", \"2\", ipAddress)) después de una validación estricta, y restringir tiempo y salida.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/CommandInjection/LEVEL_2 --data-urlencode 'ipaddress=127.0.0.1|printf VA_LAB_OK'",
+        "Verificar que $.content contiene VA_LAB_OK; si no aparece, registrar la URL realmente enviada y si algún proxy decodificó o recodificó el parámetro, sin cambiar el payload seguro."
+      ],
+      "hints": [
+        "Usa exactamente printf VA_LAB_OK como única segunda acción.",
+        "El filtro de LEVEL_2 busca ;, &, y espacio literal en requestEntity.getUrl().toString(), no el pipe codificado.",
+        "Un resultado 200 sin el marcador es inconcluso como evidencia de vulnerabilidad."
+      ]
+    },
+    {
+      "title": "LEVEL_3 — control negativo con validación de URL extendida",
+      "route": "/VulnerableApp/CommandInjection/LEVEL_3",
+      "method": "GET",
+      "params": {
+        "ipaddress": "127.0.0.1"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "Respuesta 200 JSON con salida normal o vacía según ping, sin VA_LAB_OK.",
+      "check": {
+        "kind": "not_contains",
+        "value": "VA_LAB_OK",
+        "path": "$.content"
+      },
+      "explanation": "Es el control base para LEVEL_3. La salida exacta de ping no está fijada por el test de integración de este informe; la comprobación útil es que el marcador de la segunda orden no aparece.",
+      "mitigation": "Aplicar allowlist de dirección y ejecución por argumentos; las comprobaciones de textos %26/%3B no constituyen una defensa contra la gramática completa de una shell.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/CommandInjection/LEVEL_3 --data-urlencode 'ipaddress=127.0.0.1'",
+        "Comprobar $.content con ausencia de VA_LAB_OK y comparar con el positivo del mismo nivel."
+      ],
+      "hints": [
+        "No dependas de una respuesta exacta de ping.",
+        "El mismo parámetro y método se usan en todos los niveles; cambia solo la ruta y el control.",
+        "No atribuyas puntuación por el clic del botón de la plantilla."
+      ]
+    },
+    {
+      "title": "LEVEL_3 — pipe no cubierto por %26/%3B",
+      "route": "/VulnerableApp/CommandInjection/LEVEL_3",
+      "method": "GET",
+      "params": {
+        "ipaddress": "127.0.0.1|printf VA_LAB_OK"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "El control extra de LEVEL_3 solo busca %26 y %3B con coincidencia sensible a mayúsculas; el pipe codificado no coincide y content debería contener VA_LAB_OK en el despliegue del commit.",
+      "check": {
+        "kind": "contains",
+        "value": "VA_LAB_OK",
+        "path": "$.content"
+      },
+      "explanation": "Este positivo contrasta con LEVEL_2 y muestra que agregar dos cadenas prohibidas no cubre el metacarácter pipe. El valor se limita a un printf fijo, por lo que no se extraen secretos ni se ejecutan órdenes externas adicionales.",
+      "mitigation": "No intentes ampliar una blacklist; elimina sh -c, pasa el argumento separado y valida la dirección con una política positiva.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/CommandInjection/LEVEL_3 --data-urlencode 'ipaddress=127.0.0.1|printf VA_LAB_OK'",
+        "Buscar VA_LAB_OK en $.content. Si un componente HTTP cambia la representación de la URL, anotar la incertidumbre: este informe no afirma que el entorno real se haya ejecutado."
+      ],
+      "hints": [
+        "El comentario Case Insensitive no coincide completamente con los contains exactos de la implementación; no es necesario explotar esa diferencia para este positivo.",
+        "El único indicador aceptable es el marcador literal.",
+        "No uses el ejemplo histórico con lectura de archivos."
+      ]
+    },
+    {
+      "title": "LEVEL_4 — control negativo con comprobaciones codificadas sin marcador",
+      "route": "/VulnerableApp/CommandInjection/LEVEL_4",
+      "method": "GET",
+      "params": {
+        "ipaddress": "127.0.0.1"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "Respuesta 200 JSON; content puede depender de ping, pero no contiene VA_LAB_OK.",
+      "check": {
+        "kind": "not_contains",
+        "value": "VA_LAB_OK",
+        "path": "$.content"
+      },
+      "explanation": "El control negativo evita confundir la disponibilidad del endpoint con la ejecución del marcador. LEVEL_4 hace sus comprobaciones en mayúsculas, pero una dirección normal no activa ninguna ruta de shell adicional.",
+      "mitigation": "Validar con una parser de IP y usar una API de proceso sin intérprete. Si se devuelve salida, tratarla como datos y no insertarla con innerHTML.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/CommandInjection/LEVEL_4 --data-urlencode 'ipaddress=127.0.0.1'",
+        "Comprobar ausencia de VA_LAB_OK en $.content."
+      ],
+      "hints": [
+        "El hecho de que el filtro use toUpperCase() no cambia el resultado del caso base.",
+        "No uses un 200 como único criterio.",
+        "La plantilla HTML solo es una interfaz; la verificación se hace sobre JSON."
+      ]
+    },
+    {
+      "title": "LEVEL_4 — pipe que queda fuera de la blacklist ampliada",
+      "route": "/VulnerableApp/CommandInjection/LEVEL_4",
+      "method": "GET",
+      "params": {
+        "ipaddress": "127.0.0.1|printf VA_LAB_OK"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "El filtro sensible a mayúsculas bloquea %26/%3B, pero no %7C; si la entrada alcanza sh -c, content debe contener VA_LAB_OK.",
+      "check": {
+        "kind": "contains",
+        "value": "VA_LAB_OK",
+        "path": "$.content"
+      },
+      "explanation": "El positivo muestra el límite de la defensa de LEVEL_4 sin leer archivos ni ejecutar una operación de red. Solo se observa la salida del printf fijo.",
+      "mitigation": "Usar ProcessBuilder con argumentos no interpretados y una allowlist; no intentar mantener una lista de metacaracteres supuestamente completa.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/CommandInjection/LEVEL_4 --data-urlencode 'ipaddress=127.0.0.1|printf VA_LAB_OK'",
+        "Verificar que $.content contiene VA_LAB_OK y conservar el caso base como control negativo."
+      ],
+      "hints": [
+        "--data-urlencode mantiene el separador fuera de la forma literal de la URL.",
+        "El marcador no debe cambiarse por id, cat, nc, una shell inversa ni una lectura de archivos.",
+        "La evidencia es específica a este marcador y no equivale a una medición de impacto general."
+      ]
+    },
+    {
+      "title": "LEVEL_5 — control negativo antes de probar el salto de línea",
+      "route": "/VulnerableApp/CommandInjection/LEVEL_5",
+      "method": "GET",
+      "params": {
+        "ipaddress": "127.0.0.1"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "Respuesta 200 JSON con salida de ping variable o vacía, sin VA_LAB_OK.",
+      "check": {
+        "kind": "not_contains",
+        "value": "VA_LAB_OK",
+        "path": "$.content"
+      },
+      "explanation": "El control establece el comportamiento normal del nivel que ya bloquea el pipe codificado. No se usa una orden de prueba ni un destino adicional.",
+      "mitigation": "Eliminar el intérprete de comandos y validar el dato como una IP antes de crear el proceso; aplicar timeout y límites de salida.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/CommandInjection/LEVEL_5 --data-urlencode 'ipaddress=127.0.0.1'",
+        "Comprobar que $.content no contiene VA_LAB_OK."
+      ],
+      "hints": [
+        "El control no necesita conocer el texto exacto que imprime ping.",
+        "No concluyas que el filtro es seguro solo porque un pipe queda bloqueado.",
+        "La comparación válida es contra el positivo de salto de línea del mismo endpoint."
+      ]
+    },
+    {
+      "title": "LEVEL_5 — salto de línea codificado con marcador fijo",
+      "route": "/VulnerableApp/CommandInjection/LEVEL_5",
+      "method": "GET",
+      "params": {
+        "ipaddress": "127.0.0.1\nprintf VA_LAB_OK"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "curl codifica el salto de línea como %0A; como LEVEL_5 no lo comprueba y sí concatena en sh -c, content debería contener VA_LAB_OK si el target conserva esa representación y el proceso se ejecuta.",
+      "check": {
+        "kind": "contains",
+        "value": "VA_LAB_OK",
+        "path": "$.content"
+      },
+      "explanation": "Este es el caso seguro representativo del comentario fuente de LEVEL_5: el salto de línea separa el ping del printf sin usar ;, &, espacio literal ni %7C. El marcador es un builtin sin efectos laterales y se comprueba solo en la respuesta JSON.",
+      "mitigation": "No construir una orden de shell con entrada de usuario. Permitir únicamente una IP parseada y pasarla como argumento individual; una blacklist de codificaciones no cubre saltos de línea y otras sintaxis.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/CommandInjection/LEVEL_5 --data-urlencode $'ipaddress=127.0.0.1\\nprintf VA_LAB_OK'",
+        "Verificar VA_LAB_OK en $.content. Si no aparece, revisar solo la URL codificada y la respuesta; no sustituir el salto por otra orden o separador."
+      ],
+      "hints": [
+        "La sintaxis $'...' es de Bash/Kali y convierte \\n en un salto de línea real antes de que curl lo codifique.",
+        "El valor contiene únicamente una dirección local y printf VA_LAB_OK.",
+        "Un resultado sin marcador puede deberse a normalización del proxy, ausencia de ping o diferencias de despliegue; no se debe prometer éxito sin ejecutar en el target."
+      ]
+    },
+    {
+      "title": "LEVEL_6 — control positivo legítimo de la lista permitida",
+      "route": "/VulnerableApp/CommandInjection/LEVEL_6",
+      "method": "GET",
+      "params": {
+        "ipaddress": "127.0.0.1"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "Respuesta 200 JSON con isValid=true y content de ping variable o vacío según la imagen; no contiene VA_LAB_OK. La IPv4 completa satisface IP_ADDRESS_PATTERN.",
+      "check": {
+        "kind": "not_contains",
+        "value": "VA_LAB_OK",
+        "path": "$.content"
+      },
+      "explanation": "Este control verifica que LEVEL_6 no rompe la funcionalidad prevista para una IPv4 y que la ruta segura todavía intenta ping. No prueba por sí solo que el shell haya desaparecido, porque el código aún lo usa internamente.",
+      "mitigation": "Conservar la validación positiva como defensa en profundidad, pero reemplazar además sh -c por ejecución con argumentos separados y timeout.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/CommandInjection/LEVEL_6 --data-urlencode 'ipaddress=127.0.0.1'",
+        "Comprobar ausencia de VA_LAB_OK en $.content y observar que una respuesta 200/isValid=true solo confirma el contrato HTTP, no la seguridad completa."
+      ],
+      "hints": [
+        "127.0.0.1 es una IPv4 aceptada por la expresión del código.",
+        "La salida de ping no es un valor estable entre imágenes.",
+        "Usa este resultado como control frente al intento de inyección siguiente."
+      ]
+    },
+    {
+      "title": "LEVEL_6 — control de rechazo del marcador de inyección",
+      "route": "/VulnerableApp/CommandInjection/LEVEL_6",
+      "method": "GET",
+      "params": {
+        "ipaddress": "127.0.0.1|printf VA_LAB_OK"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "La entrada no coincide con la IPv4 ni con localhost; el método no debe crear el proceso y debe devolver 200 JSON con content exactamente vacío e isValid=true. El marcador no debe aparecer.",
+      "check": {
+        "kind": "json",
+        "value": "",
+        "path": "$.content"
+      },
+      "explanation": "El mismo payload que funciona en LEVEL_1–LEVEL_4 no satisface la allowlist de LEVEL_6. El check JSON sobre content vacío es más informativo que comprobar solo el estado HTTP, pero no demuestra que cualquier variante imaginable esté bloqueada.",
+      "mitigation": "Mantener una allowlist robusta, preferiblemente con un parser de IP, ejecutar sin shell y cubrir variantes de entrada en tests de integración. No exponer isValid=true como señal de que la solicitud fue aceptada semánticamente.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/CommandInjection/LEVEL_6 --data-urlencode 'ipaddress=127.0.0.1|printf VA_LAB_OK'",
+        "Comprobar que la ruta responde JSON y que $.content es la cadena vacía; confirmar también que no contiene VA_LAB_OK."
+      ],
+      "hints": [
+        "El pipe está dentro del parámetro, pero la expresión de IPv4 no permite ese carácter.",
+        "No interpretes isValid=true como aceptación de la dirección: el constructor del bean lo fija siempre a true.",
+        "Contrasta este resultado con el positivo del mismo marcador en LEVEL_4 o con el control de LEVEL_5, sin ejecutar payloads adicionales."
+      ]
+    }
+  ],
+  "limitations": [
+    "El análisis está limitado al commit 4df80bbcd42682ecf26334f12c568e0f4a326c1a y a la familia commandInjection. No se modificó código ni se investigaron otras familias.",
+    "No hay un archivo específico de commandInjection bajo src/main/resources/attackvectors en este checkout; la familia declara textos y payloads mediante anotaciones ChallengeCard, mientras expectedIssues.csv solo registra CWE-77 en las líneas 48 y 53 de CommandInjection.java. No se inventan recursos ausentes.",
+    "La evidencia de los ejercicios es verificación estática del flujo y comandos curl reproducibles; no se ejecutó el target autorizado durante la elaboración. La presencia del marcador depende de que el contenedor tenga ping, de la configuración del perfil unsafe y de que ningún proxy normalice la URL antes de que RequestEntity sea inspeccionado.",
+    "Los tests dedicados mockean getResponseFromPingCommand y por ello prueban validators y contratos de respuesta, no una ejecución de shell real. Sus URI de prueba conservan codificaciones como %7C, %3B y %0A; un despliegue puede representarlas de otra manera.",
+    "contains VA_LAB_OK es evidencia acotada de que el flujo alcanzó ese printf benigno; no es una autorización para probar órdenes arbitrarias ni prueba por sí misma de RCE general. Un HTTP 200 o isValid=true tampoco prueba ejecución.",
+    "El frontend usa innerHTML para renderizar content, pero estos ejercicios no califican XSS. Un reflejo no prueba ejecución XSS; un 200 no prueba IDOR; y no se atribuye puntaje por hacer clic en la interfaz. La comprobación recomendada es leer el JSON y aplicar el objeto check indicado.",
+    "No se usan receptor, Mailpit, archivos del host, secretos, órdenes de red, reverse shells, cargas de DoS ni borrado de datos: para commandInjection el único efecto intencional del payload es el marcador printf VA_LAB_OK."
+  ]
+}

@@ -1,0 +1,564 @@
+{
+  "id": "openRedirect",
+  "title": "Open Redirect: redirecciones abiertas mediante HTTP 3xx",
+  "concept": "Esta familia estudia destinos de redirección controlados por el cliente y colocados en la cabecera HTTP Location. El controlador activo es Http3xxStatusCodeBasedInjection, anotado como VulnerableAppRestController con nombre Http3xxStatusCodeBasedInjection; siguiendo la convención indicada, sus rutas son /VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_n. Los niveles 1 a 5 muestran validaciones por prefijo que aceptan valores no cubiertos por la lista negra; los niveles 6 y 7 concatenan texto suministrado por el usuario con la autoridad de la solicitud; los niveles 9 y 10 aceptan cualquier destino, con la diferencia de que el nivel 10 añade únicamente una advertencia en la interfaz. Los niveles 8, 11 y 12 son controles seguros: los dos primeros usan una lista blanca y el último usa una referencia indirecta a nombres predefinidos. Las pruebas unitarias comprueban principalmente status 302/200/403/400 y el contenido de Location; no prueban por sí solas que un navegador haya seguido el salto ni que un tercero haya recibido datos. Todas las comprobaciones propuestas usan receiver:8081 como destino inocuo y no usan curl -L.",
+  "source_files": [
+    "src/main/java/org/sasanlabs/service/vulnerability/openRedirect/Http3xxStatusCodeBasedInjection.java",
+    "src/main/java/org/sasanlabs/service/vulnerability/openRedirect/ClientSideInjection.java",
+    "src/main/java/org/sasanlabs/service/vulnerability/openRedirect/MetaTagBasedInjection.java",
+    "src/main/java/org/sasanlabs/service/vulnerability/openRedirect/RefreshHeaderBasedInjection.java",
+    "src/test/java/org/sasanlabs/service/vulnerability/openRedirect/Http3xxStatusCodeBasedInjectionTest.java",
+    "src/main/resources/i18n/messages.properties",
+    "src/main/resources/static/templates/Http3xxStatusCodeBasedInjection/LEVEL_1/Http3xxStatusCodeBasedInjection.html",
+    "src/main/resources/static/templates/Http3xxStatusCodeBasedInjection/LEVEL_1/Http3xxStatusCodeBasedInjection.js",
+    "src/main/resources/static/templates/Http3xxStatusCodeBasedInjection/LEVEL_9/Http3xxStatusCodeBasedInjection.html",
+    "src/main/resources/static/templates/Http3xxStatusCodeBasedInjection/LEVEL_9/Http3xxStatusCodeBasedInjection.js",
+    "src/main/resources/static/templates/Http3xxStatusCodeBasedInjection/LEVEL_10/Http3xxStatusCodeBasedInjection.html",
+    "src/main/resources/static/templates/Http3xxStatusCodeBasedInjection/LEVEL_10/Http3xxStatusCodeBasedInjection.js",
+    "src/main/resources/static/templates/Http3xxStatusCodeBasedInjection/LEVEL_11/Http3xxStatusCodeBasedInjection.html",
+    "src/main/resources/static/templates/Http3xxStatusCodeBasedInjection/LEVEL_11/Http3xxStatusCodeBasedInjection.js",
+    "src/main/resources/static/templates/Http3xxStatusCodeBasedInjection/LEVEL_12/Http3xxStatusCodeBasedInjection.html",
+    "src/main/resources/static/templates/Http3xxStatusCodeBasedInjection/LEVEL_12/Http3xxStatusCodeBasedInjection.js",
+    "src/main/resources/static/templates/MetaTagBasedInjection/LEVEL_1/MetaTagBasedInjection.html",
+    "src/main/resources/static/templates/MetaTagBasedInjection/LEVEL_1/MetaTagBasedInjection.js",
+    "src/main/resources/scanner/sast/expectedIssues.csv"
+  ],
+  "levels": [
+    {
+      "route": "/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_1",
+      "method": "GET",
+      "parameters": {
+        "returnTo": "cadena obligatoria; se copia sin validación"
+      },
+      "behavior": "getURLRedirectionResponseEntity devuelve 302 Found y agrega el valor íntegro de returnTo en Location. El validador siempre devuelve true.",
+      "vulnerable": true,
+      "notes": "Es la inyección directa básica. La anotación AttackVector describe OPEN_REDIRECT_QUERY_PARAM_DIRECTLY_ADD_TO_LOCATION_HEADER. Un destino local http://receiver:8081/VA_LAB_OK es suficiente para verificar el control sin salir del laboratorio."
+    },
+    {
+      "route": "/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_2",
+      "method": "GET",
+      "parameters": {
+        "returnTo": "cadena obligatoria; además se examina la autoridad de la RequestEntity"
+      },
+      "behavior": "Convierte el URL de la solicitud en java.net.URL y rechaza solo valores cuyo comienzo, en minúsculas, sea http, https o www, salvo que el valor sea exactamente la autoridad de la solicitud. Todo valor que no empiece por esos prefijos se coloca en Location con 302.",
+      "vulnerable": true,
+      "notes": "La lista negra acepta esquemas alternativos como ftp y valores relativos; el test original usa ftp://ftp.dlptest.com/. En el laboratorio se sustituye el host por receiver:8081. La igualdad con la autoridad es una comparación textual, no una validación de destino."
+    },
+    {
+      "route": "/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_3",
+      "method": "GET",
+      "parameters": {
+        "returnTo": "cadena obligatoria; se examina también la autoridad de la RequestEntity"
+      },
+      "behavior": "Extiende la lista negra de nivel 2 con el prefijo //; acepta todo lo que no comience por http, https, // o www, o lo que sea exactamente la autoridad de la solicitud, y lo escribe en Location con 302.",
+      "vulnerable": true,
+      "notes": "El recurso de mensajes propone /%09/localdomain.pw y el test unitario lo verifica como valor aceptado. El ejercicio usa /%09/receiver:8081/VA_LAB_OK. El encabezado demuestra el dato construido por el servidor; no debe interpretarse como prueba de cómo cada navegador normaliza tabs codificados."
+    },
+    {
+      "route": "/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_4",
+      "method": "GET",
+      "parameters": {
+        "returnTo": "cadena obligatoria; se examina también la autoridad de la RequestEntity"
+      },
+      "behavior": "Añade a la lista negra de nivel 3 el prefijo del carácter nulo. Acepta cualquier valor que no empiece por http, https, //, www o el carácter nulo, o que sea exactamente la autoridad de la solicitud, y lo coloca en Location con 302.",
+      "vulnerable": true,
+      "notes": "La prueba de carácter nulo está Disabled porque construir el URI de RequestEntity con ese carácter produce URISyntaxException. El test activo usa /%09/localdomain.pw; aquí se conserva un marcador y receiver local, sin enviar un byte nulo."
+    },
+    {
+      "route": "/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_5",
+      "method": "GET",
+      "parameters": {
+        "returnTo": "cadena obligatoria; se examina también la autoridad de la RequestEntity"
+      },
+      "behavior": "Mantiene las exclusiones de nivel 4 y exige además que el primer carácter tenga valor Java mayor que 20 y que la cadena no sea vacía, salvo la excepción de igualdad con la autoridad. Los valores aceptados se copian a Location con 302.",
+      "vulnerable": true,
+      "notes": "Es una comprobación de caracteres/prefijos, no un análisis de URL. El test original acepta localdomain.pw/. El ejercicio usa receiver:8081/VA_LAB_OK y no sigue el Location; que un cliente pueda o no interpretar esa cadena como URL absoluta es una cuestión separada."
+    },
+    {
+      "route": "/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_6",
+      "method": "GET",
+      "parameters": {
+        "returnTo": "cadena obligatoria, concatenada después de protocolo://autoridad de la solicitud"
+      },
+      "behavior": "No valida returnTo. Construye Location como requestUrl.getProtocol() + :// + requestUrl.getAuthority() + returnTo y responde 302.",
+      "vulnerable": true,
+      "notes": "El test original demuestra https://somedomain.comsomedomain.com. Un valor que empieza por @ puede cambiar el significado de autoridad al ser interpretado por un cliente URL; el ejercicio limita el host final a receiver:8081 y solo inspecciona la cabecera."
+    },
+    {
+      "route": "/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_7",
+      "method": "GET",
+      "parameters": {
+        "returnTo": "cadena obligatoria; si comienza con / se elimina una barra"
+      },
+      "behavior": "No valida el contenido. Quita una barra inicial si existe y construye Location como protocolo://autoridad de la solicitud + / + returnTo, con status 302.",
+      "vulnerable": true,
+      "notes": "Está anotado como AttackVector y copia entrada no validada al encabezado. A diferencia del nivel 6, la barra forzada suele conservar la autoridad local para entradas normales; por ello el resultado probado aquí es una construcción de Location controlada, no una promesa de salto cross-origin en todos los clientes."
+    },
+    {
+      "route": "/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_8",
+      "method": "GET",
+      "parameters": {
+        "returnTo": "cadena obligatoria; solo / y /VulnerableApp/ están permitidos"
+      },
+      "behavior": "Usa WHITELISTED_URLS y solo devuelve 302 con Location para / o /VulnerableApp/. Para cualquier otro valor devuelve 200 sin Location.",
+      "vulnerable": false,
+      "notes": "Es la primera variante segura de contraste. La comparación es exacta y permite únicamente dos destinos relativos predefinidos. No tiene AttackVector, aunque sí una anotación de ruta con variant SECURE."
+    },
+    {
+      "route": "/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_9",
+      "method": "GET",
+      "parameters": {
+        "returnTo": "cadena obligatoria; URL o ruta arbitraria"
+      },
+      "behavior": "Devuelve 302 y copia cualquier returnTo a Location. La plantilla describe la progresión hacia phishing y usa originalmente /VulnerableApp/phishing/fake-login.html.",
+      "vulnerable": true,
+      "notes": "Es un endpoint de phishing sin advertencia. El ejercicio no usa una página de login ni captura credenciales: apunta únicamente al receptor inocuo local y no sigue la redirección."
+    },
+    {
+      "route": "/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_10",
+      "method": "GET",
+      "parameters": {
+        "returnTo": "cadena obligatoria; URL o ruta arbitraria"
+      },
+      "behavior": "El método de servidor es igual de permisivo que el nivel 9: devuelve 302 y copia el valor a Location. La advertencia/interstitial y el botón Continue existen en JavaScript y solo afectan a la experiencia de la interfaz.",
+      "vulnerable": true,
+      "notes": "La advertencia no es un control de servidor: una solicitud curl llega directamente al endpoint y no hace clic. No se debe atribuir puntuación por mostrar, cerrar o pulsar la ventana; la evidencia reproducible es la respuesta HTTP."
+    },
+    {
+      "route": "/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_11",
+      "method": "GET",
+      "parameters": {
+        "returnTo": "cadena obligatoria; solo / y /VulnerableApp/ pasan la lista blanca"
+      },
+      "behavior": "Para un valor permitido responde 302 con Location; para un destino no permitido responde 403 con el cuerpo Redirect blocked: untrusted redirect target y sin Location.",
+      "vulnerable": false,
+      "notes": "Es el control seguro de allowlist usado por la plantilla interactiva. Bloquea tanto destinos externos como rutas internas no aprobadas, por ejemplo /VulnerableApp/phishing/fake-login.html."
+    },
+    {
+      "route": "/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_12",
+      "method": "GET",
+      "parameters": {
+        "returnTo": "cadena obligatoria usada como destinationKey; valores válidos: home y root"
+      },
+      "behavior": "Nunca usa el valor recibido como URL. Busca returnTo como clave en REDIRECT_DESTINATIONS; home se transforma en /VulnerableApp/ y root en /. Una clave desconocida responde 400 con Redirect blocked: unknown destination y sin Location.",
+      "vulnerable": false,
+      "notes": "Es la defensa por referencia indirecta. Las pruebas recorren URLs, esquemas, variantes de barras, javascript: y claves con espacios/mayúsculas, y esperan rechazo; el valor del solicitante no alcanza Location."
+    }
+  ],
+  "exercises": [
+    {
+      "title": "Nivel 1: Location directo hacia el receptor local",
+      "route": "/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_1",
+      "method": "GET",
+      "params": {
+        "returnTo": "http://receiver:8081/VA_LAB_OK"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "302 Found con Location: http://receiver:8081/VA_LAB_OK. Como no se usa -L, curl no contacta al receptor.",
+      "check": {
+        "kind": "header",
+        "value": "http://receiver:8081/VA_LAB_OK",
+        "header": "Location"
+      },
+      "explanation": "El método getVulnerablePayloadLevel1 pasa siempre el validador true y agrega returnTo sin transformación. El receptor solo sirve como destino de laboratorio, no como sitio externo real.",
+      "mitigation": "No aceptar una URL arbitraria. Preferir una allowlist exacta de rutas internas o una referencia indirecta a destinos conocidos; si se permiten URLs externas, validar esquema, host, puerto y representación normalizada en un componente de URL.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_1 --data-urlencode 'returnTo=http://receiver:8081/VA_LAB_OK'"
+      ],
+      "hints": [
+        "Inspecciona la primera línea HTTP y la cabecera Location; no agregues -L.",
+        "El valor controlado debe ser un receptor local del laboratorio, no un dominio de Internet."
+      ]
+    },
+    {
+      "title": "Nivel 2: una lista negra de prefijos acepta un esquema alternativo inocuo",
+      "route": "/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_2",
+      "method": "GET",
+      "params": {
+        "returnTo": "ftp://receiver:8081/VA_LAB_OK"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "302 Found con Location: ftp://receiver:8081/VA_LAB_OK, porque el valor no empieza por http, https ni www.",
+      "check": {
+        "kind": "header",
+        "value": "ftp://receiver:8081/VA_LAB_OK",
+        "header": "Location"
+      },
+      "explanation": "La validación por prefijo no reconoce todos los esquemas. El ejercicio reproduce la clase de bypass que el test original expresa con ftp://ftp.dlptest.com/, pero usa un nombre local y no sigue el resultado.",
+      "mitigation": "Usar un parser de URL y una política positiva: en este caso, permitir solo rutas relativas o una lista explícita de hosts/esquemas autorizados. No confundir que un string no empiece por http con que sea seguro.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_2 --data-urlencode 'returnTo=ftp://receiver:8081/VA_LAB_OK'"
+      ],
+      "hints": [
+        "El método también compara el valor con la autoridad de la solicitud, pero esa igualdad no corrige la aceptación de esquemas alternativos.",
+        "La ausencia de -L es deliberada y evita cualquier conexión al destino."
+      ]
+    },
+    {
+      "title": "Nivel 3: el filtro de // aún deja pasar una forma codificada",
+      "route": "/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_3",
+      "method": "GET",
+      "params": {
+        "returnTo": "/%09/receiver:8081/VA_LAB_OK"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "302 Found con Location: /%09/receiver:8081/VA_LAB_OK; el backend acepta el valor porque no comienza por http, https, // ni www.",
+      "check": {
+        "kind": "header",
+        "value": "/%09/receiver:8081/VA_LAB_OK",
+        "header": "Location"
+      },
+      "explanation": "El valor reproduce el payload documentado /%09/localdomain.pw sin usar un dominio real. Se verifica la copia al encabezado, no que un navegador convierta el tab codificado en un salto fuera de origen.",
+      "mitigation": "Normalizar y analizar el destino antes de validarlo, rechazar controles/codificaciones ambiguas y preferir referencias internas. La validación debe ocurrir sobre una representación canónica y no solo sobre prefijos de la cadena original.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_3 --data-urlencode 'returnTo=/%09/receiver:8081/VA_LAB_OK'"
+      ],
+      "hints": [
+        "--data-urlencode hace reproducible el transporte del signo %; revisa la Location que devuelve la aplicación.",
+        "No uses una URL pública ni sigas la respuesta."
+      ]
+    },
+    {
+      "title": "Nivel 4: excluir un único byte nulo no cubre el marcador de control",
+      "route": "/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_4",
+      "method": "GET",
+      "params": {
+        "returnTo": "/%09/receiver:8081/VA_LAB_OK"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "302 Found con Location: /%09/receiver:8081/VA_LAB_OK. La ruta de carácter nulo no se ejecuta en este ejercicio porque el propio test original la tiene Disabled por URISyntaxException.",
+      "check": {
+        "kind": "header",
+        "value": "/%09/receiver:8081/VA_LAB_OK",
+        "header": "Location"
+      },
+      "explanation": "El filtro añade NULL_BYTE_CHARACTER a la lista negra, pero sigue aceptando el valor que comienza por / y contiene la representación textual %09. No se envía un byte nulo ni se intenta evadir el entorno del laboratorio.",
+      "mitigation": "Rechazar caracteres de control y entradas ambiguas después de decodificar, y aplicar una allowlist de destinos; no ampliar indefinidamente una lista negra de bytes y prefijos.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_4 --data-urlencode 'returnTo=/%09/receiver:8081/VA_LAB_OK'"
+      ],
+      "hints": [
+        "El resultado esperado es la cabecera, no una navegación automática.",
+        "La prueba Disabled del repositorio es una incertidumbre documentada, no una razón para afirmar que un byte nulo funcionaría por HTTP."
+      ]
+    },
+    {
+      "title": "Nivel 5: la condición charAt permite una cadena no bloqueada",
+      "route": "/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_5",
+      "method": "GET",
+      "params": {
+        "returnTo": "receiver:8081/VA_LAB_OK"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "302 Found con Location: receiver:8081/VA_LAB_OK, porque la cadena no empieza por los prefijos bloqueados, no está vacía y su primer carácter r supera 20.",
+      "check": {
+        "kind": "header",
+        "value": "receiver:8081/VA_LAB_OK",
+        "header": "Location"
+      },
+      "explanation": "El test unitario usa localdomain.pw/ para mostrar que una cadena ordinaria que evita la lista negra llega a Location. Aquí se usa receiver:8081 como marcador local; no se afirma que todos los clientes interpreten este valor sin esquema como un destino absoluto.",
+      "mitigation": "No basar la política en charAt ni en listas de prefijos. Parsear un URL normalizado o permitir solamente identificadores/rutas previamente registrados.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_5 --data-urlencode 'returnTo=receiver:8081/VA_LAB_OK'"
+      ],
+      "hints": [
+        "Comprueba el valor exacto de Location y el status 302.",
+        "La falta de -L mantiene el ejercicio dentro de una inspección de respuesta."
+      ]
+    },
+    {
+      "title": "Nivel 6: concatenación de autoridad con un receptor local",
+      "route": "/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_6",
+      "method": "GET",
+      "params": {
+        "returnTo": "@receiver:8081/VA_LAB_OK"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "302 Found con Location: http://target:9090@receiver:8081/VA_LAB_OK para la URL base del laboratorio; el valor demuestra la concatenación sin validación.",
+      "check": {
+        "kind": "header",
+        "value": "http://target:9090@receiver:8081/VA_LAB_OK",
+        "header": "Location"
+      },
+      "explanation": "El servidor antepone el protocolo y la autoridad de la solicitud a cualquier texto recibido. El carácter @ permite estudiar, sin navegar, cómo una biblioteca de URL podría interpretar la primera parte como userinfo y receiver como host.",
+      "mitigation": "Construir redirecciones desde destinos internos registrados, no por concatenación. Si existe una política de URLs externas, parsear y validar host, puerto, esquema y userinfo, y rechazar userinfo.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_6 --data-urlencode 'returnTo=@receiver:8081/VA_LAB_OK'"
+      ],
+      "hints": [
+        "La cabecera esperada depende de la autoridad de la URL solicitada, aquí target:9090.",
+        "No uses -L: la finalidad es observar la cabecera que compone el servidor."
+      ]
+    },
+    {
+      "title": "Nivel 7: barra forzada y Location construida por concatenación",
+      "route": "/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_7",
+      "method": "GET",
+      "params": {
+        "returnTo": "//receiver:8081/VA_LAB_OK"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "302 Found con Location: http://target:9090//receiver:8081/VA_LAB_OK; el método elimina una barra y luego añade otra.",
+      "check": {
+        "kind": "header",
+        "value": "http://target:9090//receiver:8081/VA_LAB_OK",
+        "header": "Location"
+      },
+      "explanation": "El nivel se presenta como defensa por prefijo de dominio, pero no valida returnTo: modifica solo una barra y concatena el resultado. Esta prueba permite distinguir una cabecera controlada de un open redirect cross-origin efectivo; con este valor concreto la autoridad sigue siendo target:9090.",
+      "mitigation": "No fabricar URLs por concatenación. Usar rutas internas canónicas o un registro de destinos y verificar explícitamente que el URL resuelto conserva el origen permitido.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_7 --data-urlencode 'returnTo=//receiver:8081/VA_LAB_OK'"
+      ],
+      "hints": [
+        "Cuenta las dos barras que aparecen después de target:9090.",
+        "No conviertas esta cabecera en una afirmación de salto externo sin verificar el parsing del cliente; curl sin -L es el control seguro."
+      ]
+    },
+    {
+      "title": "Nivel 8: control positivo de allowlist",
+      "route": "/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_8",
+      "method": "GET",
+      "params": {
+        "returnTo": "/"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "302 Found con Location: /, porque / es uno de los dos destinos permitidos.",
+      "check": {
+        "kind": "header",
+        "value": "/",
+        "header": "Location"
+      },
+      "explanation": "Este es el control positivo de la lista blanca WHITELISTED_URLS. La respuesta confirma que una ruta aprobada sigue funcionando sin aceptar una URL arbitraria.",
+      "mitigation": "Mantener la allowlist pequeña, exacta y basada en rutas internas; revisar que la normalización no transforme una ruta no permitida en una aprobada.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_8 --data-urlencode 'returnTo=/'"
+      ],
+      "hints": [
+        "Contrasta esta respuesta con el mismo endpoint usando /not-allowlisted.",
+        "Un 302 aquí no demuestra vulnerabilidad: es el comportamiento esperado para el destino aprobado."
+      ]
+    },
+    {
+      "title": "Nivel 8: control negativo de allowlist",
+      "route": "/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_8",
+      "method": "GET",
+      "params": {
+        "returnTo": "/not-allowlisted"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "200 OK sin cabecera Location, porque /not-allowlisted no pertenece a la lista exacta.",
+      "check": {
+        "kind": "not_contains",
+        "value": "Location:"
+      },
+      "explanation": "Este control negativo debe ejecutarse junto con el positivo. La ausencia de Location, además del status 200 que se observa en la salida de curl, es la señal de que el destino no fue redirigido.",
+      "mitigation": "Conservar la política de allowlist y probar siempre tanto destinos permitidos como no permitidos, incluidos externos y rutas internas no aprobadas.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_8 --data-urlencode 'returnTo=/not-allowlisted'"
+      ],
+      "hints": [
+        "Revisa manualmente que la primera línea sea 200 y que no aparezca Location; el kind not_contains no comprueba el status.",
+        "No atribuyas vulnerabilidad por el mero hecho de que el endpoint exista."
+      ]
+    },
+    {
+      "title": "Nivel 9: redirección de phishing simulada al receptor local",
+      "route": "/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_9",
+      "method": "GET",
+      "params": {
+        "returnTo": "http://receiver:8081/VA_LAB_OK"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "302 Found con Location: http://receiver:8081/VA_LAB_OK, sin validación ni advertencia de servidor.",
+      "check": {
+        "kind": "header",
+        "value": "http://receiver:8081/VA_LAB_OK",
+        "header": "Location"
+      },
+      "explanation": "La plantilla describe la progresión de phishing, pero el laboratorio no usa credenciales ni una página de login. La prueba se limita a demostrar que el endpoint puede emitir un destino elegido por el solicitante.",
+      "mitigation": "Aplicar allowlist o referencia indirecta y evitar que un parámetro de retorno acepte URLs completas. Una advertencia de UI no sustituye al bloqueo en servidor.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_9 --data-urlencode 'returnTo=http://receiver:8081/VA_LAB_OK'"
+      ],
+      "hints": [
+        "El receptor es local y la orden no sigue redirecciones.",
+        "El status 302 y Location son evidencia de la decisión del servidor; no es necesario hacer clic."
+      ]
+    },
+    {
+      "title": "Nivel 10: la advertencia visual no cambia el endpoint permisivo",
+      "route": "/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_10",
+      "method": "GET",
+      "params": {
+        "returnTo": "http://receiver:8081/VA_LAB_OK"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "302 Found con Location: http://receiver:8081/VA_LAB_OK. curl llega directamente al método y no interactúa con el interstitial JavaScript.",
+      "check": {
+        "kind": "header",
+        "value": "http://receiver:8081/VA_LAB_OK",
+        "header": "Location"
+      },
+      "explanation": "La plantilla muestra una advertencia y un botón Continue, pero el método getVulnerablePayloadLevel10 sigue aplicando el validador siempre verdadero. El ejercicio demuestra por qué una decisión de UI no es una mitigación de servidor.",
+      "mitigation": "Bloquear destinos no confiables en el endpoint, independientemente de la interfaz. Si se mantiene una advertencia, tratarla como ayuda al usuario y no como control de autorización.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_10 --data-urlencode 'returnTo=http://receiver:8081/VA_LAB_OK'"
+      ],
+      "hints": [
+        "No pulses enlaces ni asignaciones de puntaje por click; la prueba es la respuesta HTTP directa.",
+        "No uses -L y no envíes credenciales."
+      ]
+    },
+    {
+      "title": "Nivel 11: control positivo de allowlist segura",
+      "route": "/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_11",
+      "method": "GET",
+      "params": {
+        "returnTo": "/VulnerableApp/"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "302 Found con Location: /VulnerableApp/, porque es un destino interno aprobado.",
+      "check": {
+        "kind": "header",
+        "value": "/VulnerableApp/",
+        "header": "Location"
+      },
+      "explanation": "El método seguro conserva una navegación interna aprobada. Este control positivo debe compararse con un destino receiver y con una ruta interna no aprobada.",
+      "mitigation": "Mantener la allowlist del lado servidor y devolver un error explícito cuando el valor no pertenezca a ella.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_11 --data-urlencode 'returnTo=/VulnerableApp/'"
+      ],
+      "hints": [
+        "Un 302 permitido no implica open redirect; comprueba que Location es exactamente la ruta de la lista.",
+        "Contrasta con el ejercicio de bloqueo del mismo nivel."
+      ]
+    },
+    {
+      "title": "Nivel 11: control negativo bloquea el receptor externo",
+      "route": "/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_11",
+      "method": "GET",
+      "params": {
+        "returnTo": "http://receiver:8081/VA_LAB_OK"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "403 Forbidden con cuerpo Redirect blocked: untrusted redirect target y sin Location.",
+      "check": {
+        "kind": "contains",
+        "value": "Redirect blocked: untrusted redirect target"
+      },
+      "explanation": "El servidor bloquea el destino local no aprobado. La comprobación del cuerpo debe complementarse con la inspección manual de que no existe Location; receiver no debe recibir ninguna petición porque no se usa -L.",
+      "mitigation": "No relajar la lista blanca para acomodar cualquier URL. Si la aplicación necesita más destinos, añádalos como entradas explícitas y revisadas.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_11 --data-urlencode 'returnTo=http://receiver:8081/VA_LAB_OK'"
+      ],
+      "hints": [
+        "Confirma status 403, el texto de bloqueo y ausencia de Location.",
+        "No confundas un body 403 con una navegación: la respuesta no debe seguirse."
+      ]
+    },
+    {
+      "title": "Nivel 12: clave conocida resuelta indirectamente",
+      "route": "/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_12",
+      "method": "GET",
+      "params": {
+        "returnTo": "home"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "302 Found con Location: /VulnerableApp/. home es una clave, no una URL suministrada al encabezado.",
+      "check": {
+        "kind": "header",
+        "value": "/VulnerableApp/",
+        "header": "Location"
+      },
+      "explanation": "La tabla interna traduce home a /VulnerableApp/. El valor recibido no se concatena ni se copia a Location, por lo que los payloads de URL no tienen un destino directo donde actuar.",
+      "mitigation": "Usar identificadores opacos o nombres enumerados que se resuelvan en el servidor; rechazar cualquier clave no conocida.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_12 --data-urlencode 'returnTo=home'"
+      ],
+      "hints": [
+        "El nombre del parámetro HTTP sigue siendo returnTo aunque el argumento Java se llame destinationKey.",
+        "Contrasta con el ejercicio de clave desconocida y observa que Location solo contiene la ruta mapeada."
+      ]
+    },
+    {
+      "title": "Nivel 12: clave desconocida rechazada",
+      "route": "/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_12",
+      "method": "GET",
+      "params": {
+        "returnTo": "http://receiver:8081/VA_LAB_OK"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "400 Bad Request con cuerpo Redirect blocked: unknown destination y sin Location.",
+      "check": {
+        "kind": "contains",
+        "value": "Redirect blocked: unknown destination"
+      },
+      "explanation": "Incluso un URL local seguro es rechazado porque no es una de las claves home o root. Esto prueba la propiedad relevante: la entrada no llega al encabezado como destino.",
+      "mitigation": "Mantener la resolución indirecta y tratar los cambios de la tabla como configuración revisada; no añadir un fallback que copie el valor desconocido a Location.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/Http3xxStatusCodeBasedInjection/LEVEL_12 --data-urlencode 'returnTo=http://receiver:8081/VA_LAB_OK'"
+      ],
+      "hints": [
+        "Confirma 400, el mensaje exacto y ausencia de Location.",
+        "Que la respuesta sea 400 no prueba por sí solo una propiedad de otras familias como IDOR; aquí solo acredita el rechazo de una clave de redirección."
+      ]
+    }
+  ],
+  "limitations": {
+    "scope": "Se inspeccionó únicamente src/main/java/org/sasanlabs/service/vulnerability/openRedirect, su test directo, sus plantillas/mensajes y la referencia SAST de CWE-601. No se investigaron otras familias ni se ejecutó una navegación con navegador.",
+    "inactive_originals": [
+      "ClientSideInjection.java contiene solo una clase vacía y no aporta rutas.",
+      "RefreshHeaderBasedInjection.java contiene solo una clase vacía y no aporta rutas.",
+      "MetaTagBasedInjection.java contiene la anotación de controlador y dos métodos completamente comentados; por tanto, la plantilla MetaTagBasedInjection/LEVEL_1 existente no demuestra un endpoint activo en este commit.",
+      "No existe un archivo de recursos src/main/resources/attackvectors/*OpenRedirect*; los textos de challenge/payload de esta familia están en src/main/resources/i18n/messages.properties."
+    ],
+    "runtime_uncertainties": [
+      "La verificación estática confirma los status y cabeceras que construye el código, pero no garantiza que el despliegue Docker, proxy o cliente normalice exactamente cada URL codificada como lo hace el test unitario.",
+      "Los niveles 2 a 5 dependen de RequestEntity.getUrl().getAuthority(); el valor esperado de los ejercicios usa la autoridad indicada por la URL base target:9090.",
+      "La prueba de byte nulo de niveles 4 y 5 está deshabilitada en el repositorio por URISyntaxException; no se debe afirmar que ese payload sea reproducible por HTTP.",
+      "Las plantillas activas solo están materializadas para LEVEL_1 y LEVEL_9 a LEVEL_12; los niveles 2 a 8 apuntan por anotación a htmlTemplate LEVEL_1/Http3xxStatusCodeBasedInjection."
+    ],
+    "verificador_sugerido": {
+      "procedure": [
+        "Ejecutar las órdenes curl -i --get exactamente como están, sin -L, y guardar la respuesta completa.",
+        "Para un nivel vulnerable, exigir conjuntamente el status 302 y una cabecera Location cuyo valor coincida con el comportamiento descrito; una cadena reflejada en otra parte de la respuesta no basta.",
+        "Para un control seguro, comprobar el status esperado, el cuerpo de rechazo cuando corresponde y la ausencia de Location; un 200 aislado no demuestra una propiedad de autorización ni IDOR.",
+        "Usar receiver:8081 solo como receptor local inocuo si se necesita seguir manualmente una prueba separada; la colección aquí no lo sigue y no usa Mailpit.",
+        "No atribuir puntaje por hacer click en los enlaces de las plantillas. En el nivel 10, ver la advertencia no demuestra mitigación; la decisión relevante está en el endpoint.",
+        "La reflexión de una cadena no prueba ejecución XSS; aunque XSS no es un nivel de esta familia, cualquier verificador debe distinguir bytes reflejados de ejecución DOM."
+      ],
+      "interpretation": "La evidencia mínima honesta para open redirect es una respuesta HTTP del servidor que emite un salto no permitido (normalmente 3xx más Location) y una comparación con controles positivos/negativos. No se debe afirmar que un navegador llegó al destino, que un receptor recibió información o que se obtuvo phishing real solo por observar una cabecera."
+    },
+    "safety": "Los payloads se limitan a receiver:8081, rutas locales y el marcador VA_LAB_OK; no incluyen comandos, reverse shells, lectura de secretos, DoS, borrado de datos ni captura de credenciales."
+  }
+}

@@ -1,0 +1,393 @@
+name: ${COMPOSE_PROJECT_NAME:-vulnerableapp-academy}
+
+configs:
+  gateway_nginx:
+    file: ./gateway/nginx.conf
+
+services:
+  init:
+    build:
+      context: .
+      dockerfile: Dockerfile.init
+      target: init
+    image: ${COMPOSE_PROJECT_NAME:-vulnerableapp-academy}-init:local
+    user: "0:0"
+    command: ["python3", "/usr/local/bin/init-secrets.py"]
+    volumes:
+      - academy_secrets:/run/academy-secrets
+      - academy_data:/var/lib/academy
+      - academy_progress:/var/lib/academy-progress
+      - kali_home:/home/kali
+    cap_drop: ["ALL"]
+    cap_add: ["CHOWN", "FOWNER", "DAC_OVERRIDE", "SETGID"]
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
+    healthcheck:
+      test: ["CMD-SHELL", "test -r /run/academy-secrets/harness.key && test -d /var/lib/academy-progress"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [lab]
+
+  model-init:
+    build:
+      context: .
+      dockerfile: Dockerfile.init
+      target: model-init
+      args:
+        OLLAMA_IMAGE: ${OLLAMA_IMAGE:-ollama/ollama:0.12.11}
+    image: ${COMPOSE_PROJECT_NAME:-vulnerableapp-academy}-model-init:local
+    environment:
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-huihui_ai/qwen3-abliterated:4b-v2-q4_K_M}
+      OLLAMA_HOST: 127.0.0.1:11434
+    volumes:
+      - ollama_data:/root/.ollama
+    networks: [model_bootstrap]
+    restart: "no"
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  target:
+    build:
+      context: .
+      dockerfile: Dockerfile.target
+    image: ${COMPOSE_PROJECT_NAME:-vulnerableapp-academy}-target:local
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    environment:
+      SERVER_PORT: "9090"
+      SERVER_SERVLET_CONTEXT_PATH: /VulnerableApp
+      SPRING_MAIL_HOST: mailpit
+      SPRING_MAIL_PORT: "1025"
+      VA_LAB_FILE: /tmp/va-training.txt
+      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=75.0}
+    volumes:
+      - target_netlock:/run/target-netlock
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    expose: ["9090"]
+    sysctls:
+      net.ipv4.ping_group_range: "0 2147483647"
+    networks: [lab]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS --max-time 5 http://127.0.0.1:9090/VulnerableApp/ >/dev/null"]
+      interval: 15s
+      timeout: 8s
+      retries: 20
+      start_period: 45s
+
+  target-netlock:
+    image: ${COMPOSE_PROJECT_NAME:-vulnerableapp-academy}-target:local
+    depends_on:
+      target:
+        condition: service_started
+    network_mode: service:target
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        marker=/run/target-netlock/ready
+        apply_rules() {
+          rm -f "$$marker"
+          iptables -P OUTPUT DROP
+          iptables -F OUTPUT
+          iptables -A OUTPUT -o lo -j ACCEPT
+          iptables -A OUTPUT -d 127.0.0.11 -p udp --dport 53 -j ACCEPT
+          iptables -A OUTPUT -d 127.0.0.11 -p tcp --dport 53 -j ACCEPT
+          iptables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+          for ip in $$(getent ahostsv4 mailpit 2>/dev/null | awk '{print $$1}' | sort -u); do
+            iptables -A OUTPUT -d "$$ip" -p tcp --dport 1025 -j ACCEPT
+          done
+          for ip in $$(getent ahostsv4 receiver 2>/dev/null | awk '{print $$1}' | sort -u); do
+            iptables -A OUTPUT -d "$$ip" -p tcp --dport 8081 -j ACCEPT
+          done
+          iptables -A OUTPUT -j REJECT
+          if command -v ip6tables >/dev/null 2>&1; then
+            ip6tables -P OUTPUT DROP
+            ip6tables -F OUTPUT
+            ip6tables -A OUTPUT -o lo -j ACCEPT
+            ip6tables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+            ip6tables -A OUTPUT -j REJECT
+          fi
+          printf '%s\n' "$$(readlink /proc/self/ns/net)" > "$$marker"
+        }
+        apply_rules
+        while sleep 10; do apply_rules; done
+    volumes:
+      - target_netlock:/run/target-netlock
+    cap_drop: ["ALL"]
+    cap_add: ["NET_ADMIN"]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "test -s /run/target-netlock/ready && iptables -C OUTPUT -j REJECT"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  kali:
+    build:
+      context: .
+      dockerfile: kali/Dockerfile
+    image: ${COMPOSE_PROJECT_NAME:-vulnerableapp-academy}-kali:local
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    environment:
+      DISPLAY: :99
+      RUNNER_SECRET_FILE: /run/academy-secrets/harness.key
+      RUNNER_BIND: 0.0.0.0:9001
+    volumes:
+      - academy_secrets:/run/academy-secrets:ro
+      - academy_progress:/var/lib/kali-progress
+      - kali_home:/home/kali
+      - kali_netlock:/run/lab-netlock
+    cap_drop: ["ALL"]
+    cap_add: ["CHOWN", "FOWNER", "DAC_OVERRIDE", "SETUID", "SETGID"]
+    security_opt:
+      - no-new-privileges:true
+    expose: ["6080", "9001"]
+    networks:
+      - lab
+      - control
+    cpus: ${KALI_CPUS:-2.0}
+    mem_limit: ${KALI_MEMORY:-3g}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "test -s /run/lab-netlock/ready && curl -fsS --max-time 2 http://127.0.0.1:9001/health >/dev/null && curl -fsS --max-time 2 http://127.0.0.1:6080/vnc.html >/dev/null && nc -z 127.0.0.1 5900"]
+      interval: 15s
+      timeout: 8s
+      retries: 20
+      start_period: 20s
+
+  lab-netlock:
+    image: ${COMPOSE_PROJECT_NAME:-vulnerableapp-academy}-kali:local
+    depends_on:
+      kali:
+        condition: service_started
+    network_mode: service:kali
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        marker=/run/lab-netlock/ready
+        apply_rules() {
+          rm -f "$$marker"
+          iptables -P OUTPUT DROP
+          iptables -F OUTPUT
+          iptables -A OUTPUT -o lo -j ACCEPT
+          iptables -A OUTPUT -d 127.0.0.11 -p udp --dport 53 -j ACCEPT
+          iptables -A OUTPUT -d 127.0.0.11 -p tcp --dport 53 -j ACCEPT
+          iptables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+          for spec in "academy 8000" "target 9090" "receiver 8081" "mailpit 8025" "ollama 11434"; do
+            set -- $$spec
+            host=$$1
+            port=$$2
+            for ip in $$(getent ahostsv4 "$$host" 2>/dev/null | awk '{print $$1}' | sort -u); do
+              iptables -A OUTPUT -d "$$ip" -p tcp --dport "$$port" -j ACCEPT
+            done
+          done
+          iptables -A OUTPUT -j REJECT
+          if command -v ip6tables >/dev/null 2>&1; then
+            ip6tables -P OUTPUT DROP
+            ip6tables -F OUTPUT
+            ip6tables -A OUTPUT -o lo -j ACCEPT
+            ip6tables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+            ip6tables -A OUTPUT -j REJECT
+          fi
+          printf '%s\n' "$$(readlink /proc/self/ns/net)" > "$$marker"
+        }
+        apply_rules
+        while sleep 10; do apply_rules; done
+    volumes:
+      - kali_netlock:/run/lab-netlock
+    cap_drop: ["ALL"]
+    cap_add: ["NET_ADMIN"]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "test -s /run/lab-netlock/ready && iptables -C OUTPUT -j REJECT"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  receiver:
+    build:
+      context: ./receiver
+      dockerfile: Dockerfile
+    image: ${COMPOSE_PROJECT_NAME:-vulnerableapp-academy}-receiver:local
+    environment:
+      RECEIVER_BIND: 0.0.0.0
+      RECEIVER_PORT: "8081"
+      RECEIVER_DATA: /data/requests.jsonl
+    volumes:
+      - receiver_data:/data
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    expose: ["8081"]
+    networks: [lab]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/health', timeout=3).read()\""]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+
+  mailpit:
+    image: axllent/mailpit:v1.21.8
+    environment:
+      MP_UI_BIND_ADDR: 0.0.0.0:8025
+      MP_SMTP_BIND_ADDR: 0.0.0.0:1025
+      MP_WEBROOT: /mailpit
+      MP_DATABASE: /data/mailpit.db
+    volumes:
+      - mailpit_data:/data
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    expose: ["1025", "8025"]
+    networks: [lab]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- --timeout=3 http://127.0.0.1:8025/mailpit/ >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+
+  academy:
+    build:
+      context: .
+      dockerfile: academy/Dockerfile
+    image: ${COMPOSE_PROJECT_NAME:-vulnerableapp-academy}-academy:local
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      target:
+        condition: service_healthy
+      kali:
+        condition: service_started
+    environment:
+      ACADEMY_BIND: 0.0.0.0
+      ACADEMY_PORT: "8000"
+      DATA_DIR: /var/lib/academy
+      ACADEMY_DATA_DIR: /var/lib/academy
+      ACADEMY_PROGRESS_DIR: /var/lib/academy-progress
+      TARGET_BASE_URL: http://target:9090/VulnerableApp
+      KALI_RUNNER_URL: http://kali:9001
+      RUNNER_BASE_URL: http://kali:9001
+      OLLAMA_URL: http://ollama:11434
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-huihui_ai/qwen3-abliterated:4b-v2-q4_K_M}
+      RECEIVER_BASE_URL: http://receiver:8081
+      MAILPIT_BASE_URL: http://mailpit:8025
+      VA_LAB_FILE: /tmp/va-training.txt
+    volumes:
+      - academy_secrets:/run/academy-secrets:ro
+      - academy_data:/var/lib/academy
+      - academy_progress:/var/lib/academy-progress
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    expose: ["8000"]
+    networks:
+      - lab
+      - control
+      - frontend
+    cpus: ${ACADEMY_CPUS:-2.0}
+    mem_limit: ${ACADEMY_MEMORY:-2g}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()\""]
+      interval: 15s
+      timeout: 8s
+      retries: 20
+      start_period: 20s
+
+  ollama:
+    image: ${OLLAMA_IMAGE:-ollama/ollama:0.12.11}
+    depends_on:
+      model-init:
+        condition: service_completed_successfully
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+    volumes:
+      - ollama_data:/root/.ollama
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    expose: ["11434"]
+    networks: [control]
+    cpus: ${OLLAMA_CPUS:-4.0}
+    mem_limit: ${OLLAMA_MEMORY:-8g}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 8s
+      retries: 20
+      start_period: 30s
+
+  gateway:
+    image: nginx:1.27-alpine
+    user: "101:101"
+    depends_on:
+      academy:
+        condition: service_healthy
+      target:
+        condition: service_healthy
+      kali:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+    configs:
+      - source: gateway_nginx
+        target: /etc/nginx/nginx.conf
+        mode: 0444
+    ports:
+      - "127.0.0.1:${LAB_PORT:-8080}:8080"
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:uid=101,gid=101,mode=1777
+      - /var/run:uid=101,gid=101,mode=1777
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - lab
+      - frontend
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- --timeout=3 http://127.0.0.1:8080/health >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  academy_secrets:
+  academy_data:
+  academy_progress:
+  kali_home:
+  kali_netlock:
+  target_netlock:
+  ollama_data:
+  receiver_data:
+  mailpit_data:
+
+networks:
+  lab:
+    internal: true
+  control:
+    internal: true
+  frontend:
+    internal: true
+  model_bootstrap:

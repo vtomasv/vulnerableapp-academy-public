@@ -1,0 +1,566 @@
+body, html { 
+    display: flex;
+    flex-flow: column;
+    height: 100%;
+    overflow-y: auto;
+    margin: 0;
+}
+
+/** Navigation bar properties **/
+.navbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.5rem;
+    min-height: 84px;
+    box-sizing: border-box;
+    flex-wrap: wrap;
+}
+
+.navbar-item {
+    flex: 0 1 auto;
+}
+
+.navbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    font-size: 30px;
+    color: black;
+    margin-left: 0;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.navbar-item-menu {
+    display: flex;
+    align-items: center;
+    font-size: 20px;
+    color: #6c5336;
+    white-space: nowrap;
+}
+
+div.navbar-item-menu a {
+    text-decoration: none;
+    color: inherit;
+}
+
+.active {
+    color: black;
+    font-weight: 600;
+}
+
+.navbar-controls {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.navbar-menu {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.navbar-item-menu-star {
+    margin-left: 0.25rem;
+}
+
+/** Navigation bar properties ended here. **/
+/** It is not working for chooseMode so added !important. Might not be a correct way. Need to make it proper.*/
+.hide-component {
+    display: none !important;
+}
+/* Used while a template's CSS/JS are still loading, so the unstyled
+ * content is never painted. visibility (not display) is used so layout
+ * space is reserved and there's no additional reflow when it's revealed. */
+.content-loading {
+    visibility: hidden;
+}
+.homeContainer {
+    background: burlywood;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    text-align: center;
+}
+
+.aboutContainer {
+    background: burlywood;
+    font-size: 18px;
+    flex-direction: column;
+    text-align: center;
+    margin-left: 5%;
+    margin-right: 5%;
+}
+
+#testScanner {
+    font-size: 18px;
+    text-align: left;
+    margin-top: 3%;
+    margin-left: 5%;
+    margin-right: 5%;
+    padding-bottom: 5%;
+}
+
+.chooseMode{
+    flex: 1;
+    align-items: center;
+    display: flex;
+    justify-content: center;
+    flex-direction: column;
+    font-size: 30px;
+}
+
+.chooseVulnerability {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+}
+
+.mode-item {
+    flex: 1;
+}
+
+hr {
+    display: block;
+    height: 1px;
+    border: 0;
+    border-top: 1px solid black;
+    padding: 0;
+}
+
+#learnAndPracticeBtn , #testScannerBtn, #vulnInformationBtn{
+    display: inline-block;
+    padding: 10px 35px;
+    margin: 3px;
+    border: 3px solid transparent;
+    border-radius: 4px;
+    transition: 0.2s opacity;
+    background: black;
+    color: #FFF;
+    font-size: 18px;
+}
+
+#vulnPracticeBtn, #vulnLearnBtn {
+    justify-items: left;
+    display: inline-block;
+    padding: 8px 8px;
+    margin: 2px;
+    border: 2px solid transparent;
+    border-radius: 3px;
+    transition: 0.2s opacity;
+    background: black;
+    color: #FFF;
+    font-size: 12px;
+}
+
+.master {
+    padding: 25px;
+    border: none;
+    box-sizing: border-box;
+}
+
+/**
+ * Establishes a block formatting context so the pane is laid out beside the
+ * floated .master column for its full height. Without it, the horizontal
+ * centering of #vulnPracticeBtn / #vulnLearnBtn depends on how tall the master
+ * list is (i.e. how many vulnerabilities the endpoint returns), so a short
+ * list (e.g. the mock) shifts the buttons left.
+ */
+.detail-pane {
+    display: flow-root;
+}
+
+.hidden-md {
+    display: inline;
+}
+
+.hidden-md-down {
+    display: none;
+}
+
+.text-center {
+    text-align: center;
+}
+
+/**
+4cd4b0
+*/
+.master-item {
+    font-size: 24px;
+}
+
+.inner-master-item {
+    font-size: 18px;
+}
+
+.master-item,
+.inner-master-item {
+    border-bottom: 2px solid burlywood;
+    padding: 10px;
+}
+
+.master-item:hover,
+.master-item.active-item,
+.inner-master-item:hover,
+.inner-master-item.active-item {
+    background: burlywood;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.tooltip {
+    position: relative;
+    display: inline-block;
+}
+
+.tooltip .tooltip-text {
+    visibility: hidden;
+    opacity: 0;
+    z-index: 1;
+    position: absolute;
+    left: 50%;
+    padding: 10% 30%;
+    color: white;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: initial;
+    white-space: nowrap;
+    transform: translate(-51%, 135%);
+    transition: all 100ms ease-in-out 50ms;
+}
+
+.tooltip-text:after {
+    content: "";
+    position: absolute;
+    top: -13px;
+    left: 50%;
+    transform: translate(-50%, 0);
+    border-width: 7px;
+    border-style: solid;
+}
+
+.tooltip:hover .tooltip-text:not(.tooltip-text:hover) {
+    visibility: visible;
+    opacity: 1;
+}
+
+.secure-variant-tooltip-text {
+    background-color: #37a93c;
+}
+
+.secure-variant-tooltip-text:after {
+    border-color: transparent transparent #37a93c transparent;
+}
+
+.unsecure-variant-tooltip-text {
+    background-color: black;
+}
+
+.unsecure-variant-tooltip-text:after {
+    border-color: transparent transparent black transparent;
+}
+
+.vector {
+    transform: scale(0.82);
+    margin-bottom: -6px;
+    padding-right: 6px;
+}
+
+:not(.active-item).inner-master-item:hover .vector {
+    transform: scale(0.9);
+}
+
+.secure-vulnerability {
+    color: #37a93c;
+}
+
+/* For Phones */
+[class*='col-'] {
+    width: 100%;
+    float: left;
+}
+
+.detail {
+    padding: 25px;
+    box-sizing: border-box;
+    position: absolute;
+    z-index: 11;
+    color: black;
+}
+
+#vulnerabilityDescription {
+    color: black;
+    font-size: 18px;
+    padding: 15px;
+    text-align: left;
+}
+
+#backBtn {
+    color: black;
+    border: 1px solid;
+    background: white;
+    border-radius: 5px;
+    padding: 5px 10px;
+    top: 0;
+    left: 0;
+}
+
+#backBtn:hover {
+    cursor: pointer;
+    color: white;
+}
+
+#helpText {
+    text-align: left;
+    overflow-wrap: normal;
+}
+
+#showHelp, #hideHelp {
+    background: blueviolet;
+    display: inline-block;
+    padding: 4px 4px;
+    margin: 1px;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    transition: 0.2s opacity;
+    color: #FFF;
+    font-size: 10px;
+}
+
+#pageContainer {
+    background: burlywood;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+#contribution {
+    font-size: 20px;
+    margin-left: 5%;
+}
+
+/**
+ * Basic Animation for all the buttons in the VulnerableApp Application.
+ */
+button:active, input[type="button"]:active, input[type="submit"]:active { 
+    transform: scale(0.98); 
+    /* Scaling button to 0.98 to its original size */ 
+    box-shadow: 3px 2px 22px 1px rgba(0, 0, 0, 0.24); 
+    /* Lowering the shadow */ 
+}
+
+@media only screen and (min-width: 786px) {
+    .col-2 {
+        width: 15%;
+    }
+
+    .col-3 {
+        width: 25%;
+    }
+    
+    .col-6 {
+        width: 60%;
+    }
+
+    .detail {
+        position: static;
+    }
+
+    .hidden-md {
+        display: none;
+    }
+
+    .master {
+        border-right: 3px solid burlywood;
+    }
+
+    /**
+     * Inside .detail-pane the percentages resolve against the pane (75% of the
+     * page) instead of the page itself, so rescale the inner columns to keep
+     * the same final widths as before (15% and 60% of the page).
+     */
+    .detail-pane .col-2 {
+        width: 20%;
+    }
+
+    .detail-pane .col-6 {
+        width: 80%;
+    }
+
+}
+
+/** Mode toggle **/
+.mode-toggle {
+    display: inline-flex;
+    vertical-align: middle;
+    border: 2px solid black;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-right: 0;
+    flex-shrink: 0;
+}
+
+.mode-toggle-btn {
+    background: blanchedalmond;
+    color: black;
+    border: none;
+    padding: 0.3rem 0.8rem;
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+.mode-toggle-btn.active-mode {
+    background: black;
+    color: #fff;
+}
+
+.mode-toggle-btn:disabled {
+    background: #e0e0e0;
+    color: #999;
+    cursor: not-allowed;
+}
+
+/** Challenge cards **/
+.challenge-cards-empty {
+    text-align: left;
+    margin-top: 1rem;
+    font-style: italic;
+    color: #555;
+}
+
+.challenge-cards-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    text-align: left;
+    margin-top: 1rem;
+}
+
+.challenge-card {
+    border: 2px solid burlywood;
+    border-radius: 4px;
+    background: #fff;
+    overflow: hidden;
+}
+
+.challenge-card-header {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: burlywood;
+    color: black;
+    border: none;
+    padding: 0.6rem 0.8rem;
+    font-size: 1rem;
+    font-weight: bold;
+}
+
+.challenge-card-body {
+    padding: 0.8rem;
+}
+
+.challenge-card-objective {
+    margin-top: 0;
+}
+
+.challenge-card-hints {
+    margin: 0.5rem 0;
+}
+
+.challenge-card-reveal-hint,
+.challenge-card-show-payload {
+    background: blueviolet;
+    color: #fff;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    padding: 0.3rem 0.6rem;
+    margin: 0.2rem 0.2rem 0 0;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+.challenge-card-show-payload:disabled {
+    background: #ccc;
+    color: #666;
+    cursor: not-allowed;
+}
+
+.challenge-card-payload {
+    margin-top: 0.6rem;
+    padding: 0.6rem;
+    background: #f4f4f4;
+    border-radius: 3px;
+}
+
+.challenge-card-payload-value {
+    display: block;
+    margin-top: 0.4rem;
+    padding: 0.4rem;
+    background: #2d2d2d;
+    color: #f8f8f2;
+    border-radius: 3px;
+    overflow-wrap: anywhere;
+}
+
+@media only screen and (min-width: 786px) {
+    .challenge-cards-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+.gh-star {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35em;
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: black;
+    white-space: nowrap;
+    padding: 0.3rem 0.75rem;
+    border: 2px solid black;
+    border-radius: 6px;
+    background: transparent;
+    transition: background 0.15s, color 0.15s;
+}
+
+.gh-star:hover {
+    background: black;
+    color: #fff;
+}
+
+.gh-star:hover img {
+    filter: invert(1);
+}
+
+.gh-star img {
+    width: 18px;
+    height: 18px;
+}
+
+@media only screen and (max-width: 960px) {
+    .navbar-brand {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .navbar-controls {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .navbar-menu {
+        justify-content: center;
+    }
+}

@@ -1,0 +1,496 @@
+{
+  "id": "authentication",
+  "title": "Authentication: debilidades de autenticación y almacenamiento de contraseñas",
+  "concept": "La familia AuthenticationVulnerability expone diez variantes del mismo flujo de inicio de sesión bajo /VulnerableApp/AuthenticationVulnerability/{LEVEL}. Los niveles iniciales muestran concatenación SQL, registro de contraseñas, almacenamiento en claro y hashes rápidos; los niveles intermedios muestran enumeración de usuarios, BCrypt con una contraseña débil y BCrypt con un coste deliberadamente bajo; el nivel 9 es la variante segura con BCrypt y mensajes de error genéricos. Todas las respuestas del controlador son HTTP 200 y llevan el envoltorio JSON {content,isValid}, incluso cuando la autenticación falla, por lo que el código de estado por sí solo no demuestra autenticación. La implementación usa la tabla auth_users y restringe cada consulta por username y level; las credenciales y hashes que aparecen en los ejercicios son únicamente las semillas del laboratorio leídas desde data.sql.",
+  "source_files": [
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/authentication/AuthenticationVulnerability.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/authentication/AuthLoginService.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/authentication/AuthUser.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/authentication/AuthUserAlgorithm.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/authentication/AuthUserRepository.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/attackvectors/AuthenticationVulnerabilityPayload.properties",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/scripts/Authentication/db/schema.sql",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/scripts/Authentication/db/data.sql",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/static/templates/AuthenticationVulnerability/LEVEL_1/Auth.html",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/static/templates/AuthenticationVulnerability/LEVEL_1/Auth.js",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/static/templates/AuthenticationVulnerability/LEVEL_1/Auth.css",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/static/templates/AuthenticationVulnerability/LEVEL_8/Auth.html",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/static/templates/AuthenticationVulnerability/LEVEL_8/Auth.js",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/static/templates/AuthenticationVulnerability/LEVEL_8/Auth.css",
+    "/home/ubuntu/workshop-research/upstream/src/test/java/org/sasanlabs/service/vulnerability/authentication/AuthenticationVulnerabilityTest.java",
+    "/home/ubuntu/workshop-research/upstream/src/test/java/org/sasanlabs/service/vulnerability/authentication/AuthLoginServiceTest.java",
+    "/home/ubuntu/workshop-research/upstream/src/test/java/org/sasanlabs/service/vulnerability/authentication/AuthSeedDataRegressionTest.java",
+    "/home/ubuntu/workshop-research/upstream/src/test/resources/auth-test/application-user.sql",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/internal/utility/annotations/VulnerableAppRestController.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/internal/utility/annotations/VulnerableAppRequestMapping.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/controller/VulnerableAppRestController.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/internal/utility/LevelConstants.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/bean/GenericVulnerabilityResponseBean.java"
+  ],
+  "levels": [
+    {
+      "route": "/VulnerableApp/AuthenticationVulnerability/LEVEL_1",
+      "method": "GET",
+      "parameters": {
+        "username": "query string; requerido para intentar autenticar",
+        "password": "query string; requerido para intentar autenticar"
+      },
+      "behavior": "Construye SELECT * FROM auth_users WHERE level=1 AND username='...' AND password='...' concatenando ambos valores sin parámetros preparados. Si la consulta devuelve alguna fila, devuelve isValid=true y el perfil userId, username, email y role; si no devuelve filas, devuelve Invalid credentials. Las excepciones se convierten en Database error: ... dentro de content.",
+      "vulnerable": true,
+      "notes": "La anotación AttackVector lo clasifica como ERROR_BASED_SQL_INJECTION y el payload original propone username admin_sqli y password ' OR 1=1 --. El efecto observable es un bypass SQL de laboratorio; el catch también puede reflejar el mensaje de la base de datos. La prueba AuthLoginServiceTest confirma que se usa JdbcTemplate y la semilla data.sql asigna admin_sqli al nivel 1. La ruta GET es el valor por defecto de VulnerableAppRequestMapping. Como la consulta usa SELECT * y users.get(0), el perfil concreto tras OR 1=1 depende del orden que entregue la base; el código no garantiza que sea admin_sqli."
+    },
+    {
+      "route": "/VulnerableApp/AuthenticationVulnerability/LEVEL_2",
+      "method": "GET",
+      "parameters": {
+        "username": "query string; requerido para intentar autenticar",
+        "password": "query string; requerido para intentar autenticar"
+      },
+      "behavior": "Busca el usuario admin_logs del nivel 2 mediante el repositorio, registra LOGGER.info(\"Login attempt for user: {} | provided password: {}\", username, password) y después compara la contraseña en claro. Una coincidencia devuelve el perfil; cualquier fallo devuelve Invalid credentials, pero el valor proporcionado ya fue enviado al log.",
+      "vulnerable": true,
+      "notes": "La vulnerabilidad es la exposición de datos sensibles en logs, no un bypass. Se puede demostrar con un marcador inocuo aunque la contraseña sea incorrecta, porque el log ocurre antes de la comparación. data.sql contiene una contraseña de semilla en claro para admin_logs. No se debe puntuar inspeccionando solamente la respuesta HTTP: el indicio está en los logs del servicio."
+    },
+    {
+      "route": "/VulnerableApp/AuthenticationVulnerability/LEVEL_3",
+      "method": "GET",
+      "parameters": {
+        "username": "query string; requerido para intentar autenticar",
+        "password": "query string; requerido para intentar autenticar"
+      },
+      "behavior": "Autentica al usuario del nivel 3 comparando directamente la contraseña en claro. Cuando la autenticación tiene éxito, además del perfil añade passwordInDB con el valor almacenado y devuelve isValid=true.",
+      "vulnerable": true,
+      "notes": "AuthUserAlgorithm.PLAIN y la semilla admin_plain muestran almacenamiento en texto claro. AuthenticationVulnerabilityTest comprueba explícitamente que el campo passwordInDB aparece en la respuesta. La ruta y el formulario son GET."
+    },
+    {
+      "route": "/VulnerableApp/AuthenticationVulnerability/LEVEL_4",
+      "method": "GET",
+      "parameters": {
+        "username": "query string; requerido para intentar autenticar",
+        "password": "query string; requerido para intentar autenticar"
+      },
+      "behavior": "Calcula MD5 de la contraseña recibida y lo compara con la cadena almacenada. En un login válido devuelve el perfil, passwordHash y algorithm=MD5.",
+      "vulnerable": true,
+      "notes": "Es un hash rápido y sin sal, adecuado para ilustrar cracking offline de una contraseña débil; el ejercicio no ejecuta crackers ni servicios externos. AuthSeedDataRegressionTest verifica que el hash de admin_md5 coincide con la contraseña documentada en data.sql."
+    },
+    {
+      "route": "/VulnerableApp/AuthenticationVulnerability/LEVEL_5",
+      "method": "GET",
+      "parameters": {
+        "username": "query string; requerido para intentar autenticar",
+        "password": "query string; requerido para intentar autenticar"
+      },
+      "behavior": "Calcula SHA-1 de la contraseña recibida y lo compara con la cadena almacenada. En un login válido devuelve el perfil, passwordHash y algorithm=SHA-1.",
+      "vulnerable": true,
+      "notes": "SHA-1 también es un hash rápido y sin sal en esta semilla. AuthSeedDataRegressionTest comprueba el valor de admin_sha1 y su contraseña de laboratorio. El endpoint no usa POST: la contraseña viaja como query parameter en el diseño original."
+    },
+    {
+      "route": "/VulnerableApp/AuthenticationVulnerability/LEVEL_6",
+      "method": "GET",
+      "parameters": {
+        "username": "query string; requerido para intentar autenticar",
+        "password": "query string; requerido para intentar autenticar"
+      },
+      "behavior": "Para el registro del nivel 6, salt es null y el servicio calcula SHA-256 solamente sobre la contraseña. Un login válido devuelve el perfil, passwordHash y algorithm=SHA-256.",
+      "vulnerable": true,
+      "notes": "La semilla admin_sha256 no tiene sal. El mismo método admite sal si el registro la contiene; el nivel 7 reutiliza esa rama con una sal. AuthSeedDataRegressionTest verifica el hash sin sal de admin_sha256."
+    },
+    {
+      "route": "/VulnerableApp/AuthenticationVulnerability/LEVEL_7",
+      "method": "GET",
+      "parameters": {
+        "username": "query string; requerido para intentar autenticar",
+        "password": "query string; requerido para intentar autenticar"
+      },
+      "behavior": "Busca el usuario del nivel 7 y valida SHA-256 sobre salt+password. Si el usuario no existe devuelve User not found; si existe pero la contraseña es incorrecta devuelve Invalid password; si es correcta devuelve el perfil. Las dos respuestas de error distinguen la existencia del usuario.",
+      "vulnerable": true,
+      "notes": "La anotación clasifica el nivel como USERNAME_ENUMERATION. data.sql usa admin_enum con salt s9A#2zLk y una contraseña de laboratorio. AuthLoginServiceTest y AuthSeedDataRegressionTest cubren la diferencia entre usuario inexistente y contraseña incorrecta. La sal reduce tablas precalculadas, pero no corrige la enumeración ni convierte SHA-256 en un KDF de contraseñas."
+    },
+    {
+      "route": "/VulnerableApp/AuthenticationVulnerability/LEVEL_8",
+      "method": "POST",
+      "parameters": {
+        "username": "application/x-www-form-urlencoded; nombre admin_weak en la semilla",
+        "password": "application/x-www-form-urlencoded; contraseña de laboratorio password123"
+      },
+      "behavior": "Lee username y password desde un formulario POST, busca el registro del nivel 8 y valida con BCryptPasswordEncoder. Un login correcto devuelve solamente el perfil, sin hash ni contraseña. La debilidad intencional es la contraseña común password123, no la función de hash.",
+      "vulnerable": true,
+      "notes": "La anotación fija requestMethod=POST y la plantilla LEVEL_8/Auth.js construye application/x-www-form-urlencoded. La prueba AuthLoginServiceTest confirma el hash BCrypt de password123. El POST evita que la contraseña se coloque en la URL, pero no compensa una contraseña débil."
+    },
+    {
+      "route": "/VulnerableApp/AuthenticationVulnerability/LEVEL_9",
+      "method": "POST",
+      "parameters": {
+        "username": "application/x-www-form-urlencoded; nombre admin_secure en la semilla o un nombre inexistente",
+        "password": "application/x-www-form-urlencoded"
+      },
+      "behavior": "Valida BCrypt con el encoder normal y, tanto si el usuario no existe como si la contraseña no coincide, devuelve el mismo content=Invalid credentials e isValid=false. En éxito devuelve el perfil sin passwordInDB ni passwordHash.",
+      "vulnerable": false,
+      "notes": "Es la variante Variant.SECURE. La prueba AuthenticationVulnerabilityTest comprueba el error genérico y la ausencia de secretos, mientras AuthLoginServiceTest contrasta usuario existente e inexistente. El código sigue exponiendo el perfil básico tras un login válido; secure aquí significa que no muestra hash/contraseña y no enumera por mensaje, no que sea una implementación completa de sesión, MFA o rate limiting."
+    },
+    {
+      "route": "/VulnerableApp/AuthenticationVulnerability/LEVEL_10",
+      "method": "POST",
+      "parameters": {
+        "username": "application/x-www-form-urlencoded; nombre admin_lowcost en la semilla",
+        "password": "application/x-www-form-urlencoded; contraseña de laboratorio sunshine"
+      },
+      "behavior": "Valida el registro BCRYPT_LOW_ITERATION creando BCryptPasswordEncoder(4). En éxito devuelve el perfil y añade passwordHash y algorithm=BCrypt (Cost: 4); un fallo devuelve Invalid credentials.",
+      "vulnerable": true,
+      "notes": "La anotación fija POST. El coste 4 es deliberadamente bajo y acelera el cracking offline comparado con un coste de producción; además el controlador entrega el hash al cliente tras el login correcto. data.sql contiene admin_lowcost con el hash cost 04 y la prueba de controlador cubre la exposición de hashes en niveles débiles. AuthenticationVulnerability.java referencia AUTH_PAYLOAD_LEVEL_10, pero el archivo AuthenticationVulnerabilityPayload.properties leído en este commit sólo contiene claves hasta AUTH_PAYLOAD_LEVEL_9; la ruta y la lógica del nivel sí están definidas, pero su texto de payload puede faltar en la metadata."
+    }
+  ],
+  "exercises": [
+    {
+      "title": "LEVEL_1: bypass SQL de una sola consulta con marcador de control",
+      "route": "/VulnerableApp/AuthenticationVulnerability/LEVEL_1",
+      "method": "GET",
+      "params": {
+        "username": "admin_sqli",
+        "password": "' OR 1=1 -- "
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": {
+        "positive": "Si la imagen está cargada con la semilla esperada y la sintaxis de la base de datos acepta el comentario, la consulta puede devolver una o más filas y content será el perfil de la primera fila que el motor entregue, con isValid=true. No se debe asumir por el código que esa primera fila sea necesariamente admin_sqli.",
+        "negative_control": "Con username admin_sqli y password VA_LAB_WRONG, el código espera isValid=false y content=Invalid credentials.",
+        "safety": "El payload sólo intenta alterar el SELECT de autenticación; no contiene UPDATE, DELETE, acceso a tablas ajenas ni ejecución de comandos."
+      },
+      "check": {
+        "kind": "json",
+        "value": true,
+        "path": "$.isValid"
+      },
+      "explanation": "La concatenación de username y password dentro de SQL permite cerrar la cadena de contraseña e introducir una condición verdadera. El control negativo ayuda a distinguir el bypass de un login válido por credencial legítima. Un HTTP 200 se obtiene también ante un fallo, así que el verificador debe leer isValid y, preferiblemente, content.username.",
+      "mitigation": "Usar consultas parametrizadas o el repositorio/JPA para toda entrada; no concatenar valores en SQL y no devolver mensajes de excepción de la base de datos al cliente.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/AuthenticationVulnerability/LEVEL_1 --data-urlencode 'username=admin_sqli' --data-urlencode 'password=VA_LAB_WRONG'",
+        "curl -i --get http://target:9090/VulnerableApp/AuthenticationVulnerability/LEVEL_1 --data-urlencode 'username=admin_sqli' --data-urlencode \"password=' OR 1=1 -- \"",
+        "Comparar el JSON de ambos cuerpos y aceptar como indicio sólo la combinación isValid=true y un perfil coherente; no atribuir éxito por el código HTTP 200."
+      ],
+      "hints": [
+        "El payload debe llegar como un solo valor de password; --data-urlencode evita que los espacios y signos se pierdan.",
+        "El código usa un comentario SQL al final de la condición. Si la variante de H2 exige espacio después de --, el comando ya incluye un espacio final dentro de las comillas.",
+        "No convertir este ejercicio en extracción de datos: el objetivo es sólo el bypass de la consulta de login del nivel 1."
+      ]
+    },
+    {
+      "title": "LEVEL_2: detectar contraseña proporcionada en el log sin usar un secreto",
+      "route": "/VulnerableApp/AuthenticationVulnerability/LEVEL_2",
+      "method": "GET",
+      "params": {
+        "username": "admin_logs",
+        "password": "VA_LAB_LOG_MARKER"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": {
+        "response": "La respuesta de login puede ser isValid=false y content=Invalid credentials porque el marcador no es la contraseña almacenada.",
+        "log": "En el log del servicio debería aparecer una entrada que incluya admin_logs y VA_LAB_LOG_MARKER, ya que LOGGER.info se ejecuta antes de la comparación.",
+        "safety": "El marcador es inocuo y no es una credencial real ni un dato del host."
+      },
+      "check": {
+        "kind": "manual",
+        "value": "Revisar exclusivamente los logs del servicio del laboratorio y confirmar la aparición literal de VA_LAB_LOG_MARKER junto a admin_logs; la respuesta HTTP no verifica la escritura en logs."
+      },
+      "explanation": "Este nivel demuestra logging sensible aunque el login falle: el servicio registra el password recibido antes de validar. No es necesario conocer ni enviar la contraseña real de data.sql. La verificación requiere acceso autorizado a los logs del contenedor o consola del laboratorio, no un endpoint adicional.",
+      "mitigation": "No registrar contraseñas, tokens ni secretos; aplicar allowlists de campos, redacción estructurada y controles de acceso/retención en los logs.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/AuthenticationVulnerability/LEVEL_2 --data-urlencode 'username=admin_logs' --data-urlencode 'password=VA_LAB_LOG_MARKER'",
+        "Anotar que un cuerpo con isValid=false es compatible con el objetivo: el marcador no pretende autenticar.",
+        "En la consola de logs autorizada del laboratorio, buscar VA_LAB_LOG_MARKER y admin_logs; no exponer ni copiar otros secretos."
+      ],
+      "hints": [
+        "El orden en AuthLoginService es buscar usuario, LOGGER.info y sólo después comparar la contraseña.",
+        "No uses la contraseña real de admin_logs para probar la vulnerabilidad de logging.",
+        "No puntúes este ejercicio por el texto de la respuesta ni por HTTP 200; el artefacto a verificar es el log."
+      ]
+    },
+    {
+      "title": "LEVEL_3: observar exposición explícita del passwordInDB",
+      "route": "/VulnerableApp/AuthenticationVulnerability/LEVEL_3",
+      "method": "GET",
+      "params": {
+        "username": "admin_plain",
+        "password": "b7X$4nRj-6mW"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": {
+        "positive": "Con la semilla de data.sql, isValid=true y content.passwordInDB=b7X$4nRj-6mW además del perfil.",
+        "negative_control": "Cambiar la contraseña a VA_LAB_WRONG debe producir isValid=false y no debe entregar passwordInDB."
+      },
+      "check": {
+        "kind": "json",
+        "value": "b7X$4nRj-6mW",
+        "path": "$.content.passwordInDB"
+      },
+      "explanation": "El servicio valida una contraseña PLAIN y el controlador añade deliberadamente passwordInDB al perfil de éxito. El control negativo evita confundir el campo expuesto con una respuesta genérica o con un dato presente en una página estática.",
+      "mitigation": "Almacenar sólo hashes de contraseña adecuados y nunca serializar contraseñas, hashes o material de autenticación en la respuesta; usar DTOs de salida mínimos.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/AuthenticationVulnerability/LEVEL_3 --data-urlencode 'username=admin_plain' --data-urlencode 'password=b7X$4nRj-6mW'",
+        "curl -i --get http://target:9090/VulnerableApp/AuthenticationVulnerability/LEVEL_3 --data-urlencode 'username=admin_plain' --data-urlencode 'password=VA_LAB_WRONG'",
+        "Parsear el JSON del positivo y comprobar content.passwordInDB; no tomar como prueba el HTML de la interfaz ni un 200."
+      ],
+      "hints": [
+        "Las comillas simples del shell protegen el signo $ del password de semilla.",
+        "El nombre exacto del campo expuesto es passwordInDB, no password.",
+        "La exposición ocurre sólo después de una autenticación correcta en el código revisado."
+      ]
+    },
+    {
+      "title": "LEVEL_4: identificar MD5 rápido y el hash devuelto",
+      "route": "/VulnerableApp/AuthenticationVulnerability/LEVEL_4",
+      "method": "GET",
+      "params": {
+        "username": "admin_md5",
+        "password": "SaKyb21.20#"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": {
+        "positive": "La semilla y AuthSeedDataRegressionTest esperan isValid=true, content.algorithm=MD5 y el hash almacenado en content.passwordHash.",
+        "negative_control": "Con password VA_LAB_WRONG, el resultado esperado es isValid=false y content=Invalid credentials."
+      },
+      "check": {
+        "kind": "json",
+        "value": "MD5",
+        "path": "$.content.algorithm"
+      },
+      "explanation": "El login correcto confirma el camino de validación MD5 y muestra que el controlador entrega el hash al cliente. No se requiere ni se recomienda intentar cracking: la propiedad didáctica es que MD5 es rápido y no está diseñado para almacenamiento de contraseñas.",
+      "mitigation": "Migrar a un KDF adaptativo y moderno (por ejemplo, Argon2id, scrypt o BCrypt con coste vigente), con sal única por contraseña; no devolver el hash al cliente.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/AuthenticationVulnerability/LEVEL_4 --data-urlencode 'username=admin_md5' --data-urlencode 'password=SaKyb21.20#'",
+        "curl -i --get http://target:9090/VulnerableApp/AuthenticationVulnerability/LEVEL_4 --data-urlencode 'username=admin_md5' --data-urlencode 'password=VA_LAB_WRONG'",
+        "Comprobar content.algorithm y, si se documenta la exposición, observar que content.passwordHash no es un secreto que deba salir en una aplicación real."
+      ],
+      "hints": [
+        "No confundas la autenticación correcta con la seguridad del algoritmo: el resultado positivo es precisamente la demostración.",
+        "Usa comillas simples alrededor del argumento para que # no sea comentario del shell.",
+        "La prueba de regresión local confirma el hash de la semilla, pero no demuestra que el despliegue en target esté usando esa misma imagen."
+      ]
+    },
+    {
+      "title": "LEVEL_5: identificar SHA-1 rápido y el hash devuelto",
+      "route": "/VulnerableApp/AuthenticationVulnerability/LEVEL_5",
+      "method": "GET",
+      "params": {
+        "username": "admin_sha1",
+        "password": "WyXxb@i34"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": {
+        "positive": "Con la semilla esperada, isValid=true, content.algorithm=SHA-1 y content.passwordHash presente.",
+        "negative_control": "Con password VA_LAB_WRONG, isValid=false y content=Invalid credentials."
+      },
+      "check": {
+        "kind": "json",
+        "value": "SHA-1",
+        "path": "$.content.algorithm"
+      },
+      "explanation": "AuthLoginService calcula SHA-1 sin sal y el controlador devuelve el algoritmo y el hash en el perfil de éxito. El ejercicio se limita a comprobar el comportamiento de código; no necesita servicios de cracking ni consultas a fuentes externas.",
+      "mitigation": "Sustituir SHA-1 por un KDF adaptativo con sal única y calibrar el coste; mantener los hashes fuera de las respuestas y de logs.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/AuthenticationVulnerability/LEVEL_5 --data-urlencode 'username=admin_sha1' --data-urlencode 'password=WyXxb@i34'",
+        "curl -i --get http://target:9090/VulnerableApp/AuthenticationVulnerability/LEVEL_5 --data-urlencode 'username=admin_sha1' --data-urlencode 'password=VA_LAB_WRONG'",
+        "Leer el objeto content del JSON positivo y comprobar algorithm=SHA-1; un 200 sin ese campo no es evidencia suficiente."
+      ],
+      "hints": [
+        "El símbolo @ no necesita escaping dentro de comillas simples.",
+        "El valor de algorithm se fija en el controlador y es útil para comprobar que se alcanzó el nivel correcto.",
+        "La prueba de semilla cubre la contraseña documentada, pero no garantiza por sí sola el estado del contenedor target."
+      ]
+    },
+    {
+      "title": "LEVEL_6: distinguir SHA-256 sin sal de un KDF de contraseñas",
+      "route": "/VulnerableApp/AuthenticationVulnerability/LEVEL_6",
+      "method": "GET",
+      "params": {
+        "username": "admin_sha256",
+        "password": "QoTz8!bM52"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": {
+        "positive": "Con la semilla esperada, isValid=true, content.algorithm=SHA-256 y content.passwordHash presente; data.sql deja salt en NULL para este usuario.",
+        "negative_control": "Con password VA_LAB_WRONG, isValid=false y content=Invalid credentials."
+      },
+      "check": {
+        "kind": "json",
+        "value": "SHA-256",
+        "path": "$.content.algorithm"
+      },
+      "explanation": "La rama SHA256 usa input=password cuando el registro no tiene salt. SHA-256 puede ser criptográficamente fuerte como digest, pero su rapidez y ausencia de sal lo hacen inadecuado para contraseñas. El código también expone el hash en el resultado válido.",
+      "mitigation": "Usar un KDF adaptativo diseñado para contraseñas, con sal aleatoria por cuenta y parámetros actuales; no enviar el hash al cliente.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/AuthenticationVulnerability/LEVEL_6 --data-urlencode 'username=admin_sha256' --data-urlencode 'password=QoTz8!bM52'",
+        "curl -i --get http://target:9090/VulnerableApp/AuthenticationVulnerability/LEVEL_6 --data-urlencode 'username=admin_sha256' --data-urlencode 'password=VA_LAB_WRONG'",
+        "Comprobar content.algorithm=SHA-256 y no inferir una mitigación sólo porque el nombre SHA-256 parezca fuerte."
+      ],
+      "hints": [
+        "Las comillas simples evitan que ! active expansión de historial en shells interactivos.",
+        "LEVEL_7 también usa la rama SHA256, pero con salt; no mezcles ambos casos.",
+        "La diferencia entre un digest rápido y un KDF adaptativo es parte del objetivo, no una invitación a romper hashes."
+      ]
+    },
+    {
+      "title": "LEVEL_7: enumeración de usuarios por mensajes distintos",
+      "route": "/VulnerableApp/AuthenticationVulnerability/LEVEL_7",
+      "method": "GET",
+      "params": {
+        "username": "ghost y admin_enum en dos peticiones comparables",
+        "password": "VA_LAB_WRONG en ambas"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": {
+        "unknown_user": "Para ghost se espera isValid=false y content=User not found.",
+        "known_user_wrong_password": "Para admin_enum se espera isValid=false y content=Invalid password.",
+        "interpretation": "La diferencia de contenido revela que admin_enum existe. La sal SHA-256 de este nivel no elimina esa fuga de información."
+      },
+      "check": {
+        "kind": "manual",
+        "value": "Comparar literalmente los dos campos JSON content: User not found frente a Invalid password, manteniendo iguales método, ruta y password."
+      },
+      "explanation": "El servicio recibe enumerable=true y deliberadamente separa usuario ausente de contraseña incorrecta. Es un control positivo/negativo de existencia, no una autenticación exitosa. El verificador debe comparar dos respuestas, no contar un click en la UI ni usar sólo HTTP 200.",
+      "mitigation": "Responder con el mismo mensaje y comportamiento observable para usuario ausente y contraseña incorrecta; considerar límites de intento, respuestas temporizadas de forma consistente y monitoreo.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/AuthenticationVulnerability/LEVEL_7 --data-urlencode 'username=ghost' --data-urlencode 'password=VA_LAB_WRONG'",
+        "curl -i --get http://target:9090/VulnerableApp/AuthenticationVulnerability/LEVEL_7 --data-urlencode 'username=admin_enum' --data-urlencode 'password=VA_LAB_WRONG'",
+        "Comparar $.content en ambos JSON; no declarar enumeración por un solo 200, por un texto del frontend o por un click."
+      ],
+      "hints": [
+        "admin_enum es la cuenta del nivel 7 en data.sql y usa una sal; ghost no existe en esa semilla.",
+        "Mantén el password idéntico en ambos comandos para aislar la variable username.",
+        "El resultado esperado de ambos casos es isValid=false; la vulnerabilidad está en el mensaje diferencial."
+      ]
+    },
+    {
+      "title": "LEVEL_8: contraseña común pese a BCrypt y transporte POST",
+      "route": "/VulnerableApp/AuthenticationVulnerability/LEVEL_8",
+      "method": "POST",
+      "params": {
+        "username": "admin_weak",
+        "password": "password123"
+      },
+      "headers": {
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      "body": "username=admin_weak&password=password123",
+      "content_type": "application/x-www-form-urlencoded",
+      "expected": {
+        "positive": "Si coincide la semilla, el POST devuelve isValid=true y un perfil con username admin_weak, sin passwordHash ni passwordInDB.",
+        "negative_control": "Cambiar password a VA_LAB_WRONG debe devolver isValid=false y content=Invalid credentials.",
+        "interpretation": "POST evita poner las credenciales en la query URL, pero BCrypt no compensa password123 como contraseña de baja entropía."
+      },
+      "check": {
+        "kind": "json",
+        "value": true,
+        "path": "$.isValid"
+      },
+      "explanation": "El código valida con BCrypt normal, pero la semilla usa una contraseña común. Se prueba directamente el comportamiento de login y se contrasta con un fallo; no se hace fuerza bruta ni se toca ningún dato persistente.",
+      "mitigation": "Aplicar política de contraseñas o passphrases resistentes a listas comunes, comprobación contra contraseñas comprometidas, MFA y rate limiting; mantener BCrypt/Argon2id con parámetros calibrados.",
+      "steps": [
+        "curl -i -X POST http://target:9090/VulnerableApp/AuthenticationVulnerability/LEVEL_8 -H 'Content-Type: application/x-www-form-urlencoded' --data 'username=admin_weak&password=password123'",
+        "curl -i -X POST http://target:9090/VulnerableApp/AuthenticationVulnerability/LEVEL_8 -H 'Content-Type: application/x-www-form-urlencoded' --data 'username=admin_weak&password=VA_LAB_WRONG'",
+        "Validar el positivo leyendo isValid y content.username; verificar que el método es POST y no usar el código 200 como criterio único."
+      ],
+      "hints": [
+        "El formulario LEVEL_8/Auth.js envía exactamente username y password como form-urlencoded.",
+        "No pruebes con una lista de contraseñas: la semilla documenta una sola contraseña de laboratorio.",
+        "El objetivo es la debilidad de la contraseña, no recuperar el hash ni atacar otro endpoint."
+      ]
+    },
+    {
+      "title": "LEVEL_9: control seguro contra enumeración y fuga de hash",
+      "route": "/VulnerableApp/AuthenticationVulnerability/LEVEL_9",
+      "method": "POST",
+      "params": {
+        "comparison": "admin_secure/VA_LAB_WRONG frente a ghost/VA_LAB_WRONG",
+        "positive_optional": "admin_secure/9fG#2hJk*LmN!8qR"
+      },
+      "headers": {
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      "body": "username=admin_secure&password=VA_LAB_WRONG (repetir con username=ghost)",
+      "content_type": "application/x-www-form-urlencoded",
+      "expected": {
+        "negative_existing": "isValid=false y content=Invalid credentials para admin_secure con password incorrecta.",
+        "negative_unknown": "isValid=false y content=Invalid credentials para ghost con password incorrecta.",
+        "positive_optional": "Con la semilla esperada, el password documentado de admin_secure produce isValid=true y un perfil sin passwordHash ni passwordInDB.",
+        "interpretation": "La igualdad de los fallos es el control contra enumeración; la ausencia de campos secretos es el control contra exposición."
+      },
+      "check": {
+        "kind": "manual",
+        "value": "Comparar $.content y $.isValid de las dos respuestas negativas y, opcionalmente, comprobar que el éxito no contiene passwordHash ni passwordInDB; un único 200 no es evidencia."
+      },
+      "explanation": "Este es el contraste positivo de la familia: BCrypt normal, mensaje genérico para usuario ausente y contraseña errónea, y DTO de perfil sin material de contraseña. La etiqueta secure no implica sesión, MFA, bloqueo o rate limiting, que no aparecen en este código.",
+      "mitigation": "Conservar errores genéricos y respuestas observables equivalentes, proteger el endpoint con controles de abuso, usar MFA/sesiones seguras y evitar cualquier serialización de credenciales o hashes.",
+      "steps": [
+        "curl -i -X POST http://target:9090/VulnerableApp/AuthenticationVulnerability/LEVEL_9 -H 'Content-Type: application/x-www-form-urlencoded' --data 'username=admin_secure&password=VA_LAB_WRONG'",
+        "curl -i -X POST http://target:9090/VulnerableApp/AuthenticationVulnerability/LEVEL_9 -H 'Content-Type: application/x-www-form-urlencoded' --data 'username=ghost&password=VA_LAB_WRONG'",
+        "curl -i -X POST http://target:9090/VulnerableApp/AuthenticationVulnerability/LEVEL_9 -H 'Content-Type: application/x-www-form-urlencoded' --data 'username=admin_secure&password=9fG#2hJk*LmN!8qR'",
+        "Comparar los JSON; confirmar que las dos fallas son indistinguibles en content y que el perfil válido no trae campos de hash."
+      ],
+      "hints": [
+        "Usa exactamente la misma contraseña errónea en los dos casos negativos.",
+        "Las comillas simples mantienen #, ! y * como datos del formulario en Kali.",
+        "No uses diferencias de tiempo no controladas como prueba única; el código fuente y el mensaje JSON son la evidencia disponible aquí."
+      ]
+    },
+    {
+      "title": "LEVEL_10: BCrypt con coste 4 y hash entregado al cliente",
+      "route": "/VulnerableApp/AuthenticationVulnerability/LEVEL_10",
+      "method": "POST",
+      "params": {
+        "username": "admin_lowcost",
+        "password": "sunshine"
+      },
+      "headers": {
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      "body": "username=admin_lowcost&password=sunshine",
+      "content_type": "application/x-www-form-urlencoded",
+      "expected": {
+        "positive": "Con la semilla esperada, isValid=true, content.algorithm=BCrypt (Cost: 4) y content.passwordHash empieza por $2a$04$.",
+        "negative_control": "Con password VA_LAB_WRONG, isValid=false y content=Invalid credentials.",
+        "interpretation": "El endpoint demuestra un coste deliberadamente bajo y una exposición adicional del hash tras el login correcto."
+      },
+      "check": {
+        "kind": "json",
+        "value": "BCrypt (Cost: 4)",
+        "path": "$.content.algorithm"
+      },
+      "explanation": "El servicio instancia BCryptPasswordEncoder(4), y el controlador serializa tanto passwordHash como el texto del coste. La prueba es segura porque usa una única contraseña de la semilla y no ejecuta cracking ni modifica datos.",
+      "mitigation": "Usar un coste BCrypt calibrado al entorno o un KDF moderno, revisar periódicamente sus parámetros y nunca devolver el hash; migrar hashes en el siguiente login cuando cambien los parámetros.",
+      "steps": [
+        "curl -i -X POST http://target:9090/VulnerableApp/AuthenticationVulnerability/LEVEL_10 -H 'Content-Type: application/x-www-form-urlencoded' --data 'username=admin_lowcost&password=sunshine'",
+        "curl -i -X POST http://target:9090/VulnerableApp/AuthenticationVulnerability/LEVEL_10 -H 'Content-Type: application/x-www-form-urlencoded' --data 'username=admin_lowcost&password=VA_LAB_WRONG'",
+        "En el positivo, comprobar content.algorithm y observar que passwordHash sólo aparece porque el código del nivel 10 lo añade; no copiarlo ni intentar romperlo."
+      ],
+      "hints": [
+        "El prefijo $2a$04$ del hash de semilla es consistente con el coste 4, pero el campo algorithm es el indicador principal de esta prueba.",
+        "El password sunshine es una semilla inocua del laboratorio; no extrapoles su resultado a una política real.",
+        "El fallo conserva HTTP 200, por eso la comprobación debe usar isValid y content."
+      ]
+    }
+  ],
+  "limitations": [
+    "El análisis se limita al commit 4df80bbcd42682ecf26334f12c568e0f4a326c1a y a la familia authentication, sus plantillas, payload, semillas, pruebas y piezas compartidas necesarias para reconstruir la ruta. No se inspeccionaron otras familias de vulnerabilidades.",
+    "La ruta se deriva de @VulnerableAppRestController(value=\"AuthenticationVulnerability\") y @VulnerableAppRequestMapping(value=LEVEL_n); el controlador central construye URLs con contexto, nombre y nivel. El entorno solicitado fija la base esperada en http://target:9090/VulnerableApp, pero no se afirmó que el contenedor estuviera disponible ni se ejecutaron los curls contra él.",
+    "Las expectativas positivas dependen de que target use la imagen/semillas coherentes con data.sql. Las pruebas del repositorio validan mocks o una base H2 preparada, no el estado vivo del laboratorio. Por eso este documento verifica el código y propone comprobaciones; no promete que un ejercicio haya funcionado en ejecución.",
+    "Todas las respuestas del controlador se construyen con HTTP 200, incluso para credenciales ausentes o inválidas. Un 200 no prueba autenticación: se debe leer el JSON, especialmente isValid y content, y comparar controles.",
+    "Un mensaje reflejado o un cambio de texto no prueba ejecución de XSS; un 200 no prueba IDOR; y no se debe atribuir puntaje por hacer click en la interfaz. Esta familia no contiene ejercicios XSS ni IDOR, pero esas reglas deben mantenerse en cualquier verificador que agregue otras familias.",
+    "El check.kind=manual requiere una comparación humana o acceso autorizado a logs y no debe convertirse en un resultado automático por presencia de una página. El check.kind=json asume rutas JSONPath como $.isValid o $.content.campo y sólo confirma el valor indicado, no la ausencia de todas las demás debilidades.",
+    "No se cubren sesiones, cookies, CSRF, MFA, bloqueo, rate limiting, recuperación de contraseña, autorización posterior al login ni auditoría de logs más allá del comportamiento explícito de esta familia.",
+    "Los ejercicios no usan Mailpit ni receiver porque ningún nivel de authentication emite correo ni realiza SSRF; tampoco usan comandos externos, reverse shells, lectura de secretos del host, DoS, borrado de datos, cracking offline o extracción de tablas.",
+    "Hay una discrepancia de metadata dentro de la familia: AuthenticationVulnerability.java referencia AUTH_PAYLOAD_LEVEL_10, mientras AuthenticationVulnerabilityPayload.properties termina en AUTH_PAYLOAD_LEVEL_9. Este informe describe el nivel 10 por su anotación y código, no inventa un texto de payload ausente."
+  ]
+}

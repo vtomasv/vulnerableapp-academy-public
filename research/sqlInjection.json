@@ -1,0 +1,961 @@
+{
+  "id": "sqlInjection",
+  "title": "Familia sqlInjection: Blind, Error-based y Union-based SQL injection",
+  "concept": "Esta familia contiene tres controladores REST que consultan la tabla cars usando el parámetro de consulta id. La anotación VulnerableAppRestController aporta el nombre del controlador y VulnerableAppRequestMapping aporta LEVEL_n; junto con el context-path /VulnerableApp, las rutas resultan /VulnerableApp/{nombre}/{LEVEL}. La anotación de nivel deja GET como método predeterminado. Los niveles iniciales concatenan entrada no confiable en SQL (inyección directa o dentro de una cadena); los niveles posteriores muestran eliminación de comillas, validación de tipo, PreparedStatement, parámetros con nombre y consultas JPA/repositorio. La demostración segura usa únicamente filas conocidas de cars (Audi/BMW), expresiones booleanas sin efectos laterales y errores sintácticos controlados: no usa INSERT, UPDATE, DELETE, DDL, llamadas a funciones externas, lectura de secretos, archivos, red ni técnicas de denegación de servicio.",
+  "source_files": [
+    "src/main/java/org/sasanlabs/service/vulnerability/sqlInjection/BlindSQLInjectionVulnerability.java",
+    "src/main/java/org/sasanlabs/service/vulnerability/sqlInjection/ErrorBasedSQLInjectionVulnerability.java",
+    "src/main/java/org/sasanlabs/service/vulnerability/sqlInjection/UnionBasedSQLInjectionVulnerability.java",
+    "src/main/java/org/sasanlabs/service/vulnerability/sqlInjection/CarInformation.java",
+    "src/main/java/org/sasanlabs/service/vulnerability/sqlInjection/CarInformationRepository.java",
+    "src/main/resources/attackvectors/BlindSQLInjectionVulnerabilityPayload.properties",
+    "src/main/resources/attackvectors/ErrorBasedSQLInjectionPayload.properties",
+    "src/main/resources/attackvectors/UnionBasedSQLInjectionVulnerabilityPayload.properties",
+    "src/main/resources/static/templates/BlindSQLInjectionVulnerability/LEVEL_1/SQLInjection_Level1.html",
+    "src/main/resources/static/templates/BlindSQLInjectionVulnerability/LEVEL_1/SQLInjection_Level1.js",
+    "src/main/resources/static/templates/BlindSQLInjectionVulnerability/LEVEL_1/SQLInjection_Level1.css",
+    "src/main/resources/static/templates/ErrorBasedSQLInjectionVulnerability/LEVEL_1/SQLInjection_Level1.html",
+    "src/main/resources/static/templates/ErrorBasedSQLInjectionVulnerability/LEVEL_1/SQLInjection_Level1.js",
+    "src/main/resources/static/templates/ErrorBasedSQLInjectionVulnerability/LEVEL_1/SQLInjection_Level1.css",
+    "src/main/resources/static/templates/UnionBasedSQLInjectionVulnerability/LEVEL_1/SQLInjection_Level1.html",
+    "src/main/resources/static/templates/UnionBasedSQLInjectionVulnerability/LEVEL_1/SQLInjection_Level1.js",
+    "src/main/resources/static/templates/UnionBasedSQLInjectionVulnerability/LEVEL_1/SQLInjection_Level1.css",
+    "src/test/java/org/sasanlabs/service/vulnerability/sqlInjection/BlindSQLInjectionVulnerabilityTest.java",
+    "src/test/java/org/sasanlabs/service/vulnerability/sqlInjection/ErrorBasedSQLInjectionVulnerabilityTest.java",
+    "src/test/java/org/sasanlabs/service/vulnerability/sqlInjection/ErrorBasedSQLInjectionVulnerabilityDatabaseTest.java",
+    "src/test/java/org/sasanlabs/service/vulnerability/sqlInjection/UnionBasedSQLInjectionVulnerabilityTest.java",
+    "src/test/java/org/sasanlabs/service/vulnerability/sqlInjection/UnionBasedSQLInjectionVulnerabilityDatabaseTest.java",
+    "src/main/resources/scripts/SQLInjection/db/schema.sql",
+    "src/main/resources/scripts/SQLInjection/db/data.sql",
+    "src/test/resources/sql-injection-test/drop-cars.sql",
+    "src/main/java/org/sasanlabs/internal/utility/annotations/VulnerableAppRestController.java",
+    "src/main/java/org/sasanlabs/internal/utility/annotations/VulnerableAppRequestMapping.java",
+    "src/main/java/org/sasanlabs/internal/utility/LevelConstants.java",
+    "src/main/java/org/sasanlabs/service/impl/EndPointsInformationProvider.java",
+    "src/main/java/org/sasanlabs/vulnerability/utils/Constants.java",
+    "src/main/resources/application.properties"
+  ],
+  "levels": [
+    {
+      "route": "/VulnerableApp/BlindSQLInjectionVulnerability/LEVEL_1",
+      "method": "GET",
+      "parameters": {
+        "id": {
+          "in": "query",
+          "required": true,
+          "type": "string"
+        }
+      },
+      "behavior": "Lee id de un Map recibido por @RequestParam y concatena `select * from cars where id=` + id. Devuelve HTTP 200 y el JSON booleano { \"isCarPresent\": true } si el ResultSet tiene una fila, o { \"isCarPresent\": false } si no la tiene.",
+      "vulnerable": true,
+      "notes": "UNSECURE por defecto. La condición puede alterarse con una expresión booleana; no se muestra la fila, solo un oráculo true/false. Una entrada sintácticamente inválida puede propagar una excepción porque este método no captura el error. El test unitario verifica ambas ramas con un ResultSet simulado y el test de base de datos verifica que 999 OR id=2 selecciona BMW."
+    },
+    {
+      "route": "/VulnerableApp/BlindSQLInjectionVulnerability/LEVEL_2",
+      "method": "GET",
+      "parameters": {
+        "id": {
+          "in": "query",
+          "required": true,
+          "type": "string"
+        }
+      },
+      "behavior": "Concatena `select * from cars where id='` + id + `'` y conserva el mismo oráculo booleano HTTP 200 que el nivel 1. La entrada queda dentro de un literal SQL, pero las comillas de la entrada pueden cambiar la estructura de ese literal.",
+      "vulnerable": true,
+      "notes": "UNSECURE por defecto. El payload original propone expresiones como 100'OR '1'='1; el ejercicio usa una variante equivalente y solo consulta cars. El método tampoco captura excepciones SQL, por lo que la forma exacta del estado HTTP para un payload malformado depende del manejo global de errores."
+    },
+    {
+      "route": "/VulnerableApp/BlindSQLInjectionVulnerability/LEVEL_3",
+      "method": "GET",
+      "parameters": {
+        "id": {
+          "in": "query",
+          "required": true,
+          "type": "string"
+        }
+      },
+      "behavior": "Construye `select * from cars where id=?`, usa PreparedStatement y enlaza id con setString. Conserva el oráculo true/false y normalmente HTTP 200.",
+      "vulnerable": false,
+      "notes": "Está marcado Variant.SECURE. Los caracteres SQL se tratan como datos y no como parte de la consulta. El test unitario verifica la rama de PreparedStatement; el test de base de datos no observa fuga de BMW ni de usuarios para payloads de control."
+    },
+    {
+      "route": "/VulnerableApp/BlindSQLInjectionVulnerability/LEVEL_4",
+      "method": "GET",
+      "parameters": {
+        "id": {
+          "in": "query",
+          "required": true,
+          "type": "string"
+        }
+      },
+      "behavior": "Exige que id coincida con `\\d+`; si no, responde HTTP 400 con `Invalid ID format.`. Para un id numérico concatena `select * from cars where id=` + id y devuelve el oráculo booleano.",
+      "vulnerable": false,
+      "notes": "Está marcado Variant.SECURE. La concatenación queda acotada por validación numérica, aunque la práctica defensiva preferible sigue siendo parametrizar. La respuesta 400 es una señal de validación, no una prueba aislada de ausencia de toda vulnerabilidad."
+    },
+    {
+      "route": "/VulnerableApp/BlindSQLInjectionVulnerability/LEVEL_5",
+      "method": "GET",
+      "parameters": {
+        "id": {
+          "in": "query",
+          "required": true,
+          "type": "string"
+        }
+      },
+      "behavior": "Convierte id con Integer.parseInt y busca CarInformation por EntityManager.find. Una fila encontrada produce HTTP 200 con isCarPresent=true; una fila inexistente produce HTTP 404 con isCarPresent=false.",
+      "vulnerable": false,
+      "notes": "Está marcado Variant.SECURE. Un payload no numérico puede causar NumberFormatException y terminar en una respuesta de error del framework; eso no equivale a una inyección SQL ni debe contarse como éxito del ejercicio."
+    },
+    {
+      "route": "/VulnerableApp/ErrorBasedSQLInjectionVulnerability/LEVEL_1",
+      "method": "GET",
+      "parameters": {
+        "id": {
+          "in": "query",
+          "required": true,
+          "type": "string"
+        }
+      },
+      "behavior": "Concatena id en `select * from cars where id=` + id. Si encuentra una fila serializa id, name e image dentro de carInformation; si falla, devuelve HTTP 200 con un cuerpo tipo JSON que incorpora `moreInfo` y ex.getMessage().",
+      "vulnerable": true,
+      "notes": "UNSECURE y error-based. Los tests prueban tanto la lectura controlada de BMW mediante una condición OR como que una conversión o sintaxis inválida deja un mensaje de base de datos en moreInfo. La exposición del mensaje es una fuga de información además de la inyección; no se debe interpretar como acceso al host."
+    },
+    {
+      "route": "/VulnerableApp/ErrorBasedSQLInjectionVulnerability/LEVEL_2",
+      "method": "GET",
+      "parameters": {
+        "id": {
+          "in": "query",
+          "required": true,
+          "type": "string"
+        }
+      },
+      "behavior": "Concatena id entre comillas en `select * from cars where id='` + id + `'`. Devuelve los datos serializados de la primera fila, false si no hay fila, o HTTP 200 con moreInfo y el mensaje de la excepción si la consulta falla.",
+      "vulnerable": true,
+      "notes": "UNSECURE. Los tests de base de datos verifican que una variante con comillas puede seleccionar BMW y que `1'` expone el error SQL. El ejercicio evita la tabla users y solo utiliza la fila conocida de cars."
+    },
+    {
+      "route": "/VulnerableApp/ErrorBasedSQLInjectionVulnerability/LEVEL_3",
+      "method": "GET",
+      "parameters": {
+        "id": {
+          "in": "query",
+          "required": true,
+          "type": "string"
+        }
+      },
+      "behavior": "Elimina todas las comillas simples de id y luego concatena el valor en una consulta que sigue usando comillas alrededor del parámetro. Devuelve carInformation o un cuerpo con moreInfo ante error.",
+      "vulnerable": true,
+      "notes": "La anotación no declara Variant.SECURE y el código mantiene una consulta construida por concatenación y una respuesta de error detallada. Los tests indican que el payload de unión/OR ya no fuga BMW ni usuarios, pero también indican que los errores siguen reflejando el input (por ejemplo, abc); por honestidad se clasifica como nivel no seguro con mitigación parcial, no como bypass demostrado."
+    },
+    {
+      "route": "/VulnerableApp/ErrorBasedSQLInjectionVulnerability/LEVEL_4",
+      "method": "GET",
+      "parameters": {
+        "id": {
+          "in": "query",
+          "required": true,
+          "type": "string"
+        }
+      },
+      "behavior": "Elimina comillas y crea un PreparedStatement, pero inserta id ya concatenado en `select * from cars where id='` + id + `'`; el setter no enlaza ningún placeholder. Devuelve carInformation o moreInfo con el error.",
+      "vulnerable": true,
+      "notes": "La anotación no declara Variant.SECURE. Crear el objeto PreparedStatement no parametriza la consulta; los tests muestran que los payloads de unión no leen BMW con esta semilla, pero el mensaje de conversión aún se entrega al cliente. El hallazgo seguro verificable es la divulgación de errores y la falta de un binding real."
+    },
+    {
+      "route": "/VulnerableApp/ErrorBasedSQLInjectionVulnerability/LEVEL_5",
+      "method": "GET",
+      "parameters": {
+        "id": {
+          "in": "query",
+          "required": true,
+          "type": "string"
+        }
+      },
+      "behavior": "Usa `select * from cars where id=?` y setString. Devuelve JSON con la fila si existe, false para una fila ausente y false sin moreInfo detallado si ocurre una excepción.",
+      "vulnerable": false,
+      "notes": "Está marcado Variant.SECURE. El test de base de datos prueba que OR, comillas, CAST, UNION y valores no numéricos no devuelven BMW, usuarios ni mensajes internos. Un 200 por sí solo no prueba seguridad; se requiere comparar contenido y comportamiento con un control conocido."
+    },
+    {
+      "route": "/VulnerableApp/UnionBasedSQLInjectionVulnerability/LEVEL_1",
+      "method": "GET",
+      "parameters": {
+        "id": {
+          "in": "query",
+          "required": true,
+          "type": "string"
+        }
+      },
+      "behavior": "Concatena id en `select * from cars where id=` + id y mapea la primera fila a CarInformation, serializada como JSON por Spring. La fila puede provenir de una unión adicional.",
+      "vulnerable": true,
+      "notes": "UNSECURE. El test de base de datos prueba una UNION numérica contra la tabla users; el ejercicio seguro sustituye users por cars y selecciona únicamente BMW, una fila de entrenamiento conocida. Si no hay fila, el mapper puede devolver un objeto vacío con HTTP 200; no se debe usar ese estado como único verificador."
+    },
+    {
+      "route": "/VulnerableApp/UnionBasedSQLInjectionVulnerability/LEVEL_2",
+      "method": "GET",
+      "parameters": {
+        "id": {
+          "in": "query",
+          "required": true,
+          "type": "string"
+        }
+      },
+      "behavior": "Concatena id entre comillas en `select * from cars where id='` + id + `'` y mapea la primera fila a CarInformation. Una comilla en el valor puede cerrar el literal y añadir una UNION.",
+      "vulnerable": true,
+      "notes": "UNSECURE. Los tests originales usan la tabla users para demostrar la fuga, pero este informe no la consulta: el ejercicio utiliza `SELECT id,name,image FROM cars WHERE id=2`, con columnas conocidas y sin efectos laterales."
+    },
+    {
+      "route": "/VulnerableApp/UnionBasedSQLInjectionVulnerability/LEVEL_3",
+      "method": "GET",
+      "parameters": {
+        "id": {
+          "in": "query",
+          "required": true,
+          "type": "string"
+        }
+      },
+      "behavior": "Elimina comillas simples y concatena el resultado dentro de un literal SQL. La respuesta sigue siendo un CarInformation HTTP 200 cuando el driver devuelve una fila.",
+      "vulnerable": false,
+      "notes": "Está marcado Variant.SECURE. La mitigación de eliminación de comillas no es una defensa general recomendable, pero los tests de base de datos no observan fuga de BMW ni de users con los payloads usados; la defensa robusta de los niveles siguientes es binding de parámetros."
+    },
+    {
+      "route": "/VulnerableApp/UnionBasedSQLInjectionVulnerability/LEVEL_4",
+      "method": "GET",
+      "parameters": {
+        "id": {
+          "in": "query",
+          "required": true,
+          "type": "string"
+        }
+      },
+      "behavior": "Ejecuta `select * from cars where id=?` y enlaza id mediante PreparedStatementSetter; el resultado se convierte a CarInformation.",
+      "vulnerable": false,
+      "notes": "Está marcado Variant.SECURE. La entrada no modifica la consulta. Para valores no convertibles el driver puede responder con error; el test solo exige que no se devuelva una fila de BMW o de users."
+    },
+    {
+      "route": "/VulnerableApp/UnionBasedSQLInjectionVulnerability/LEVEL_5",
+      "method": "GET",
+      "parameters": {
+        "id": {
+          "in": "query",
+          "required": true,
+          "type": "string"
+        }
+      },
+      "behavior": "Usa NamedParameterJdbcTemplate con `select * from cars where id=:id` y MapSqlParameterSource; BeanPropertyRowMapper crea el CarInformation.",
+      "vulnerable": false,
+      "notes": "Está marcado Variant.SECURE. El valor se enlaza como parámetro nombrado y no se concatena en el SQL. Un id inexistente puede producir una excepción de queryForObject según la configuración; eso es una diferencia de manejo de ausencia, no una prueba de inyección."
+    },
+    {
+      "route": "/VulnerableApp/UnionBasedSQLInjectionVulnerability/LEVEL_6",
+      "method": "GET",
+      "parameters": {
+        "id": {
+          "in": "query",
+          "required": true,
+          "type": "string"
+        }
+      },
+      "behavior": "Construye el JPQL fijo `from CarInformation where id = :id`, convierte id a Integer y lo enlaza con TypedQuery.setParameter.",
+      "vulnerable": false,
+      "notes": "Está marcado Variant.SECURE. Un texto como `999 OR id=2` falla en Integer.valueOf antes de consultar; el test espera NumberFormatException para ese caso. El 500 resultante puede ser ruidoso, pero no demuestra SQLi."
+    },
+    {
+      "route": "/VulnerableApp/UnionBasedSQLInjectionVulnerability/LEVEL_7",
+      "method": "GET",
+      "parameters": {
+        "id": {
+          "in": "query",
+          "required": true,
+          "type": "string"
+        }
+      },
+      "behavior": "Usa CriteriaBuilder/CriteriaQuery y compara el atributo id con el parámetro recibido, sin insertar id en texto SQL o JPQL. Devuelve el CarInformation de la consulta.",
+      "vulnerable": false,
+      "notes": "Está marcado Variant.SECURE. El test de base de datos prueba id válido y payloads de OR/UNION sin fuga. La conversión/coerción de tipos del proveedor JPA puede cambiar el estado HTTP ante entradas no numéricas, por lo que el check seguro se limita a ausencia del marcador BMW."
+    },
+    {
+      "route": "/VulnerableApp/UnionBasedSQLInjectionVulnerability/LEVEL_8",
+      "method": "GET",
+      "parameters": {
+        "id": {
+          "in": "query",
+          "required": true,
+          "type": "string"
+        }
+      },
+      "behavior": "Ejecuta la NamedQuery `findById` de CarInformation (`select c from CarInformation c where c.id=:id`) y convierte id con Integer.valueOf antes de setParameter.",
+      "vulnerable": false,
+      "notes": "Está marcado Variant.SECURE. Un payload con comillas o UNION falla en la conversión antes de llegar al JPQL; el test espera NumberFormatException para una unión entrecomillada."
+    },
+    {
+      "route": "/VulnerableApp/UnionBasedSQLInjectionVulnerability/LEVEL_9",
+      "method": "GET",
+      "parameters": {
+        "id": {
+          "in": "query",
+          "required": true,
+          "type": "string"
+        }
+      },
+      "behavior": "Convierte id a Integer y llama a CarInformationRepository.findById. Devuelve HTTP 200 con la entidad encontrada o HTTP 404 cuando no existe.",
+      "vulnerable": false,
+      "notes": "Está marcado Variant.SECURE. El test espera 404 para id 999 y NumberFormatException para una UNION numérica; la consulta deriva de Spring Data y no permite insertar SQL en el valor."
+    }
+  ],
+  "exercises": [
+    {
+      "title": "Blind L1: comparar un control falso con una condición siempre verdadera",
+      "route": "/VulnerableApp/BlindSQLInjectionVulnerability/LEVEL_1",
+      "method": "GET",
+      "params": {
+        "control": {
+          "id": "999"
+        },
+        "payload": {
+          "id": "100 OR 2=2"
+        }
+      },
+      "headers": {
+        "Accept": "application/json"
+      },
+      "body": null,
+      "content_type": null,
+      "expected": "Verificación estática y tests predicen que el control de id inexistente devuelve isCarPresent=false y que el segundo valor puede devolver isCarPresent=true porque altera el WHERE. Ambos suelen ser HTTP 200; no se promete el resultado del target sin ejecutarlo.",
+      "check": {
+        "kind": "manual",
+        "value": "Comparar los dos cuerpos JSON: el control debe ser false y el payload debe cambiar a true. Un 200, por sí solo, no demuestra la inyección."
+      },
+      "explanation": "El nivel concatena id sin comillas en una consulta numérica. Se usa 100, que no necesita existir, y una expresión booleana sin escribir ni modificar datos. El marcador true/false es el oráculo ciego previsto por el controlador.",
+      "mitigation": "Usar PreparedStatement con `where id=?`, validar el tipo como número y devolver un error genérico sin detalles de la base de datos.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/BlindSQLInjectionVulnerability/LEVEL_1 --data-urlencode 'id=999'",
+        "curl -i --get http://target:9090/VulnerableApp/BlindSQLInjectionVulnerability/LEVEL_1 --data-urlencode 'id=100 OR 2=2'"
+      ],
+      "hints": [
+        "Primero establece el comportamiento normal con un id que no aparece en la semilla.",
+        "La respuesta no expone una fila: observa solamente el cambio de isCarPresent.",
+        "No uses tiempos de espera ni funciones de base de datos; la comparación booleana basta."
+      ]
+    },
+    {
+      "title": "Blind L2: salir de un literal entrecomillado con un marcador booleano",
+      "route": "/VulnerableApp/BlindSQLInjectionVulnerability/LEVEL_2",
+      "method": "GET",
+      "params": {
+        "control": {
+          "id": "999"
+        },
+        "payload": {
+          "id": "100' OR '1'='1"
+        }
+      },
+      "headers": {
+        "Accept": "application/json"
+      },
+      "body": null,
+      "content_type": null,
+      "expected": "Según la consulta observada y el payload de la propiedad, el control debe ser false y la variante con comillas puede ser true. Una respuesta de error para alguno de los dos valores es una incertidumbre de dialecto/driver, no un éxito automático.",
+      "check": {
+        "kind": "manual",
+        "value": "Comparar isCarPresent del control y del payload; exigir true/false coherentes y registrar también el estado HTTP. No puntuar por una mera respuesta 200."
+      },
+      "explanation": "El código envuelve id entre comillas simples. El payload cierra el literal, añade una condición verdadera y deja un literal final para equilibrar la consulta; sigue limitado a la tabla cars.",
+      "mitigation": "No eliminar comillas como defensa principal; enlazar el valor con un parámetro y aplicar validación de tipo antes de consultar.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/BlindSQLInjectionVulnerability/LEVEL_2 --data-urlencode 'id=999'",
+        "curl -i --get http://target:9090/VulnerableApp/BlindSQLInjectionVulnerability/LEVEL_2 --data-urlencode \"id=100' OR '1'='1\""
+      ],
+      "hints": [
+        "El control debe ser un id ausente, no un id existente.",
+        "La consulta fuente ya aporta las comillas de apertura y cierre.",
+        "Si el driver devuelve error, conserva esa observación y no la conviertas en una afirmación de explotación exitosa."
+      ]
+    },
+    {
+      "title": "Blind L3: control de parámetro preparado contra una expresión OR",
+      "route": "/VulnerableApp/BlindSQLInjectionVulnerability/LEVEL_3",
+      "method": "GET",
+      "params": {
+        "control": {
+          "id": "1"
+        },
+        "payload": {
+          "id": "999 OR id=2"
+        }
+      },
+      "headers": {
+        "Accept": "application/json"
+      },
+      "body": null,
+      "content_type": null,
+      "expected": "El control debe indicar true para Audi. El payload se trata como texto; por ello no debería seleccionar BMW y puede devolver false o un error de conversión del driver. El test de base de datos considera el nivel no inyectable.",
+      "check": {
+        "kind": "manual",
+        "value": "Confirmar que el control devuelve true y que el cuerpo del payload no cambia a true por BMW; revisar el cuerpo, no solamente el código HTTP."
+      },
+      "explanation": "El nivel usa un placeholder y setString, de modo que los operadores incluidos en id no se incorporan al SQL. El primer request es el control positivo funcional y el segundo es el control negativo de inyección.",
+      "mitigation": "Mantener el binding de parámetros y no volver a concatenar el valor para construir SQL.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/BlindSQLInjectionVulnerability/LEVEL_3 --data-urlencode 'id=1'",
+        "curl -i --get http://target:9090/VulnerableApp/BlindSQLInjectionVulnerability/LEVEL_3 --data-urlencode 'id=999 OR id=2'"
+      ],
+      "hints": [
+        "Usa Audi como control positivo conocido por la semilla.",
+        "La presencia de OR en el texto no debe alterar la consulta preparada.",
+        "Una ausencia de BMW es evidencia acotada a este marcador y esta semilla, no una auditoría completa."
+      ]
+    },
+    {
+      "title": "Blind L4: comprobar el rechazo por validación numérica",
+      "route": "/VulnerableApp/BlindSQLInjectionVulnerability/LEVEL_4",
+      "method": "GET",
+      "params": {
+        "id": "1'"
+      },
+      "headers": {
+        "Accept": "application/json"
+      },
+      "body": null,
+      "content_type": null,
+      "expected": "El código predice HTTP 400 y el texto `Invalid ID format.` porque la comilla no satisface \\d+; no se debería ejecutar la consulta.",
+      "check": {
+        "kind": "contains",
+        "value": "Invalid ID format."
+      },
+      "explanation": "Es una comprobación negativa de una entrada con metacarácter SQL. El control no necesita extraer filas; solo verifica que la validación ocurre antes de la concatenación.",
+      "mitigation": "Conservar la validación como defensa adicional, pero usar además una consulta parametrizada y límites razonables de entrada.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/BlindSQLInjectionVulnerability/LEVEL_4 --data-urlencode \"id=1'\""
+      ],
+      "hints": [
+        "El texto esperado es el cuerpo de la rama HTTP 400.",
+        "No confundas un rechazo por validación con una prueba de que todo el sistema es seguro.",
+        "Repite con id=1 si necesitas el control funcional, pero no uses solo su 200 como verificador."
+      ]
+    },
+    {
+      "title": "Blind L5: conversión entera y acceso JPA como control defensivo",
+      "route": "/VulnerableApp/BlindSQLInjectionVulnerability/LEVEL_5",
+      "method": "GET",
+      "params": {
+        "control": {
+          "id": "1"
+        },
+        "payload": {
+          "id": "999 OR id=2"
+        }
+      },
+      "headers": {
+        "Accept": "application/json"
+      },
+      "body": null,
+      "content_type": null,
+      "expected": "El control debe producir isCarPresent=true para Audi. El payload no es un entero; Integer.parseInt puede causar una respuesta de error del framework y nunca debería seleccionar BMW. El estado exacto del error no está fijado por este controlador.",
+      "check": {
+        "kind": "manual",
+        "value": "Verificar true para id=1 y ausencia del marcador BMW en el segundo cuerpo; no considerar un 500 como prueba de seguridad ni como prueba de explotación."
+      },
+      "explanation": "La conversión se ejecuta antes de EntityManager.find. Es un contraste útil con L1, pero el comportamiento del error de NumberFormatException depende del manejador global.",
+      "mitigation": "Convertir de forma controlada, responder 400 ante entrada inválida y mantener APIs JPA parametrizadas sin filtrar trazas.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/BlindSQLInjectionVulnerability/LEVEL_5 --data-urlencode 'id=1'",
+        "curl -i --get http://target:9090/VulnerableApp/BlindSQLInjectionVulnerability/LEVEL_5 --data-urlencode 'id=999 OR id=2'"
+      ],
+      "hints": [
+        "La respuesta del primer request es el control positivo.",
+        "El segundo request prueba que el texto no llega como JPQL/SQL ejecutable.",
+        "Documenta por separado la validación de entrada y el código de estado."
+      ]
+    },
+    {
+      "title": "Error L1: observar divulgación controlada de error SQL",
+      "route": "/VulnerableApp/ErrorBasedSQLInjectionVulnerability/LEVEL_1",
+      "method": "GET",
+      "params": {
+        "control": {
+          "id": "1"
+        },
+        "error_payload": {
+          "id": "1'"
+        }
+      },
+      "headers": {
+        "Accept": "application/json"
+      },
+      "body": null,
+      "content_type": null,
+      "expected": "El control debería devolver isCarPresent=true y Audi. Para `1'`, los tests predicen un cuerpo con moreInfo y un mensaje de sintaxis de la base de datos; la forma exacta del mensaje depende del driver instalado.",
+      "check": {
+        "kind": "contains",
+        "value": "moreInfo"
+      },
+      "explanation": "La vulnerabilidad de error-based se demuestra de forma inocua mediante un error sintáctico, sin enumerar tablas ni extraer secretos. El método incluye ex.getMessage() en la respuesta.",
+      "mitigation": "Capturar errores internamente, registrar un identificador correlacionable y devolver un mensaje genérico; parametrizar la consulta y validar id.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/ErrorBasedSQLInjectionVulnerability/LEVEL_1 --data-urlencode 'id=1'",
+        "curl -i --get http://target:9090/VulnerableApp/ErrorBasedSQLInjectionVulnerability/LEVEL_1 --data-urlencode \"id=1'\""
+      ],
+      "hints": [
+        "El control establece que la ruta y la semilla funcionan.",
+        "Busca moreInfo en el cuerpo, no una cadena de error específica del motor.",
+        "No uses el payload original de CAST ni consultas contra users: no son necesarios para comprobar la fuga de errores."
+      ]
+    },
+    {
+      "title": "Error L1: condición OR que devuelve la fila de entrenamiento BMW",
+      "route": "/VulnerableApp/ErrorBasedSQLInjectionVulnerability/LEVEL_1",
+      "method": "GET",
+      "params": {
+        "id": "999 OR id=2"
+      },
+      "headers": {
+        "Accept": "application/json"
+      },
+      "body": null,
+      "content_type": null,
+      "expected": "Con la semilla de tests, la consulta concatenada puede devolver la fila cars.id=2 y el JSON debería contener name BMW. No se afirma que el target esté sembrado igual ni que el request se haya ejecutado.",
+      "check": {
+        "kind": "contains",
+        "value": "BMW"
+      },
+      "explanation": "La respuesta de error-based serializa la fila completa, por lo que una alteración booleana deja un marcador visible y no solo un true/false. BMW es un dato de entrenamiento no sensible en la semilla.",
+      "mitigation": "Usar binding de parámetros, permitir únicamente identificadores válidos y no devolver la entidad completa cuando el caso de uso solo necesita existencia.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/ErrorBasedSQLInjectionVulnerability/LEVEL_1 --data-urlencode 'id=999 OR id=2'"
+      ],
+      "hints": [
+        "El 999 evita depender de una fila original.",
+        "id=2 es BMW en scripts/SQLInjection/db/data.sql.",
+        "Que aparezca BMW confirma el efecto en esta semilla; no prueba lectura de otras tablas ni del host."
+      ]
+    },
+    {
+      "title": "Error L2: UNION entrecomillada limitada a la tabla cars",
+      "route": "/VulnerableApp/ErrorBasedSQLInjectionVulnerability/LEVEL_2",
+      "method": "GET",
+      "params": {
+        "id": "999' OR id='2"
+      },
+      "headers": {
+        "Accept": "application/json"
+      },
+      "body": null,
+      "content_type": null,
+      "expected": "Según los tests, la variante entrecomillada puede seleccionar BMW y serializarlo. La ruta puede variar en estado HTTP si el driver o la semilla de target difieren.",
+      "check": {
+        "kind": "contains",
+        "value": "BMW"
+      },
+      "explanation": "El nivel 2 rodea id con comillas simples. El valor cierra y vuelve a abrir el literal de forma que la condición busque la fila 2; no se usa UNION ni se toca users.",
+      "mitigation": "Parametrizar la consulta; no confiar en reemplazar caracteres y no exponer excepciones al cliente.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/ErrorBasedSQLInjectionVulnerability/LEVEL_2 --data-urlencode \"id=999' OR id='2\""
+      ],
+      "hints": [
+        "El payload de la propiedad original usa la misma idea de romper el literal.",
+        "Mantén la prueba en cars y comprueba solo BMW.",
+        "Si aparece moreInfo, registra el error pero no concluyas que hubo fuga de otra tabla."
+      ]
+    },
+    {
+      "title": "Error L3: comprobar el límite de eliminar comillas",
+      "route": "/VulnerableApp/ErrorBasedSQLInjectionVulnerability/LEVEL_3",
+      "method": "GET",
+      "params": {
+        "id": "999' OR id='2"
+      },
+      "headers": {
+        "Accept": "application/json"
+      },
+      "body": null,
+      "content_type": null,
+      "expected": "El test de base de datos predice que la sustitución de comillas impide devolver BMW con este payload. Un valor no numérico como abc puede producir moreInfo que solo refleje abc; el estado exacto puede depender del driver.",
+      "check": {
+        "kind": "not_contains",
+        "value": "BMW"
+      },
+      "explanation": "Es un control negativo frente a L2. También ilustra que un filtro puntual no es igual a parametrizar: el código sigue concatenando y la respuesta sigue revelando errores.",
+      "mitigation": "Reemplazar la concatenación y el filtro de comillas por PreparedStatement real, y ocultar el mensaje de excepción.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/ErrorBasedSQLInjectionVulnerability/LEVEL_3 --data-urlencode \"id=999' OR id='2\""
+      ],
+      "hints": [
+        "La comprobación es ausencia de BMW, no un 200.",
+        "El test original separa no-fuga de tabla y divulgación del error; conserva ambas observaciones.",
+        "No llames a este nivel completamente seguro porque la anotación no es Variant.SECURE."
+      ]
+    },
+    {
+      "title": "Error L4: demostrar que preparar una consulta ya concatenada no basta",
+      "route": "/VulnerableApp/ErrorBasedSQLInjectionVulnerability/LEVEL_4",
+      "method": "GET",
+      "params": {
+        "id": "999' OR id='2"
+      },
+      "headers": {
+        "Accept": "application/json"
+      },
+      "body": null,
+      "content_type": null,
+      "expected": "El test predice que no se devuelve BMW porque las comillas se eliminan antes de crear el PreparedStatement, pero el código no enlaza ningún placeholder y mantiene la divulgación de errores.",
+      "check": {
+        "kind": "not_contains",
+        "value": "BMW"
+      },
+      "explanation": "El nombre PreparedStatement puede inducir a error: la cadena SQL se completa con id antes de preparar y el setter es vacío. El ejercicio verifica el límite de esa pseudo-mitigación sin consultar datos sensibles.",
+      "mitigation": "Construir `select * from cars where id=?` como SQL fijo y llamar a setString/setInt para el valor; separar el mensaje público del log interno.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/ErrorBasedSQLInjectionVulnerability/LEVEL_4 --data-urlencode \"id=999' OR id='2\""
+      ],
+      "hints": [
+        "Compara este comportamiento con Error L2 y observa que el test de código verifica un setter vacío.",
+        "No uses un 200 como criterio suficiente.",
+        "Un cuerpo con moreInfo sigue siendo un hallazgo aunque no contenga BMW."
+      ]
+    },
+    {
+      "title": "Error L5: control positivo y payload OR contra binding real",
+      "route": "/VulnerableApp/ErrorBasedSQLInjectionVulnerability/LEVEL_5",
+      "method": "GET",
+      "params": {
+        "control": {
+          "id": "1"
+        },
+        "payload": {
+          "id": "999 OR id=2"
+        }
+      },
+      "headers": {
+        "Accept": "application/json"
+      },
+      "body": null,
+      "content_type": null,
+      "expected": "El control debe devolver Audi y isCarPresent=true. El payload debe tratarse como valor literal: los tests esperan isCarPresent=false y que no aparezcan BMW, usuarios ni moreInfo de la base de datos.",
+      "check": {
+        "kind": "manual",
+        "value": "Confirmar Audi en el control y ausencia de BMW/moreInfo en el payload; el check no atribuye seguridad por el código HTTP."
+      },
+      "explanation": "Este contraste muestra el mismo uso funcional de la ruta con dos valores y separa éxito de negocio (Audi) de resistencia a inyección (payload literal).",
+      "mitigation": "Mantener la consulta parametrizada, validar id y responder 400 ante valores no válidos en vez de depender de excepciones.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/ErrorBasedSQLInjectionVulnerability/LEVEL_5 --data-urlencode 'id=1'",
+        "curl -i --get http://target:9090/VulnerableApp/ErrorBasedSQLInjectionVulnerability/LEVEL_5 --data-urlencode 'id=999 OR id=2'"
+      ],
+      "hints": [
+        "Audi es la fila 1 de la semilla y funciona como control positivo.",
+        "BMW es el marcador de que la condición OR habría alterado la selección.",
+        "La ausencia de moreInfo es tan importante como la ausencia de BMW."
+      ]
+    },
+    {
+      "title": "Union L1: UNION segura sobre cars para devolver BMW",
+      "route": "/VulnerableApp/UnionBasedSQLInjectionVulnerability/LEVEL_1",
+      "method": "GET",
+      "params": {
+        "id": "999 UNION SELECT id,name,image FROM cars WHERE id=2"
+      },
+      "headers": {
+        "Accept": "application/json"
+      },
+      "body": null,
+      "content_type": null,
+      "expected": "Con la semilla de scripts/SQLInjection/db/data.sql, la unión puede hacer que la primera fila mapeada sea BMW y que el JSON contenga name BMW e image de BMW. No se consulta users.",
+      "check": {
+        "kind": "contains",
+        "value": "BMW"
+      },
+      "explanation": "El endpoint concatena directamente id y el SELECT adicional tiene exactamente tres columnas compatibles con cars. Es una prueba de lectura de una fila de entrenamiento conocida, sin modificación ni enumeración de secretos.",
+      "mitigation": "Usar `where id=?` con binding y no permitir que el cliente controle fragmentos de SELECT, UNION, ORDER BY o nombres de tabla.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/UnionBasedSQLInjectionVulnerability/LEVEL_1 --data-urlencode 'id=999 UNION SELECT id,name,image FROM cars WHERE id=2'"
+      ],
+      "hints": [
+        "Las tres columnas deben corresponder a id, name e image.",
+        "999 evita que una fila original gane la posición que se mapea.",
+        "El payload original documenta users, pero este ejercicio deliberadamente usa solo cars."
+      ]
+    },
+    {
+      "title": "Union L2: UNION entrecomillada limitada a cars",
+      "route": "/VulnerableApp/UnionBasedSQLInjectionVulnerability/LEVEL_2",
+      "method": "GET",
+      "params": {
+        "id": "999' UNION SELECT id,name,image FROM cars WHERE id=2 OR '1'='2"
+      },
+      "headers": {
+        "Accept": "application/json"
+      },
+      "body": null,
+      "content_type": null,
+      "expected": "Según el código y el patrón de test, la cadena puede cerrar el literal y devolver BMW en el objeto mapeado. El estado o cuerpo real debe verificarse en el target y no se promete aquí.",
+      "check": {
+        "kind": "contains",
+        "value": "BMW"
+      },
+      "explanation": "Es la variante con literal del ejercicio anterior. La condición final falsa evita traer accidentalmente filas adicionales y mantiene el alcance en id=2 de cars.",
+      "mitigation": "Parametrizar id; eliminar la posibilidad de que la entrada aporte comillas, operadores o SELECT secundarios; no confiar en escape manual.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/UnionBasedSQLInjectionVulnerability/LEVEL_2 --data-urlencode \"id=999' UNION SELECT id,name,image FROM cars WHERE id=2 OR '1'='2\""
+      ],
+      "hints": [
+        "La ruta añade sus propias comillas alrededor del parámetro.",
+        "El nombre BMW es un marcador controlado, no una lectura de información privada.",
+        "Si el driver rechaza el SQL, registra la incertidumbre de dialecto en vez de cambiar el payload a una operación destructiva."
+      ]
+    },
+    {
+      "title": "Union L3: control negativo después de eliminar comillas",
+      "route": "/VulnerableApp/UnionBasedSQLInjectionVulnerability/LEVEL_3",
+      "method": "GET",
+      "params": {
+        "control": {
+          "id": "1"
+        },
+        "payload": {
+          "id": "999' UNION SELECT id,name,image FROM cars WHERE id=2"
+        }
+      },
+      "headers": {
+        "Accept": "application/json"
+      },
+      "body": null,
+      "content_type": null,
+      "expected": "El control debe devolver Audi. El payload pierde las comillas antes de formar la consulta y, según el test, no debe devolver BMW; puede producir objeto vacío o error según el driver.",
+      "check": {
+        "kind": "manual",
+        "value": "Verificar Audi en el control y ausencia del texto BMW en el payload; una respuesta 200 vacía no demuestra por sí sola que el filtro sea una defensa suficiente."
+      },
+      "explanation": "Contrasta el nivel vulnerable entrecomillado con su filtro puntual. La anotación marca el nivel como SECURE, pero la mitigación recomendada sigue siendo binding, no una lista de reemplazos.",
+      "mitigation": "Sustituir la eliminación de comillas por PreparedStatement y validar el tipo del identificador.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/UnionBasedSQLInjectionVulnerability/LEVEL_3 --data-urlencode 'id=1'",
+        "curl -i --get http://target:9090/VulnerableApp/UnionBasedSQLInjectionVulnerability/LEVEL_3 --data-urlencode \"id=999' UNION SELECT id,name,image FROM cars WHERE id=2\""
+      ],
+      "hints": [
+        "El control confirma que el mapper funciona.",
+        "Compara el cuerpo completo, no solo el estado HTTP.",
+        "La ausencia de BMW es un control de no-fuga acotado a la semilla."
+      ]
+    },
+    {
+      "title": "Union L4: PreparedStatement con valor de unión como dato",
+      "route": "/VulnerableApp/UnionBasedSQLInjectionVulnerability/LEVEL_4",
+      "method": "GET",
+      "params": {
+        "control": {
+          "id": "1"
+        },
+        "payload": {
+          "id": "999 UNION SELECT id,name,image FROM cars WHERE id=2"
+        }
+      },
+      "headers": {
+        "Accept": "application/json"
+      },
+      "body": null,
+      "content_type": null,
+      "expected": "El control debe devolver Audi. El payload se enlaza al placeholder y no debe devolver BMW; puede terminar en error de conversión o respuesta vacía según el driver.",
+      "check": {
+        "kind": "manual",
+        "value": "Confirmar que el control funciona y que el segundo cuerpo no contiene BMW; no exigir un código 200 concreto porque el controlador no define el mapeo de errores del driver."
+      },
+      "explanation": "El SQL es fijo y el texto de UNION viaja como valor del parámetro. Es el patrón de defensa que faltaba en los primeros niveles.",
+      "mitigation": "Mantener binding, usar validación de entero cuando el dominio lo permita y convertir errores de conversión en 400 genérico.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/UnionBasedSQLInjectionVulnerability/LEVEL_4 --data-urlencode 'id=1'",
+        "curl -i --get http://target:9090/VulnerableApp/UnionBasedSQLInjectionVulnerability/LEVEL_4 --data-urlencode 'id=999 UNION SELECT id,name,image FROM cars WHERE id=2'"
+      ],
+      "hints": [
+        "El test de código verifica que la consulta contiene `?` y un setter.",
+        "No uses `;` ni una segunda sentencia: la UNION de cars es suficiente.",
+        "Un error sin BMW no debe marcarse como fuga."
+      ]
+    },
+    {
+      "title": "Union L5: parámetro nombrado frente a UNION",
+      "route": "/VulnerableApp/UnionBasedSQLInjectionVulnerability/LEVEL_5",
+      "method": "GET",
+      "params": {
+        "control": {
+          "id": "1"
+        },
+        "payload": {
+          "id": "999 UNION SELECT id,name,image FROM cars WHERE id=2"
+        }
+      },
+      "headers": {
+        "Accept": "application/json"
+      },
+      "body": null,
+      "content_type": null,
+      "expected": "El control debe devolver Audi. El payload se enlaza al parámetro nombrado `:id` y no debe devolver BMW; queryForObject puede representar una entrada inválida mediante excepción.",
+      "check": {
+        "kind": "manual",
+        "value": "Revisar que Audi aparece solo en el control y que el payload no contiene BMW; anotar por separado cualquier 4xx/5xx del framework."
+      },
+      "explanation": "NamedParameterJdbcTemplate separa texto SQL y valor de id. La prueba repite el mismo marcador que L4 para aislar la diferencia de API.",
+      "mitigation": "Continuar usando parámetros nombrados y manejar de forma explícita ausencia y conversión, sin incluir detalles de SQLException en respuestas.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/UnionBasedSQLInjectionVulnerability/LEVEL_5 --data-urlencode 'id=1'",
+        "curl -i --get http://target:9090/VulnerableApp/UnionBasedSQLInjectionVulnerability/LEVEL_5 --data-urlencode 'id=999 UNION SELECT id,name,image FROM cars WHERE id=2'"
+      ],
+      "hints": [
+        "El test unitario inspecciona que el valor de id llega a MapSqlParameterSource.",
+        "No confundas excepción por fila ausente con inyección.",
+        "La ausencia de BMW es el marcador útil para esta prueba."
+      ]
+    },
+    {
+      "title": "Union L6: Integer.valueOf antes de JPQL",
+      "route": "/VulnerableApp/UnionBasedSQLInjectionVulnerability/LEVEL_6",
+      "method": "GET",
+      "params": {
+        "control": {
+          "id": "1"
+        },
+        "payload": {
+          "id": "999 OR id=2"
+        }
+      },
+      "headers": {
+        "Accept": "application/json"
+      },
+      "body": null,
+      "content_type": null,
+      "expected": "El control debe devolver Audi. El payload no es entero y el test predice NumberFormatException antes de la consulta; el estado HTTP final depende del manejador global.",
+      "check": {
+        "kind": "manual",
+        "value": "Confirmar Audi en el control y ausencia de BMW en la respuesta del payload; no convertir un 500 por validación en una afirmación de explotación o de seguridad total."
+      },
+      "explanation": "La consulta JPQL usa un parámetro y el método convierte el identificador antes de crearla. Se prueba la frontera de tipo con una expresión booleana sin efectos.",
+      "mitigation": "Validar y convertir con respuesta 400 controlada; conservar parámetros JPQL y no exponer stack traces.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/UnionBasedSQLInjectionVulnerability/LEVEL_6 --data-urlencode 'id=1'",
+        "curl -i --get http://target:9090/VulnerableApp/UnionBasedSQLInjectionVulnerability/LEVEL_6 --data-urlencode 'id=999 OR id=2'"
+      ],
+      "hints": [
+        "La prueba es de tipo y binding, no de ejecución de una UNION.",
+        "La semilla usa Audi como id=1.",
+        "Observa el cuerpo y logs permitidos del laboratorio, sin pedir secretos del host."
+      ]
+    },
+    {
+      "title": "Union L7: CriteriaQuery no concatena el id",
+      "route": "/VulnerableApp/UnionBasedSQLInjectionVulnerability/LEVEL_7",
+      "method": "GET",
+      "params": {
+        "control": {
+          "id": "1"
+        },
+        "payload": {
+          "id": "999 UNION SELECT id,name,image FROM cars WHERE id=2"
+        }
+      },
+      "headers": {
+        "Accept": "application/json"
+      },
+      "body": null,
+      "content_type": null,
+      "expected": "El control debe devolver Audi. El CriteriaQuery se construye con la API de criterios y no debe devolver BMW para el texto de UNION; el proveedor JPA puede responder con error de tipo.",
+      "check": {
+        "kind": "manual",
+        "value": "Comparar ambos cuerpos y confirmar que BMW no aparece en el payload; registrar el código HTTP sin usarlo como único criterio."
+      },
+      "explanation": "El id se pasa como valor a CriteriaBuilder.equal, no como fragmento de consulta. El payload permanece inocuo y solo intenta comprobar si existe concatenación.",
+      "mitigation": "Mantener la API de criterios o consultas parametrizadas y validar el tipo de id con un error 400 claro.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/UnionBasedSQLInjectionVulnerability/LEVEL_7 --data-urlencode 'id=1'",
+        "curl -i --get http://target:9090/VulnerableApp/UnionBasedSQLInjectionVulnerability/LEVEL_7 --data-urlencode 'id=999 UNION SELECT id,name,image FROM cars WHERE id=2'"
+      ],
+      "hints": [
+        "El test de base de datos prueba ausencia de BMW y de usuarios para payloads equivalentes.",
+        "No uses una entrada que modifique datos.",
+        "La comparación debe centrarse en el valor retornado, no en hacer click en la UI."
+      ]
+    },
+    {
+      "title": "Union L8: NamedQuery y conversión de identificador",
+      "route": "/VulnerableApp/UnionBasedSQLInjectionVulnerability/LEVEL_8",
+      "method": "GET",
+      "params": {
+        "control": {
+          "id": "1"
+        },
+        "payload": {
+          "id": "999' UNION SELECT id,name,image FROM cars WHERE id=2"
+        }
+      },
+      "headers": {
+        "Accept": "application/json"
+      },
+      "body": null,
+      "content_type": null,
+      "expected": "El control debe devolver Audi. La entrada con comillas no pasa Integer.valueOf y el test predice NumberFormatException, sin una fila BMW; el código HTTP depende del manejador global.",
+      "check": {
+        "kind": "manual",
+        "value": "Verificar Audi en el control y ausencia de BMW en el payload; documentar si la validación se presenta como 4xx o 5xx."
+      },
+      "explanation": "La NamedQuery está declarada en CarInformation y el valor se enlaza con setParameter después de convertirlo a entero.",
+      "mitigation": "Convertir con manejo explícito, responder 400 para entradas inválidas y conservar la NamedQuery parametrizada.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/UnionBasedSQLInjectionVulnerability/LEVEL_8 --data-urlencode 'id=1'",
+        "curl -i --get http://target:9090/VulnerableApp/UnionBasedSQLInjectionVulnerability/LEVEL_8 --data-urlencode \"id=999' UNION SELECT id,name,image FROM cars WHERE id=2\""
+      ],
+      "hints": [
+        "La comilla hace que el payload no sea un entero.",
+        "No necesitas conocer la tabla users para verificar esta defensa.",
+        "La ausencia de BMW es el resultado observable seguro."
+      ]
+    },
+    {
+      "title": "Union L9: repositorio Spring Data y 404 controlado",
+      "route": "/VulnerableApp/UnionBasedSQLInjectionVulnerability/LEVEL_9",
+      "method": "GET",
+      "params": {
+        "control": {
+          "id": "1"
+        },
+        "unknown": {
+          "id": "999"
+        },
+        "payload": {
+          "id": "999 OR id=2"
+        }
+      },
+      "headers": {
+        "Accept": "application/json"
+      },
+      "body": null,
+      "content_type": null,
+      "expected": "El control debe devolver Audi; id=999 debe devolver 404 según el test; el payload no entero puede terminar en NumberFormatException y nunca debería devolver BMW. El estado de una excepción no está fijado por este JSON.",
+      "check": {
+        "kind": "manual",
+        "value": "Comprobar Audi para el control, 404 para el id desconocido y ausencia de BMW para el payload. Un 200 no prueba IDOR ni seguridad y no se atribuye puntaje por click."
+      },
+      "explanation": "El método convierte id a Integer y delega en findById. El triple contraste separa fila válida, ausencia normal y entrada no numérica.",
+      "mitigation": "Usar validación de entrada con respuesta 400, conservar el repositorio parametrizado y no exponer excepciones del proveedor.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/UnionBasedSQLInjectionVulnerability/LEVEL_9 --data-urlencode 'id=1'",
+        "curl -i --get http://target:9090/VulnerableApp/UnionBasedSQLInjectionVulnerability/LEVEL_9 --data-urlencode 'id=999'",
+        "curl -i --get http://target:9090/VulnerableApp/UnionBasedSQLInjectionVulnerability/LEVEL_9 --data-urlencode 'id=999 OR id=2'"
+      ],
+      "hints": [
+        "La prueba 404 es funcional y no debe confundirse con un error de base de datos.",
+        "El payload no debe llegar al repositorio como SQL ejecutable.",
+        "Inspecciona cuerpo y código HTTP; nunca infieras seguridad solo porque una UI responde."
+      ]
+    }
+  ],
+  "limitations": [
+    "El análisis estático se realizó sobre el commit 4df80bbcd42682ecf26334f12c568e0f4a326c1a y exclusivamente sobre sqlInjection, sus recursos, tests y la infraestructura mínima de anotaciones/rutas. No se revisaron ni se usaron otras familias.",
+    "No se ejecutaron los curls contra target:9090 en este informe; `expected` describe lo que se puede inferir del código y de los tests. El seed del target puede no coincidir con scripts/SQLInjection/db/data.sql, el driver puede redactar mensajes distintos y el manejador global puede convertir excepciones en estados distintos.",
+    "La semilla de tests contiene Audi id=1, BMW id=2, Mercedes-Benz id=3 y SKODA id=4. Los ejercicios usan BMW/Audi como marcadores no sensibles. Los payloads originales que consultan users se documentaron conceptualmente en source_files/tests, pero no se reproducen aquí para evitar extracción de datos de otras tablas.",
+    "Un check contains BMW aporta evidencia de que una fila conocida fue seleccionada en esa semilla, pero no prueba acceso arbitrario. Un check not_contains BMW no prueba seguridad completa: una respuesta vacía, un 4xx o un 5xx también pueden no contener el marcador. Por eso los ejercicios seguros combinan control funcional, cuerpo, estado HTTP y notas manuales.",
+    "Reflejar `moreInfo` o un mensaje de sintaxis demuestra divulgación de error, no necesariamente lectura de datos; un HTTP 200 tampoco demuestra ausencia de SQLi. Los checks manuales deben conservar la diferencia entre código de estado, contenido y causa.",
+    "Para XSS, un reflejo de texto no prueba ejecución DOM; para IDOR, un 200 no prueba autorización indebida; y no se atribuye puntaje por hacer click en la interfaz. Esta familia no necesita Mailpit, receiver ni peticiones externas: todos los pasos son GET locales al laboratorio.",
+    "No se incluyen comandos externos, reverse shells, acceso a archivos o secretos del host, operaciones destructivas, DDL/DML ni cargas de tiempo/DoS. Las condiciones OR y UNION se limitan a SELECT de la tabla cars y a los marcadores de entrenamiento indicados.",
+    "Los niveles L3/L4 de ErrorBased usan filtros de comillas y no están marcados Variant.SECURE aunque los tests no observen fuga de BMW/users con sus payloads; se reportan como no seguros por la concatenación residual y la divulgación de errores, sin afirmar que el bypass de SQLi haya sido reproducido.",
+    "La plantilla JavaScript de cada controlador construye la petición como `?id=` y muestra solo una parte del resultado. La verificación recomendada usa curl y el cuerpo HTTP, no el click de la UI ni la apariencia de una imagen."
+  ]
+}

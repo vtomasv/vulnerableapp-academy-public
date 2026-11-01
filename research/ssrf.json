@@ -1,0 +1,272 @@
+{
+  "id": "ssrf",
+  "title": "SSRF: solicitud de recursos controlada por el servidor",
+  "concept": "La familia SSRF expone el parámetro de consulta obligatorio fileurl. El servidor valida que el valor pueda convertirse en java.net.URL y, según el nivel, aplica ninguna restricción adicional, bloquea el esquema file, bloquea solamente el host literal 169.254.169.254, bloquea los hosts de metadatos que conoce MetaDataServiceMock o permite únicamente la URL exacta del gist configurado. Para una URL no simulada por MetaDataServiceMock, la aplicación abre una URLConnection, lee el cuerpo completo y devuelve JSON con las propiedades content e isValid. Este documento usa únicamente el receptor inocuo local receiver:8081 en comandos reproducibles; no intenta acceder a metadatos, archivos del host ni destinos externos.",
+  "source_files": [
+    "src/main/java/org/sasanlabs/service/vulnerability/ssrf/SSRFVulnerability.java",
+    "src/main/java/org/sasanlabs/service/vulnerability/ssrf/MetaDataServiceMock.java",
+    "src/test/java/org/sasanlabs/service/vulnerability/ssrf/SSRFVulnerabilityTest.java",
+    "src/main/resources/attackvectors/SSRFVulnerabilityPayload.properties",
+    "src/main/resources/static/templates/SSRFVulnerability/LEVEL_1/SSRF.html",
+    "src/main/resources/static/templates/SSRFVulnerability/LEVEL_1/SSRF.js",
+    "src/main/resources/static/templates/SSRFVulnerability/LEVEL_1/SSRF.css",
+    "src/main/resources/application.properties (solo gistId.sasanlabs.projects)",
+    "src/main/java/org/sasanlabs/internal/utility/annotations/VulnerableAppRestController.java",
+    "src/main/java/org/sasanlabs/internal/utility/annotations/VulnerableAppRequestMapping.java",
+    "src/main/java/org/sasanlabs/service/impl/EndPointsInformationProvider.java",
+    "src/main/java/org/sasanlabs/service/vulnerability/bean/GenericVulnerabilityResponseBean.java"
+  ],
+  "levels": [
+    {
+      "route": "/VulnerableApp/SSRFVulnerability/LEVEL_1",
+      "method": "GET",
+      "parameters": {
+        "fileurl": {
+          "in": "query",
+          "required": true,
+          "type": "URL absoluta",
+          "binding": "@RequestParam(\"fileurl\")"
+        }
+      },
+      "behavior": "isUrlValid solo construye java.net.URL y llama a toURI. Para cualquier URL sintácticamente válida invoca getGenericVulnerabilityResponseWhenURL. Las URL cuyos host y ruta pertenecen a MetaDataServiceMock reciben una respuesta sintética; las demás se leen mediante URLConnection y su cuerpo se concatena en content. Una URL inválida también responde HTTP 200, pero con content=Provided URL not valid e isValid=false.",
+      "vulnerable": true,
+      "notes": [
+        "No existe una allowlist de esquema, host, puerto o destino. El código original permite que la funcionalidad del servidor intente leer recursos elegidos por el cliente.",
+        "El payload original de attackvectors describe acceso a recursos locales; este informe no lo ejecuta. Las pruebas unitarias también cubren un archivo temporal, pero los ejercicios aquí se limitan al receptor local autorizado.",
+        "La anotación usa el htmlTemplate LEVEL_1/SSRF y el método de la anotación queda en GET por el valor predeterminado de requestMethod()."
+      ]
+    },
+    {
+      "route": "/VulnerableApp/SSRFVulnerability/LEVEL_2",
+      "method": "GET",
+      "parameters": {
+        "fileurl": {
+          "in": "query",
+          "required": true,
+          "type": "URL absoluta",
+          "binding": "@RequestParam(\"fileurl\")"
+        }
+      },
+      "behavior": "Primero exige una URL válida y después exige que URL.getProtocol() no sea exactamente file. URL.getProtocol() normaliza el esquema a minúsculas, por lo que la variante FILE no constituye un bypass en este código. Todas las URL no-file, incluido el receptor local, siguen el mismo flujo de lectura de Level 1 y los hosts simulados por MetaDataServiceMock siguen devolviendo datos sintéticos.",
+      "vulnerable": true,
+      "notes": [
+        "El control es solo por esquema; no hay restricción de host, resolución DNS, red privada, puerto, redirecciones ni validación del destino final.",
+        "SSRFVulnerabilityTest verifica que un archivo temporal y su variante de esquema en mayúsculas sean rechazados, mientras que las URL HTTP de prueba son aceptadas. No se reproduce el caso de archivo en los ejercicios seguros.",
+        "El payload de nivel 2 describe el acceso a metadatos; aquí se documenta el comportamiento, pero no se envía ninguna solicitud al servicio de metadatos."
+      ]
+    },
+    {
+      "route": "/VulnerableApp/SSRFVulnerability/LEVEL_3",
+      "method": "GET",
+      "parameters": {
+        "fileurl": {
+          "in": "query",
+          "required": true,
+          "type": "URL absoluta",
+          "binding": "@RequestParam(\"fileurl\")"
+        }
+      },
+      "behavior": "Aplica las mismas comprobaciones de Level 2 y, si el host de la URL es exactamente 169.254.169.254, devuelve invalidUrlResponse sin realizar el flujo normal. No bloquea el resto de hosts que MetaDataServiceMock reconoce, como las representaciones IPv6-mapped o 169.254.170.2; cuando esos destinos coinciden con la tabla del mock, la aplicación devuelve la respuesta sintética del mock.",
+      "vulnerable": true,
+      "notes": [
+        "La comparación es new URL(url).getHost().equals(\"169.254.169.254\"), no una validación de IP canónica ni una política de red.",
+        "La prueba unitaria contrasta el host IPv4 literal bloqueado con la forma [::ffff:169.254.169.254], que continúa pasando esta comprobación; esto explica por qué el nivel sigue marcado como vulnerable.",
+        "El receptor local no pertenece al host bloqueado y sirve como prueba segura de la rama permitida; no se usa como puente hacia ningún destino adicional."
+      ]
+    },
+    {
+      "route": "/VulnerableApp/SSRFVulnerability/LEVEL_4",
+      "method": "GET",
+      "parameters": {
+        "fileurl": {
+          "in": "query",
+          "required": true,
+          "type": "URL absoluta",
+          "binding": "@RequestParam(\"fileurl\")"
+        }
+      },
+      "behavior": "Rechaza el esquema file y, en lugar de comparar un solo literal, llama a MetaDataServiceMock.isPresent(new URL(url)). Por tanto bloquea los hosts HTTP de la tabla simulada de metadatos y devuelve content=Provided URL not valid e isValid=false para ellos. Cualquier otro destino HTTP válido, incluido receiver:8081, sigue llegando a URLConnection y se puede usar para solicitar servicios internos o medir respuestas; el código no implementa una allowlist general ni un escaneo separado.",
+      "vulnerable": true,
+      "notes": [
+        "MetaDataServiceMock reconoce únicamente las entradas definidas en su IP_ENVIRONMENT_MAP y solo para el protocolo http; no equivale a una defensa de red completa.",
+        "El payload original menciona port scanning, pero el método concreto solo intenta leer la URL proporcionada. Un error de conexión puede propagarse como error de la aplicación, por lo que no debe interpretarse un 200 genérico como prueba de una conexión exitosa.",
+        "El ejercicio seguro usa el receptor local, que no está en el mock, y no intenta explorar puertos ni nombres internos."
+      ]
+    },
+    {
+      "route": "/VulnerableApp/SSRFVulnerability/LEVEL_5",
+      "method": "GET",
+      "parameters": {
+        "fileurl": {
+          "in": "query",
+          "required": true,
+          "type": "URL absoluta",
+          "binding": "@RequestParam(\"fileurl\")"
+        }
+      },
+      "behavior": "Está anotado con variant=Variant.SECURE. Solo cuando gistUrl.equalsIgnoreCase(url), donde gistUrl es https://gist.githubusercontent.com/raw/ seguido de gistId.sasanlabs.projects, se ejecuta la lectura de la URL. Cualquier otra URL válida, incluido receiver:8081, recibe HTTP 200 con content=Provided URL not valid e isValid=false. La igualdad es sobre la URL completa e ignora mayúsculas, no una allowlist por host o ruta separada.",
+      "vulnerable": false,
+      "notes": [
+        "application.properties fija gistId.sasanlabs.projects=bbf2e2183b8f6252061663ce0ddee79b, y el JavaScript de la plantilla usa la URL completa correspondiente para la carga normal de la interfaz.",
+        "El nivel 5 tiene @AttackVector sin clave payload y no declara ChallengeCard; aun así es un nivel original y está incluido por su @VulnerableAppRequestMapping.",
+        "La restricción impide el receptor local, por lo que el ejercicio reproducible de este informe es un control negativo seguro. No se solicita el gist externo ni se afirma que esté disponible."
+      ]
+    }
+  ],
+  "exercises": [
+    {
+      "title": "Nivel 1: solicitud SSRF controlada al receptor local",
+      "route": "/VulnerableApp/SSRFVulnerability/LEVEL_1",
+      "method": "GET",
+      "params": {
+        "fileurl": "http://receiver:8081/"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "Si target puede resolver y alcanzar receiver:8081 y el receptor responde, se espera HTTP 200 con JSON que contenga isValid=true. content debe ser el cuerpo que el receptor entregue; su texto exacto no se presupone. Como control sintáctico, not-a-url debe devolver HTTP 200 con isValid=false y content=Provided URL not valid.",
+      "check": {
+        "kind": "json",
+        "value": true,
+        "path": "isValid"
+      },
+      "explanation": "Este caso cubre la rama permitida de Level 1 sin consultar metadatos ni archivos. La lectura se hace desde el servidor target, no desde Kali. El control negativo demuestra que el campo llega al método, pero no convierte un estado HTTP 200 en evidencia de SSRF: hay que comprobar el JSON y, para atribución fuerte, correlacionar una solicitud o marcador en el receptor.",
+      "mitigation": "Aplicar una allowlist positiva de esquemas, hosts y puertos necesarios; resolver y validar el destino final después de redirecciones; rechazar destinos loopback, link-local, privados y de metadatos en forma canónica; limitar tiempo, tamaño y saltos, y preferir un proxy de salida con política de red. No confiar en una comprobación de texto del host.",
+      "steps": [
+        "Desde Kali, envía la URL únicamente al receptor local autorizado: curl -i --get http://target:9090/VulnerableApp/SSRFVulnerability/LEVEL_1 --data-urlencode 'fileurl=http://receiver:8081/'",
+        "Ejecuta el control de sintaxis inválida, también sin destino externo: curl -i --get http://target:9090/VulnerableApp/SSRFVulnerability/LEVEL_1 --data-urlencode 'fileurl=not-a-url'",
+        "Compara el JSON y, si el laboratorio expone observabilidad del receptor, su registro de la solicitud; no otorgues éxito solo por ver HTTP/1.1 200."
+      ],
+      "hints": [
+        "El parámetro se llama fileurl y es query parameter, no JSON ni formulario POST.",
+        "En Level 1 una URL válida alcanza el flujo de URLConnection; la respuesta puede ser un error de infraestructura si receiver no está accesible desde target.",
+        "No cambies el valor por un archivo local, una IP de metadatos o un servicio externo."
+      ]
+    },
+    {
+      "title": "Nivel 2: comprobar que el receptor HTTP sigue permitido",
+      "route": "/VulnerableApp/SSRFVulnerability/LEVEL_2",
+      "method": "GET",
+      "params": {
+        "fileurl": "http://receiver:8081/"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "Para el receptor local autorizado se espera, si el receptor está disponible desde target, HTTP 200 con isValid=true. El control not-a-url se espera con isValid=false y content=Provided URL not valid. El ejercicio no ejecuta el caso bloqueado del esquema file ni el caso de metadatos.",
+      "check": {
+        "kind": "json",
+        "value": true,
+        "path": "isValid"
+      },
+      "explanation": "El receptor demuestra que Level 2 no bloquea todo HTTP: solo añade el filtro del protocolo file. La diferencia frente a Level 1 se verifica estáticamente y con los tests del repositorio, porque los destinos file y de metadatos quedan deliberadamente fuera de los comandos seguros solicitados.",
+      "mitigation": "Sustituir el filtro de esquema por una política de salida positiva y centralizada. Validar el host resuelto y cada salto de redirección, bloquear rangos internos y de enlace local, y usar límites de conexión y respuesta. El bloqueo aislado de file no cubre SSRF HTTP.",
+      "steps": [
+        "Solicita el receptor inocuo mediante la ruta del nivel 2: curl -i --get http://target:9090/VulnerableApp/SSRFVulnerability/LEVEL_2 --data-urlencode 'fileurl=http://receiver:8081/'",
+        "Ejecuta el control negativo de URL malformada: curl -i --get http://target:9090/VulnerableApp/SSRFVulnerability/LEVEL_2 --data-urlencode 'fileurl=not-a-url'",
+        "Registra por separado si el receptor vio la solicitud originada por target; un 200 sin isValid=true no es verificación suficiente."
+      ],
+      "hints": [
+        "URL.getProtocol() está normalizado en minúsculas por java.net.URL; la prueba de mayúsculas no es un bypass según el código revisado.",
+        "El mismo parámetro y el mismo método GET se usan en todos los niveles.",
+        "No sustituyas receiver por una IP de metadatos ni por un recurso de Internet."
+      ]
+    },
+    {
+      "title": "Nivel 3: control de host exacto con destino inocuo",
+      "route": "/VulnerableApp/SSRFVulnerability/LEVEL_3",
+      "method": "GET",
+      "params": {
+        "fileurl": "http://receiver:8081/"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "El receptor no coincide con el host literal que Level 3 bloquea; si es alcanzable desde target, se espera HTTP 200 con JSON isValid=true. Para la entrada not-a-url se espera isValid=false. No se prueba ninguna variante de IP ni el servicio de metadatos.",
+      "check": {
+        "kind": "json",
+        "value": true,
+        "path": "isValid"
+      },
+      "explanation": "El caso positivo seguro muestra que la nueva comparación no convierte Level 3 en una allowlist: cualquier host diferente al literal bloqueado sigue entrando al fetch. La conclusión de vulnerabilidad se apoya en la comparación exacta y en el test que conserva una representación IPv6-mapped, no en una exploración de infraestructura.",
+      "mitigation": "Validar destinos contra una allowlist de nombres o identificadores de servicio, resolver DNS de forma segura y verificar la IP resultante en cada conexión; rechazar todas las formas canónicas y no canónicas de redes privadas, loopback, link-local y metadata. Aislar la salida del proceso con controles de red.",
+      "steps": [
+        "Envía únicamente el receptor local al nivel 3: curl -i --get http://target:9090/VulnerableApp/SSRFVulnerability/LEVEL_3 --data-urlencode 'fileurl=http://receiver:8081/'",
+        "Ejecuta el control negativo de formato: curl -i --get http://target:9090/VulnerableApp/SSRFVulnerability/LEVEL_3 --data-urlencode 'fileurl=not-a-url'",
+        "Correlaciona el resultado con el registro inocuo del receptor si existe; no interpretes el solo estado 200 como demostración del flujo de red."
+      ],
+      "hints": [
+        "La defensa del código compara exactamente new URL(url).getHost() con una cadena.",
+        "Un destino seguro distinto del host comparado es suficiente para observar la rama permitida sin tocar metadata.",
+        "La revisión no autoriza escaneo de puertos ni pruebas contra IPs internas."
+      ]
+    },
+    {
+      "title": "Nivel 4: allowlist incompleta frente al receptor local",
+      "route": "/VulnerableApp/SSRFVulnerability/LEVEL_4",
+      "method": "GET",
+      "params": {
+        "fileurl": "http://receiver:8081/"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "receiver:8081 no está en la tabla MetaDataServiceMock, por lo que, si el receptor responde y target tiene conectividad, se espera HTTP 200 con isValid=true. La entrada not-a-url debe producir isValid=false. No se realizan port scans ni solicitudes a la tabla de metadatos.",
+      "check": {
+        "kind": "json",
+        "value": true,
+        "path": "isValid"
+      },
+      "explanation": "Este es un positivo controlado para la rama que no coincide con el mock. Level 4 bloquea un conjunto conocido de hosts simulados, pero deja una solicitud HTTP genérica a URLConnection; por eso el control local permite verificar la diferencia entre un filtro específico y una política de salida completa sin enumerar servicios.",
+      "mitigation": "Eliminar la dependencia de una lista parcial de metadatos como control principal. Usar allowlist de destinos de negocio, validación de resolución y redirecciones, límites de recursos y segmentación de red que impida desde el proceso cualquier salida no necesaria.",
+      "steps": [
+        "Solicita el receptor local autorizado en Level 4: curl -i --get http://target:9090/VulnerableApp/SSRFVulnerability/LEVEL_4 --data-urlencode 'fileurl=http://receiver:8081/'",
+        "Comprueba el control de URL inválida: curl -i --get http://target:9090/VulnerableApp/SSRFVulnerability/LEVEL_4 --data-urlencode 'fileurl=not-a-url'",
+        "Si el receptor ofrece un log de marcador, úsalo para corroborar que la petición salió desde target; no uses respuestas de error o tiempos como escaneo de puertos."
+      ],
+      "hints": [
+        "MetaDataServiceMock es una simulación dentro de la aplicación y no una llamada real a un proveedor cloud.",
+        "El valor seguro debe permanecer exactamente en http://receiver:8081/.",
+        "Si receiver no está accesible desde target, documenta la incertidumbre de conectividad en lugar de convertirla en un resultado de vulnerabilidad."
+      ]
+    },
+    {
+      "title": "Nivel 5: control negativo contra la allowlist segura",
+      "route": "/VulnerableApp/SSRFVulnerability/LEVEL_5",
+      "method": "GET",
+      "params": {
+        "fileurl": "http://receiver:8081/"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "receiver:8081 no es la URL completa del gist permitido. Se espera HTTP 200 con JSON isValid=false y content=Provided URL not valid, independientemente de que receiver esté levantado, porque la solicitud se rechaza antes de URLConnection. El positivo original sería la URL exacta construida con el gistId configurado, pero no se ejecuta porque este laboratorio limita SSRF a receiver:8081.",
+      "check": {
+        "kind": "json",
+        "value": false,
+        "path": "isValid"
+      },
+      "explanation": "El ejercicio comprueba la rama de rechazo de la variante SECURE sin tráfico externo. Es un control negativo seguro y reproducible; no intenta falsificar el gist permitido ni afirma que la URL remota esté disponible. La aceptación del gist se documenta por revisión del código y la configuración.",
+      "mitigation": "Mantener una allowlist estricta de identificadores de servicio en lugar de aceptar URL arbitrarias, pero además evitar concatenar una URL remota mutable como única prueba de seguridad. Restringir egress, verificar esquema/host/puerto/ruta y aplicar timeouts, límites de tamaño y observabilidad.",
+      "steps": [
+        "Envía el receptor local al nivel marcado seguro: curl -i --get http://target:9090/VulnerableApp/SSRFVulnerability/LEVEL_5 --data-urlencode 'fileurl=http://receiver:8081/'",
+        "Ejecuta el control de sintaxis inválida para distinguir el rechazo por formato del rechazo por allowlist: curl -i --get http://target:9090/VulnerableApp/SSRFVulnerability/LEVEL_5 --data-urlencode 'fileurl=not-a-url'",
+        "Compara ambos cuerpos JSON; en los dos casos el código responde por invalidUrlResponse, por lo que no debe esperarse ninguna entrada en el log del receptor."
+      ],
+      "hints": [
+        "La comparación del nivel 5 cubre la URL completa con equalsIgnoreCase, no solo el nombre de host.",
+        "No reemplaces el receptor por el gist externo en un comando: la reproducción autorizada de este informe usa solo el receptor local.",
+        "Un HTTP 200 aquí representa la decisión de aplicación, no la disponibilidad ni la lectura de un recurso remoto."
+      ]
+    }
+  ],
+  "limitations": [
+    "La ruta se deduce de @VulnerableAppRestController(value=SSRFVulnerability), @VulnerableAppRequestMapping(value=LEVEL_n) y EndPointsInformationProvider, que concatena /VulnerableApp/{nombre}/{LEVEL}; las cinco rutas listadas son una verificación de código, no una garantía de que el contenedor esté levantado.",
+    "No se ejecutaron los comandos curl durante esta revisión. Los resultados esperados son inferencias del commit 4df80bbcd42682ecf26334f12c568e0f4a326c1a, sus tests y la configuración leída; no se debe prometer que los ejercicios funcionarán sin confirmar DNS, conectividad y respuesta de receiver desde target.",
+    "El verificador sugerido debe parsear el JSON y revisar isValid y, cuando corresponda, content=Provided URL not valid. HTTP 200 por sí solo no prueba SSRF: los rechazos también devuelven 200 y una conexión fallida puede generar otro resultado. Para una atribución fuerte se necesita un marcador o registro controlado en receiver correlacionado con la solicitud del target, no una inferencia desde Kali.",
+    "MetaDataServiceMock produce cuerpos sintéticos para hosts y rutas concretos; por tanto los tests de metadata no prueban acceso a un proveedor cloud real. No se incluyeron comandos contra 169.254.169.254, sus variantes, archivos locales, secretos, puertos arbitrarios ni servicios externos.",
+    "El JavaScript de la plantilla parsea content como JSON y construye HTML con innerHTML, pero esa UI no se usa para los ejercicios de SSRF. Un reflejo de texto no prueba ejecución XSS; un HTTP 200 no prueba IDOR; y no se debe atribuir puntaje por hacer clic en una interfaz. Esas señales deben permanecer fuera del verificador SSRF.",
+    "La respuesta del receptor no está definida en este repositorio. Por eso los checks positivos solo validan el campo JSON isValid=true y recomiendan corroboración en el receptor; no fijan una cadena de content que podría variar por la imagen del laboratorio.",
+    "Level 5 permite una URL remota exacta configurada por gistId.sasanlabs.projects. Ese comportamiento seguro se revisó estáticamente, pero no se prueba en los comandos porque el alcance seguro exige usar únicamente receiver:8081."
+  ]
+}

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">VA Academy</title>
+  <desc id="desc">Monograma VA ámbar sobre fondo carbón</desc>
+  <rect width="64" height="64" rx="8" fill="#0d1113"/>
+  <path d="M10 12h11l11 28L43 12h11L37 52H26z" fill="#efad45"/>
+  <path d="M29 25h11l-5 12h-11z" fill="#0d1113"/>
+  <path d="M47 44h7v8h-7z" fill="#4bd2c0"/>
+</svg>

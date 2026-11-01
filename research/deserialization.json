@@ -1,0 +1,270 @@
+{
+  "id": "deserialization",
+  "title": "Deserialización insegura de cookies JSON (CWE-502)",
+  "concept": "La familia reconstruye objetos Java desde cookies controladas por el cliente. En LEVEL_1 y LEVEL_2 el valor es Base64 de JSON sin firma y se deserializa a UserPreferences, por lo que el cliente puede cambiar campos que la aplicación trata como confiables. LEVEL_3 es el control seguro: firma el JSON con HMAC-SHA256 y verifica la firma antes de parsear, además de enlazar el resultado a UserPreferences. LEVEL_4 activa el tipado polimórfico de Jackson con LaissezFaireSubTypeValidator: el JSON puede escoger la clase mediante @class y Jackson llama sus setters durante la lectura. El gadget incluido en el laboratorio solo agrega note a una lista de auditoría acotada en memoria; no se debe convertir este ejercicio en ejecución de comandos.",
+  "source_files": [
+    "4df80bbcd42682ecf26334f12c568e0f4a326c1a:src/main/java/org/sasanlabs/service/vulnerability/deserialization/InsecureDeserializationVulnerability.java",
+    "4df80bbcd42682ecf26334f12c568e0f4a326c1a:src/main/java/org/sasanlabs/service/vulnerability/deserialization/InsecureDeserializationCookieController.java",
+    "4df80bbcd42682ecf26334f12c568e0f4a326c1a:src/main/java/org/sasanlabs/service/vulnerability/deserialization/DeserializationUtils.java",
+    "4df80bbcd42682ecf26334f12c568e0f4a326c1a:src/main/java/org/sasanlabs/service/vulnerability/deserialization/UserPreferences.java",
+    "4df80bbcd42682ecf26334f12c568e0f4a326c1a:src/main/java/org/sasanlabs/service/vulnerability/deserialization/Role.java",
+    "4df80bbcd42682ecf26334f12c568e0f4a326c1a:src/main/java/org/sasanlabs/service/vulnerability/deserialization/VisitedSection.java",
+    "4df80bbcd42682ecf26334f12c568e0f4a326c1a:src/main/java/org/sasanlabs/service/vulnerability/deserialization/AuditLogGadget.java",
+    "4df80bbcd42682ecf26334f12c568e0f4a326c1a:src/test/java/org/sasanlabs/service/vulnerability/deserialization/InsecureDeserializationVulnerabilityTest.java",
+    "4df80bbcd42682ecf26334f12c568e0f4a326c1a:src/test/java/org/sasanlabs/service/vulnerability/deserialization/InsecureDeserializationCookieControllerTest.java",
+    "4df80bbcd42682ecf26334f12c568e0f4a326c1a:src/main/resources/i18n/messages.properties (claves INSECURE_DESERIALIZATION; payloads de desafío)",
+    "4df80bbcd42682ecf26334f12c568e0f4a326c1a:src/main/resources/static/templates/InsecureDeserialization/LEVEL_1/InsecureDeserialization.{html,js,css}",
+    "4df80bbcd42682ecf26334f12c568e0f4a326c1a:src/main/resources/static/templates/InsecureDeserialization/LEVEL_2/InsecureDeserialization.{html,js,css}",
+    "4df80bbcd42682ecf26334f12c568e0f4a326c1a:src/main/resources/static/templates/InsecureDeserialization/LEVEL_4/InsecureDeserialization.{html,js,css}",
+    "4df80bbcd42682ecf26334f12c568e0f4a326c1a:src/main/java/org/sasanlabs/internal/utility/annotations/VulnerableAppRestController.java (nombre de ruta)",
+    "4df80bbcd42682ecf26334f12c568e0f4a326c1a:src/main/java/org/sasanlabs/internal/utility/annotations/VulnerableAppRequestMapping.java (nivel y método GET por defecto)",
+    "4df80bbcd42682ecf26334f12c568e0f4a326c1a:src/main/java/org/sasanlabs/controller/VulnerableAppRestController.java (convención de URL del contexto)",
+    "4df80bbcd42682ecf26334f12c568e0f4a326c1a:src/main/resources/application.properties (context-path /VulnerableApp y puerto 9090)",
+    "Nota de recursos attackvectors: en este commit no hay un archivo src/main/resources/attackvectors/* específico de deserialization; los valores relevantes están en messages.properties y en las anotaciones ChallengeCard del controlador de la familia."
+  ],
+  "levels": [
+    {
+      "route": "/VulnerableApp/InsecureDeserialization/LEVEL_1",
+      "method": "GET para comprobar; POST sobre la misma ruta para emitir la cookie normal",
+      "parameters": {
+        "GET": {
+          "cookies": {
+            "preferences_level1": "Base64 de JSON UserPreferences, sin firma; campos observados: theme y notificationsEnabled"
+          }
+        },
+        "POST": {
+          "form": {
+            "theme": "light o dark (obligatorio)",
+            "notificationsEnabled": "true o false (opcional, default false)"
+          },
+          "response_cookie": "preferences_level1; HttpOnly; Path=/; Max-Age=3600"
+        }
+      },
+      "behavior": "Si falta la cookie, el endpoint pide guardar preferencias. Si existe, deserializeUnsafe la decodifica y la reconstruye como UserPreferences sin comprobar firma, origen ni que el objeto provenga del POST legítimo. Devuelve isValid=true cuando theme no es light ni dark; el mensaje incluye el valor deserializado y el estado de notificaciones.",
+      "vulnerable": true,
+      "notes": "La validación del formulario POST solo limita lo que la interfaz escribe; no protege el GET frente a una cookie editada. El payload del recurso de mensajes es preferences_level1=eyJ0aGVtZSI6IkhBQ0tFRCIsIm5vdGlmaWNhdGlvbnNFbmFibGVkIjp0cnVlfQ==, que decodifica a {\"theme\":\"HACKED\",\"notificationsEnabled\":true}. Es manipulación de datos/objeto, no ejecución de código."
+    },
+    {
+      "route": "/VulnerableApp/InsecureDeserialization/LEVEL_2",
+      "method": "GET para comprobar; POST sin cuerpo para emitir la sesión normal",
+      "parameters": {
+        "GET": {
+          "cookies": {
+            "session_level2": "Base64 de JSON UserPreferences con username y role, sin firma"
+          }
+        },
+        "POST": {
+          "form": {},
+          "response_cookie": "session_level2; HttpOnly; Path=/; Max-Age=3600; normalmente username=Adam y role=USER"
+        }
+      },
+      "behavior": "La cookie emitida por startSessionLevel2 representa a Adam como USER. El GET deserializa la cookie sin firma y usa session.getRole() para decidir si muestra las tareas administrativas. Un JSON que cambie role a ADMIN recibe isValid=true y el texto Welcome Adam (ADMIN) con Admin tasks.",
+      "vulnerable": true,
+      "notes": "Es una escalada de privilegios didáctica causada por confiar en un campo de autorización dentro de un objeto que controla el cliente. Un JSON vacío se trata como guest/USER y un role desconocido produce fallo de deserialización; ninguno de esos controles corrige la ausencia de integridad. El payload documentado es session_level2=eyJ1c2VybmFtZSI6IkFkYW0iLCJyb2xlIjoiQURNSU4ifQ==, que decodifica a {\"username\":\"Adam\",\"role\":\"ADMIN\"}."
+    },
+    {
+      "route": "/VulnerableApp/InsecureDeserialization/LEVEL_3",
+      "method": "GET para comprobar; POST sin cuerpo para emitir la sesión firmada",
+      "parameters": {
+        "GET": {
+          "cookies": {
+            "session_level3": "Base64(JSON).Base64(HMAC-SHA256); la firma solo la conoce el servidor"
+          }
+        },
+        "POST": {
+          "form": {},
+          "response_cookie": "session_level3; HttpOnly; Path=/; Max-Age=3600; sesión de Adam como USER y firma HMAC"
+        }
+      },
+      "behavior": "verifyAndDeserialize rechaza null, entradas mayores de 16.384 caracteres, valores sin punto separador, Base64 inválido y firmas ausentes o distintas. Compara la firma antes de entregar los bytes a Jackson y luego enlaza el resultado a UserPreferences. La cookie genuina se acepta; la cookie unsigned ADMIN de LEVEL_2 o una cookie firmada cuyo primer componente fue cambiado se rechazan.",
+      "vulnerable": false,
+      "notes": "Es el control negativo/positivo seguro incluido en la familia, marcado variant=SECURE. El secreto se genera aleatoriamente al arrancar la JVM, por lo que no es reproducible calcular una firma válida desde Kali; la forma segura de obtener una cookie es el POST de emisión. La anotación sigue declarando la categoría INSECURE_DESERIALIZATION para que el nivel aparezca en el catálogo, pero la implementación está diseñada para no ser explotable por manipulación del cliente."
+    },
+    {
+      "route": "/VulnerableApp/InsecureDeserialization/LEVEL_4",
+      "method": "GET para comprobar; POST con section para emitir una visita normal",
+      "parameters": {
+        "GET": {
+          "cookies": {
+            "activity_level4": "Base64 de JSON polimórfico; @class nombra la clase a instanciar"
+          }
+        },
+        "POST": {
+          "form": {
+            "section": "texto de la sección, por ejemplo Level 2"
+          },
+          "response_cookie": "activity_level4; HttpOnly; Path=/; Max-Age=3600"
+        }
+      },
+      "behavior": "deserializePolymorphicUnsafe usa un ObjectMapper con default typing y LaissezFaireSubTypeValidator. Un cookie normal nombra VisitedSection y el endpoint devuelve Last visited section. Si el JSON nombra org.sasanlabs.service.vulnerability.deserialization.AuditLogGadget, Jackson instancia esa clase y llama setNote durante la lectura; el endpoint devuelve Audit log: <note> con isValid=true. Otros tipos de la clase permitida producen unexpected type.",
+      "vulnerable": true,
+      "notes": "La clase AuditLogGadget es un gadget de laboratorio seguro: solo añade el note a una lista CopyOnWriteArrayList limitada a 50 entradas. El código no debe interpretarse como una invitación a probar shells, lectura de archivos, redirecciones ni comandos. El payload benigno documentado es activity_level4=eyJAY2xhc3MiOiJvcmcuc2FzYW5sYWJzLnNlcnZpY2UudnVsbmVyYWJpbGl0eS5kZXNlcmlhbGl6YXRpb24uQXVkaXRMb2dHYWRnZXQiLCJub3RlIjoiSEFDS0VEIn0=, que el test de la familia usa para observar test-marker/HACKED en la auditoría."
+    }
+  ],
+  "exercises": [
+    {
+      "title": "LEVEL_1: alterar un objeto de preferencias sin firma",
+      "route": "/VulnerableApp/InsecureDeserialization/LEVEL_1",
+      "method": "POST de preparación y GET de verificación",
+      "params": {
+        "POST_form": {
+          "theme": "dark",
+          "notificationsEnabled": "true"
+        },
+        "GET_cookie": {
+          "preferences_level1": "eyJ0aGVtZSI6IkhBQ0tFRCIsIm5vdGlmaWNhdGlvbnNFbmFibGVkIjp0cnVlfQ=="
+        }
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Cookie": "preferences_level1=eyJ0aGVtZSI6IkhBQ0tFRCIsIm5vdGlmaWNhdGlvbnNFbmFibGVkIjp0cnVlfQ=="
+      },
+      "body": "theme=dark&notificationsEnabled=true para la preparación POST; el GET de prueba no lleva cuerpo",
+      "content_type": "application/x-www-form-urlencoded para POST; application/json esperado en GET",
+      "expected": "La preparación normal devuelve 200 y Set-Cookie. Con la cookie controlada, el GET debería devolver un JSON cuyo isValid sea true y cuyo content refleje Theme: HACKED, notifications on, si el despliegue coincide con el código revisado. El control negativo con la cookie emitida para dark debería conservar isValid=false.",
+      "check": {
+        "kind": "json",
+        "value": true,
+        "path": "$.isValid"
+      },
+      "explanation": "El formulario permite solo light/dark, pero el GET confía en cualquier Base64(JSON) recibido. La cadena HACKED se usa únicamente como marcador de estado; no contiene HTML activo ni orden de sistema. El check JSON comprueba la señal explícita del bean, mientras que content=Theme: HACKED es evidencia contextual que conviene inspeccionar por separado.",
+      "mitigation": "No usar un objeto serializado controlado por el cliente para una decisión de negocio. Preferir estado del lado servidor o un token firmado con HMAC verificado antes de parsear; enlazar el resultado a un esquema/clase permitido, validar tamaño y campos, y mantener una lista de valores de negocio válida después de verificar integridad.",
+      "steps": [
+        "1. Control negativo: emitir una cookie legítima y observar solo la cabecera sin asumir que el reto está resuelto: curl -i -c /tmp/va-deser-l1.cookies -X POST 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_1' -H 'Content-Type: application/x-www-form-urlencoded' --data 'theme=dark&notificationsEnabled=true'",
+        "2. Comprobar la cookie legítima: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_1' -b /tmp/va-deser-l1.cookies -H 'Accept: application/json'",
+        "3. Control positivo seguro, sin ejecutar nada en el servidor: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_1' -H 'Accept: application/json' -H 'Cookie: preferences_level1=eyJ0aGVtZSI6IkhBQ0tFRCIsIm5vdGlmaWNhdGlvbnNFbmFibGVkIjp0cnVlfQ=='",
+        "4. Comparar ambos JSON. Una respuesta 200 solo demuestra que el endpoint respondió; el resultado esperado de este código se acredita por $.isValid=true y el contenido HACKED, no por el código HTTP aislado."
+      ],
+      "hints": [
+        "La cookie es Base64, no cifrado: el valor se puede decodificar conceptualmente como {\"theme\":\"HACKED\",\"notificationsEnabled\":true}.",
+        "No hace falta usar un navegador ni ejecutar un comando del sistema; basta con enviar la cabecera Cookie.",
+        "Compara contra la cookie legítima de dark para no confundir una respuesta normal con la señal del ejercicio."
+      ]
+    },
+    {
+      "title": "LEVEL_2: contrastar USER con una sesión ADMIN forjada",
+      "route": "/VulnerableApp/InsecureDeserialization/LEVEL_2",
+      "method": "POST de preparación y GET de verificación",
+      "params": {
+        "POST_form": {},
+        "GET_cookie_control": {
+          "session_level2": "cookie emitida por el POST, normalmente Adam/USER"
+        },
+        "GET_cookie_positive": {
+          "session_level2": "eyJ1c2VybmFtZSI6IkFkYW0iLCJyb2xlIjoiQURNSU4ifQ=="
+        }
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Cookie": "session_level2=eyJ1c2VybmFtZSI6IkFkYW0iLCJyb2xlIjoiQURNSU4ifQ=="
+      },
+      "body": "vacío en POST y GET",
+      "content_type": "application/x-www-form-urlencoded para POST; application/json esperado en GET",
+      "expected": "El POST de control emite Adam/USER. El GET con esa cookie debe mostrar Welcome Adam (USER) y isValid=false. El GET con el Base64 ADMIN de este ejercicio debería mostrar Welcome Adam (ADMIN), Admin tasks e isValid=true, según la lógica revisada.",
+      "check": {
+        "kind": "contains",
+        "value": "Welcome Adam (ADMIN)"
+      },
+      "explanation": "El mismo tipo UserPreferences contiene role, y el código usa ese valor directamente para decidir tareas administrativas. La comparación USER/ADMIN hace visible la diferencia de autorización. La comprobación contains es intencionalmente complementaria: se debe revisar también que el JSON tenga isValid=true; encontrar texto no prueba por sí solo que una autorización real se haya bypassed en otro contexto.",
+      "mitigation": "No aceptar role/subject desde un cookie unsigned. Mantener la identidad y los permisos en una sesión del servidor o en un token con firma, validar issuer/audience/expiración y aplicar autorización server-side en cada operación; no derivar privilegios solo de un objeto reconstruido desde bytes del cliente.",
+      "steps": [
+        "1. Iniciar la sesión normal en un jar local: curl -i -c /tmp/va-deser-l2.cookies -X POST 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_2' -H 'Accept: application/json'",
+        "2. Control negativo USER: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_2' -b /tmp/va-deser-l2.cookies -H 'Accept: application/json'",
+        "3. Control positivo seguro con el marcador documentado y sin comandos externos: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_2' -H 'Accept: application/json' -H 'Cookie: session_level2=eyJ1c2VybmFtZSI6IkFkYW0iLCJyb2xlIjoiQURNSU4ifQ=='",
+        "4. Confirmar la diferencia en content y $.isValid. No atribuir el resultado a un 200: ambos caminos están diseñados para responder HTTP 200 y expresar el estado en el JSON."
+      ],
+      "hints": [
+        "El cookie legítimo representa role=USER; el payload positivo solo cambia ese campo a ADMIN.",
+        "No hay que adivinar ni romper una firma en LEVEL_2: el código no verifica ninguna.",
+        "El control USER evita llamar éxito a cualquier respuesta que simplemente contenga un saludo."
+      ]
+    },
+    {
+      "title": "LEVEL_3: verificar que HMAC rechaza el mismo cambio ADMIN",
+      "route": "/VulnerableApp/InsecureDeserialization/LEVEL_3",
+      "method": "POST de emisión segura y GET de controles",
+      "params": {
+        "POST_form": {},
+        "GET_genuine_cookie": "session_level3 emitida por el servidor",
+        "GET_unsigned_tamper": "eyJ1c2VybmFtZSI6IkFkYW0iLCJyb2xlIjoiQURNSU4ifQ=="
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Cookie": "session_level3=eyJ1c2VybmFtZSI6IkFkYW0iLCJyb2xlIjoiQURNSU4ifQ=="
+      },
+      "body": "vacío en POST y GET",
+      "content_type": "application/x-www-form-urlencoded para POST; application/json esperado en GET",
+      "expected": "La cookie genuina emitida por POST se acepta como Adam/USER. El mismo payload ADMIN unsigned usado contra LEVEL_2 debe ser rechazado en LEVEL_3, normalmente con isValid=false y un mensaje sobre firma ausente o mismatch. No se intenta fabricar una HMAC desde Kali.",
+      "check": {
+        "kind": "not_contains",
+        "value": "Welcome Adam (ADMIN)"
+      },
+      "explanation": "Este nivel es el control seguro de la familia. El check solo evita confundir una respuesta con privilegios ADMIN con una aceptación segura; la prueba más fuerte es comparar la cookie genuina con la unsigned y, si se modifica una cookie firmada real, observar Signature mismatch. El secreto es aleatorio por proceso, por lo que no se debe presentar una firma calculada manualmente ni prometer un valor estable.",
+      "mitigation": "Conservar la verificación HMAC antes de la deserialización, usar comparación resistente a timing, limitar tamaño y enlazar el payload a la clase esperada. En una aplicación real, preferir además sesión server-side para roles y rotación/gestión segura del secreto; no exponerlo en el cliente.",
+      "steps": [
+        "1. Obtener una cookie firmada legítima y guardar el Set-Cookie localmente: curl -i -c /tmp/va-deser-l3.cookies -X POST 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_3' -H 'Accept: application/json'",
+        "2. Control positivo del camino seguro: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_3' -b /tmp/va-deser-l3.cookies -H 'Accept: application/json'",
+        "3. Reusar deliberadamente el payload ADMIN sin firma, que sí se acepta en LEVEL_2: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_3' -H 'Accept: application/json' -H 'Cookie: session_level3=eyJ1c2VybmFtZSI6IkFkYW0iLCJyb2xlIjoiQURNSU4ifQ=='",
+        "4. Registrar como resultado esperado el rechazo de ADMIN, no el mero 200. Si se prueba una mutación de una cookie genuina, conservar el componente después del punto y cambiar solo el Base64 anterior; el código debería informar Signature mismatch."
+      ],
+      "hints": [
+        "La cookie de LEVEL_3 tiene dos componentes separados por un punto; la de LEVEL_2 solo tiene Base64(JSON).",
+        "El HMAC se verifica antes de que Jackson lea el JSON, así que cambiar role no debe llegar a la decisión de autorización.",
+        "La emisión de la cookie genuina y su aceptación son el control positivo; la cookie unsigned ADMIN es el control negativo de seguridad."
+      ]
+    },
+    {
+      "title": "LEVEL_4: instanciación de un gadget de auditoría benigno",
+      "route": "/VulnerableApp/InsecureDeserialization/LEVEL_4",
+      "method": "POST de preparación, GET normal y GET con @class controlado",
+      "params": {
+        "POST_form": {
+          "section": "Level 2"
+        },
+        "GET_cookie_control": {
+          "activity_level4": "cookie normal emitida para VisitedSection"
+        },
+        "GET_cookie_positive": {
+          "activity_level4": "eyJAY2xhc3MiOiJvcmcuc2FzYW5sYWJzLnNlcnZpY2UudnVsbmVyYWJpbGl0eS5kZXNlcmlhbGl6YXRpb24uQXVkaXRMb2dHYWRnZXQiLCJub3RlIjoiSEFDS0VEIn0="
+        }
+      },
+      "headers": {
+        "Accept": "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Cookie": "activity_level4=eyJAY2xhc3MiOiJvcmcuc2FzYW5sYWJzLnNlcnZpY2UudnVsbmVyYWJpbGl0eS5kZXNlcmlhbGl6YXRpb24uQXVkaXRMb2dHYWRnZXQiLCJub3RlIjoiSEFDS0VEIn0="
+      },
+      "body": "section=Level 2 para la preparación; el GET no lleva cuerpo",
+      "content_type": "application/x-www-form-urlencoded para POST; application/json esperado en GET",
+      "expected": "La cookie normal debe producir Last visited section: Level 2 e isValid=false. La cookie positiva nombra AuditLogGadget, por lo que debería producir Audit log: HACKED e isValid=true y dejar un marcador en la lista de auditoría del proceso, si el despliegue coincide con el commit. Esto solo demuestra que el setter se ejecutó durante deserialización; no demuestra RCE ni acceso a red.",
+      "check": {
+        "kind": "contains",
+        "value": "Audit log: HACKED"
+      },
+      "explanation": "El campo @class no es un dato de VisitedSection validado: decide qué clase construye el ObjectMapper polimórfico. AuditLogGadget.setNote escribe el marcador en memoria antes de que el controlador inspeccione el objeto. El valor HACKED es texto benigno. El check de contenido es una señal observable del gadget de laboratorio, pero el verificador honesto debe indicar que un texto reflejado o un HTTP 200 no acredita ejecución arbitraria.",
+      "mitigation": "No habilitar default typing para input no confiable. Desactivar polimorfismo por defecto, usar DTOs concretos y allowlists estrictas de tipos cuando sean imprescindibles, verificar integridad antes de parsear, validar tamaño y aislar cualquier gadget/sink; actualizar dependencias y revisar clases con setters/constructores con efectos secundarios.",
+      "steps": [
+        "1. Emitir primero una visita normal, guardando su cookie: curl -i -c /tmp/va-deser-l4.cookies -X POST 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_4' -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'section=Level 2'",
+        "2. Control negativo con VisitedSection normal: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_4' -b /tmp/va-deser-l4.cookies -H 'Accept: application/json'",
+        "3. Control positivo seguro, limitado a un marcador de auditoría en memoria: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_4' -H 'Accept: application/json' -H 'Cookie: activity_level4=eyJAY2xhc3MiOiJvcmcuc2FzYW5sYWJzLnNlcnZpY2UudnVsbmVyYWJpbGl0eS5kZXNlcmlhbGl6YXRpb24uQXVkaXRMb2dHYWRnZXQiLCJub3RlIjoiSEFDS0VEIn0='",
+        "4. Comparar el texto Audit log: HACKED con Last visited section. No usar @class de ninguna otra clase, no enviar payloads de procesos/red/archivos y no convertir el marcador en una orden ejecutable."
+      ],
+      "hints": [
+        "El JSON positivo contiene exactamente @class=org.sasanlabs.service.vulnerability.deserialization.AuditLogGadget y note=HACKED.",
+        "La cookie normal sirve como control negativo porque nombra VisitedSection y no AuditLogGadget.",
+        "El efecto observable está acotado a la lista de auditoría en memoria, que el test limita a 50 entradas."
+      ]
+    }
+  ],
+  "limitations": [
+    "El informe es una verificación estática del commit 4df80bbcd42682ecf26334f12c568e0f4a326c1a. No se afirma que los comandos hayan sido ejecutados con éxito contra target:9090 en esta revisión ni que el contenedor esté en un estado concreto.",
+    "El resultado esperado depende de que el despliegue use el perfil public, el context-path /VulnerableApp, el puerto 9090 y exactamente el código revisado. La cookie de LEVEL_3 es emitida por el proceso y su HMAC no puede reproducirse offline desde Kali.",
+    "Los niveles GET y sus controladores de emisión POST comparten cada ruta. Un Set-Cookie confirma que se emitió una cookie; no confirma que la deserialización posterior sea segura ni que el desafío esté resuelto.",
+    "Los checks propuestos son señales verificables, no un sistema de puntuación. Un HTTP 200 no prueba IDOR, autorización correcta, deserialización segura ni ejecución de código. Un texto reflejado no prueba ejecución XSS; aquí no se usa ningún payload XSS. No se debe atribuir puntaje por hacer clic en la interfaz.",
+    "En LEVEL_4, ver Audit log: HACKED o comprobar que un setter recibió note solo evidencia instanciación y efecto del gadget incluido. No demuestra RCE, ejecución remota, lectura de secretos ni acceso a servicios. Se excluyen expresamente comandos externos, reverse shells, archivos del host, DoS y borrado de datos.",
+    "El campo check.kind=contains o not_contains no sustituye la inspección del JSON completo; check.kind=json con $.isValid depende de la forma de respuesta del bean y solo comprueba ese campo. check.kind=header, si se usa para Set-Cookie, solo demuestra una cabecera. Para una conclusión fuerte deben compararse siempre el control negativo y el positivo y anotarse también los mensajes de error.",
+    "No hay un recurso src/main/resources/attackvectors específico de esta familia en el commit; los valores de payload y las explicaciones están en src/main/resources/i18n/messages.properties y en las anotaciones ChallengeCard de InsecureDeserializationVulnerability."
+  ]
+}

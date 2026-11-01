@@ -1,0 +1,364 @@
+{
+  "id": "otp",
+  "title": "OTP Authentication Vulnerability: niveles 1 a 5",
+  "concept": "La familia OTP implementa solicitudes y validaciones de contraseñas de un solo uso. El controlador OTPVulnerability está anotado con @VulnerableAppRestController(value = \"OTPVulnerability\") y cada solicitud de nivel usa @VulnerableAppRequestMapping(value = LEVEL_n, requestMethod = POST); por ello, con el contexto indicado, la ruta de solicitud es /VulnerableApp/OTPVulnerability/LEVEL_n y la validación adicional es /VulnerableApp/OTPVulnerability/LEVEL_n/validate. Los formularios usan application/x-www-form-urlencoded y los parámetros son email para solicitar y email más otp para validar. OTPUserSeeder crea tres usuarios por nivel: level1_user1@sasanlabs.org a level1_user3@sasanlabs.org, y el patrón equivalente para los niveles 2 a 5. La progresión original va desde un OTP de cuatro dígitos con Random, sin vencimiento ni límite de intentos, hasta un OTP de seis dígitos con SecureRandom, vencimiento, HMAC en memoria, límite de solicitudes, límite de intentos y uso único. El objeto JSON de respuesta siempre tiene content e isValid; un HTTP 200 por sí solo no expresa que la autenticación haya sido válida. Los metadatos @AttackVector y @ChallengeCard de los niveles 1 a 4 están en OTPVulnerability.java y sus textos en messages.properties; la búsqueda acotada no encontró un archivo separado de src/main/resources/attackvectors para OTP. El análisis y los ejercicios se basan en el commit 4df80bbcd42682ecf26334f12c568e0f4a326c1a y describen verificaciones esperadas por código, no resultados observados en ejecución.",
+  "source_files": [
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/otp/OTPVulnerability.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/otp/OTPService.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/otp/OTPEntity.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/otp/OTPRepository.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/otp/OTPUser.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/otp/OTPUserRepository.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/otp/OTPUserSeeder.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/otp/OTPResult.java",
+    "/home/ubuntu/workshop-research/upstream/src/test/java/org/sasanlabs/service/vulnerability/otp/OTPServiceTest.java",
+    "/home/ubuntu/workshop-research/upstream/src/test/java/org/sasanlabs/service/vulnerability/otp/OTPVulnerabilityTest.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/i18n/messages.properties",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/scripts/OTP/db/schema.sql",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/scripts/OTP/db/data.sql",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/static/templates/OTPVulnerability/LEVEL_1/OTP.html",
+    "/home/ubuntu/workshop-research/upstream/src/main/resources/static/templates/OTPVulnerability/LEVEL_1/OTP.js",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/internal/utility/LevelConstants.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/internal/utility/annotations/VulnerableAppRestController.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/internal/utility/annotations/VulnerableAppRequestMapping.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/vulnerability/bean/GenericVulnerabilityResponseBean.java",
+    "/home/ubuntu/workshop-research/upstream/src/main/java/org/sasanlabs/service/impl/EndPointsInformationProvider.java"
+  ],
+  "levels": [
+    {
+      "level": "LEVEL_1",
+      "route": "http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_1",
+      "method": "POST",
+      "parameters": {
+        "request": {
+          "email": "level1_user1@sasanlabs.org"
+        },
+        "validate_route": "http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_1/validate",
+        "validate": {
+          "email": "level1_user1@sasanlabs.org",
+          "otp": "cadena de 4 dígitos recibida en Mailpit"
+        }
+      },
+      "behavior": "requestOTPLevel1 consulta el usuario por email y nivel, genera String.format(\"%04d\", new Random().nextInt(10000)), guarda ese valor sin transformar aunque el campo se llame otpHash, no asigna expiresAt y envía el OTP por correo si el usuario existe. La respuesta de solicitud es genérica y success incluso si no existe el usuario. validateOTPLevel1 busca el token más reciente y compara el valor recibido con el valor guardado; no comprueba expiración, no incrementa attempts, no consulta used y no tiene rate limit. El espacio de búsqueda es de 10.000 valores, pero este informe no recomienda recorrerlo ni genera esa carga.",
+      "vulnerable": true,
+      "notes": "@AttackVector declara WEAK_RANDOM_NUMBER_GENERATION, NO_LOGIN_RATE_LIMITING y PASSWORD_RESET_TOKEN_WITHOUT_EXPIRY. Los textos de challenge describen autenticar a level1_user1@sasanlabs.org sin conocer su OTP y el payload original describe fuerza bruta de 0000 a 9999; se documenta solo como riesgo de código, no como procedimiento de fuerza bruta. OTPVulnerabilityTest cubre delegación, y OTPServiceTest comprueba solicitud con y sin usuario y validación correcta/incorrecta. La ruta /validate es un @PostMapping separado, no una segunda @VulnerableAppRequestMapping."
+    },
+    {
+      "level": "LEVEL_2",
+      "route": "http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_2",
+      "method": "POST",
+      "parameters": {
+        "request": {
+          "email": "level2_user1@sasanlabs.org"
+        },
+        "validate_route": "http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_2/validate",
+        "validate": {
+          "email": "level2_user1@sasanlabs.org",
+          "otp": "cadena de 6 dígitos recibida en Mailpit"
+        }
+      },
+      "behavior": "requestOTPLevel2 crea Random con System.currentTimeMillis(), obtiene un OTP de seis dígitos, lo guarda sin hash y sin vencimiento, y envía el valor por correo cuando el usuario existe. La semilla temporal hace predecible la secuencia si un atacante conoce o acota el instante de generación, pero no hay una prueba de predicción en este informe. La validación solo compara el valor contra el último token y, como no hay contador, used ni expiresAt, no limita intentos ni vencimiento. La solicitud también devuelve respuesta genérica y success para un usuario no sembrado.",
+      "vulnerable": true,
+      "notes": "@AttackVector declara WEAK_RANDOM_NUMBER_GENERATION, NO_LOGIN_RATE_LIMITING y PASSWORD_RESET_TOKEN_WITHOUT_EXPIRY. Los textos del nivel describen predecir el OTP con la semilla basada en tiempo. No hay una prueba unitaria de servicio específica de LEVEL_2 en los tests leídos; la conclusión de la semilla y de la ausencia de límites proviene directamente de OTPService.java. La validación permite reutilizar el mismo valor mientras exista el último registro."
+    },
+    {
+      "level": "LEVEL_3",
+      "route": "http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_3",
+      "method": "POST",
+      "parameters": {
+        "request": {
+          "email": "level3_user1@sasanlabs.org"
+        },
+        "validate_route": "http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_3/validate",
+        "validate": {
+          "email": "level3_user1@sasanlabs.org",
+          "otp": "cadena de 6 dígitos recibida en Mailpit"
+        }
+      },
+      "behavior": "requestOTPLevel3 usa SecureRandom para un OTP de seis dígitos y fija expiresAt a cinco minutos. validateOTPLevel3 exige igualdad y que la hora actual sea anterior al vencimiento, pero nunca marca el token como usado ni aumenta attempts. Por tanto, el mismo OTP válido puede ser aceptado de nuevo dentro de su ventana de cinco minutos y no existe límite de intentos.",
+      "vulnerable": true,
+      "notes": "@AttackVector declara REUSABLE_PASSWORD_RESET_TOKEN y NO_LOGIN_RATE_LIMITING. OTPServiceTest contiene validateOTPLevel3_ShouldSucceedTwice_DemonstratingReplayVulnerability y también prueba el rechazo de un token expirado. El control positivo de este nivel es precisamente la segunda validación con el mismo OTP; el resultado esperado se debe verificar en isValid, no en el estado HTTP."
+    },
+    {
+      "level": "LEVEL_4",
+      "route": "http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_4",
+      "method": "POST",
+      "parameters": {
+        "request": {
+          "email": "level4_user1@sasanlabs.org"
+        },
+        "validate_route": "http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_4/validate",
+        "validate": {
+          "email": "level4_user1@sasanlabs.org",
+          "otp": "cadena de 6 dígitos recibida en Mailpit"
+        }
+      },
+      "behavior": "requestOTPLevel4 usa SecureRandom, guarda un OTP de seis dígitos con vencimiento de cinco minutos y no limita cuántas solicitudes nuevas se pueden hacer. validateOTPLevel4 serializa por email:nivel, rechaza cuando attempts ya es 3 o más, incrementa attempts antes de comparar y marca used tras un éxito. Sin embargo, nunca comprueba used antes de aceptar: el mismo OTP exitoso puede volver a pasar mientras no se hayan consumido los tres intentos y no haya vencido. Solicitar un token nuevo crea otro registro con attempts en cero, por lo que el límite de intentos no es un límite de solicitudes.",
+      "vulnerable": true,
+      "notes": "@AttackVector declara NO_LOGIN_RATE_LIMITING y el texto del nivel destaca la generación ilimitada. OTPServiceTest prueba el rechazo con attempts=3 y que used se marca después de un éxito, pero no prueba el replay que se deduce de la ausencia de la comprobación isUsed() en validateOTPLevel4. Esta observación adicional debe tratarse como hallazgo de revisión de código y confirmarse de forma acotada con una segunda validación, no con muchas solicitudes."
+    },
+    {
+      "level": "LEVEL_5",
+      "route": "http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_5",
+      "method": "POST",
+      "parameters": {
+        "request": {
+          "email": "level5_user1@sasanlabs.org"
+        },
+        "validate_route": "http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_5/validate",
+        "validate": {
+          "email": "level5_user1@sasanlabs.org",
+          "otp": "cadena de 6 dígitos recibida en Mailpit"
+        }
+      },
+      "behavior": "Es la variante Variant.SECURE. requestOTPLevel5 usa SecureRandom, cuenta tokens del mismo email y nivel creados en los últimos quince minutos y rechaza desde el cuarto, calcula HMAC-SHA256 con una clave aleatoria de 256 bits generada al arrancar, guarda solo el HMAC, fija vencimiento de cinco minutos y envía el OTP. validateOTPLevel5 rechaza used, rechaza desde tres intentos, incrementa attempts antes de comparar el HMAC, exige vencimiento y marca used tras el éxito. Para un usuario no existente devuelve el mismo mensaje genérico sin enviar correo.",
+      "vulnerable": false,
+      "notes": "No tiene @AttackVector ni @ChallengeCard y la anotación de nivel declara Variant.SECURE. OTPServiceTest y OTPVulnerabilityTest cubren token usado, rate limit, no enumeración y delegación. El control positivo de seguridad es que una validación correcta puede tener isValid=true una vez y el replay del mismo OTP debe tener isValid=false; el rate limit se verifica en una cuenta fresca con una cuarta solicitud, teniendo en cuenta el estado persistente del laboratorio."
+    }
+  ],
+  "exercises": [
+    {
+      "title": "Nivel 1: flujo legítimo y control de usuario no sembrado sin fuerza bruta",
+      "route": "http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_1",
+      "method": "POST",
+      "params": {
+        "request": {
+          "email": "level1_user1@sasanlabs.org"
+        },
+        "validate": {
+          "email": "level1_user1@sasanlabs.org",
+          "otp": "<OTP_DE_MAILPIT>"
+        },
+        "control_no_sembrado": {
+          "email": "not-seeded@example.invalid"
+        }
+      },
+      "headers": {
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      "body": {
+        "request": "email=level1_user1%40sasanlabs.org",
+        "validate": "email=level1_user1%40sasanlabs.org&otp=<OTP_DE_MAILPIT>"
+      },
+      "content_type": "application/x-www-form-urlencoded",
+      "expected": "Por el código, la solicitud a un usuario sembrado debería devolver JSON con isValid=true y generar un mensaje en Mailpit cuyo cuerpo contiene Your OTP is:. Tras sustituir <OTP_DE_MAILPIT> por el valor leído en ese mensaje, la validación debería devolver content=Login successful e isValid=true. La solicitud para not-seeded@example.invalid también devuelve un mensaje genérico e isValid=true, pero no debería enviar correo. Esto no prueba por sí solo la debilidad de Random ni recorre las 10.000 combinaciones.",
+      "check": {
+        "kind": "json",
+        "path": "isValid",
+        "value": true
+      },
+      "explanation": "Este ejercicio verifica el contrato real del controlador y evita una carga de fuerza bruta. La revisión de código establece que el OTP de LEVEL_1 es de cuatro dígitos, se guarda en claro pese al nombre otpHash, no vence y no consume intentos. La comparación de la respuesta de usuario válido y usuario desconocido documenta la no enumeración en el mensaje de solicitud, pero la entrega de un HTTP 200 no demuestra autenticación correcta.",
+      "mitigation": "Usar CSPRNG, al menos seis dígitos con entropía adecuada, expiración corta, uso único, contador atómico de intentos y rate limiting por cuenta, IP y dispositivo. Almacenar una representación derivada segura del OTP y mantener respuestas de solicitud genéricas.",
+      "steps": [
+        "Control opcional de método: curl -i --get http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_1 --data-urlencode 'email=level1_user1@sasanlabs.org' ; la anotación declara POST, así que no se debe interpretar una respuesta de método no permitido como hallazgo de autenticación.",
+        "curl -i -sS -X POST http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_1 -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'email=level1_user1@sasanlabs.org'",
+        "curl -i -sS --get http://mailpit:8025/mailpit/api/v1/search --data-urlencode 'query=to:level1_user1@sasanlabs.org'",
+        "MSG_ID=$(curl -sS --get http://mailpit:8025/mailpit/api/v1/search --data-urlencode 'query=to:level1_user1@sasanlabs.org' | jq -r '.messages[0].ID'); curl -sS \"http://mailpit:8025/mailpit/api/v1/message/${MSG_ID}\" | jq -r '.Text' ; copiar solo el OTP del cuerpo, sin exponer otros datos.",
+        "curl -i -sS -X POST http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_1/validate -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'email=level1_user1@sasanlabs.org' --data-urlencode 'otp=<OTP_DE_MAILPIT>'",
+        "curl -i -sS -X POST http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_1 -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'email=not-seeded@example.invalid'"
+      ],
+      "hints": [
+        "Sustituye <OTP_DE_MAILPIT> manualmente por el OTP del mensaje recién solicitado; no lo adivines ni enumeres combinaciones.",
+        "En cada respuesta inspecciona el JSON content/isValid; el código responde HTTP 200 tanto para éxito lógico como para error de validación."
+      ]
+    },
+    {
+      "title": "Nivel 2: observar el flujo de Random con semilla temporal sin predecir ni bombardear",
+      "route": "http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_2",
+      "method": "POST",
+      "params": {
+        "request": {
+          "email": "level2_user1@sasanlabs.org"
+        },
+        "validate": {
+          "email": "level2_user1@sasanlabs.org",
+          "otp": "<OTP_DE_MAILPIT>"
+        }
+      },
+      "headers": {
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      "body": {
+        "request": "email=level2_user1%40sasanlabs.org",
+        "validate": "email=level2_user1%40sasanlabs.org&otp=<OTP_DE_MAILPIT>"
+      },
+      "content_type": "application/x-www-form-urlencoded",
+      "expected": "La solicitud debería enviar un OTP de seis dígitos a Mailpit y responder con isValid=true. La validación con el valor recuperado debería responder Login successful/isValid=true; una segunda validación inmediata del mismo valor también está prevista por el código porque no hay used ni expiración. El ejercicio no afirma haber predicho la semilla: solo hace reproducible la ruta y deja la predictibilidad como conclusión de revisión de código.",
+      "check": {
+        "kind": "json",
+        "path": "isValid",
+        "value": true
+      },
+      "explanation": "OTPService crea new Random(System.currentTimeMillis()) en cada solicitud. Esa elección reduce el espacio temporal de semillas, pero intentar inferir el instante o probar candidatos en el servicio no es necesario para este laboratorio y podría generar carga. Dos validaciones acotadas muestran la ausencia de consumo del token, no prueban por sí solas la predicción de la semilla.",
+      "mitigation": "Usar SecureRandom para generar el OTP, no derivar la seguridad de la hora del sistema, usar expiración y consumo único, y aplicar controles de intento y solicitud. El hash/HMAC debe compararse de manera segura y no guardar el OTP en claro.",
+      "steps": [
+        "curl -i -sS -X POST http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_2 -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'email=level2_user1@sasanlabs.org'",
+        "curl -i -sS --get http://mailpit:8025/mailpit/api/v1/search --data-urlencode 'query=to:level2_user1@sasanlabs.org'",
+        "MSG_ID=$(curl -sS --get http://mailpit:8025/mailpit/api/v1/search --data-urlencode 'query=to:level2_user1@sasanlabs.org' | jq -r '.messages[0].ID'); curl -sS \"http://mailpit:8025/mailpit/api/v1/message/${MSG_ID}\" | jq -r '.Text' ; copiar el OTP de seis dígitos.",
+        "curl -i -sS -X POST http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_2/validate -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'email=level2_user1@sasanlabs.org' --data-urlencode 'otp=<OTP_DE_MAILPIT>'",
+        "curl -i -sS -X POST http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_2/validate -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'email=level2_user1@sasanlabs.org' --data-urlencode 'otp=<OTP_DE_MAILPIT>'"
+      ],
+      "hints": [
+        "El método y el cuerpo son POST form, no GET; el parámetro otp solo se envía a /validate.",
+        "La prueba de semilla temporal aquí es estática: Random(System.currentTimeMillis()) aparece en OTPService.java; no es necesario lanzar un predictor."
+      ]
+    },
+    {
+      "title": "Nivel 3: replay controlado del mismo OTP dentro de su vencimiento",
+      "route": "http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_3",
+      "method": "POST",
+      "params": {
+        "request": {
+          "email": "level3_user1@sasanlabs.org"
+        },
+        "validate_first": {
+          "email": "level3_user1@sasanlabs.org",
+          "otp": "<OTP_DE_MAILPIT>"
+        },
+        "validate_replay": {
+          "email": "level3_user1@sasanlabs.org",
+          "otp": "<OTP_DE_MAILPIT>"
+        }
+      },
+      "headers": {
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      "body": {
+        "request": "email=level3_user1%40sasanlabs.org",
+        "validate": "email=level3_user1%40sasanlabs.org&otp=<OTP_DE_MAILPIT>"
+      },
+      "content_type": "application/x-www-form-urlencoded",
+      "expected": "La primera validación debería ser isValid=true y la segunda, con exactamente el mismo email y OTP dentro de cinco minutos, también debería ser isValid=true según OTPServiceTest. Si el token no se obtiene o ya expiró, ambas observaciones quedan inconclusas y se debe solicitar un token nuevo; no se debe contar un HTTP 200 como éxito lógico.",
+      "check": {
+        "kind": "json",
+        "path": "isValid",
+        "value": true
+      },
+      "explanation": "Este es el ejercicio representativo de REUSABLE_PASSWORD_RESET_TOKEN. validateOTPLevel3 solo comprueba otpHash y expiresAt; no consulta ni actualiza used. La repetición está acotada a dos POST y no requiere fuerza bruta, acceso a secretos ni automatización masiva.",
+      "mitigation": "Al validar correctamente, marcar el token como usado en una operación atómica y rechazar used=true antes de comparar. Mantener vencimiento corto, límite de intentos y protección contra carreras en una base de datos compartida, no solo en memoria.",
+      "steps": [
+        "curl -i -sS -X POST http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_3 -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'email=level3_user1@sasanlabs.org'",
+        "curl -i -sS --get http://mailpit:8025/mailpit/api/v1/search --data-urlencode 'query=to:level3_user1@sasanlabs.org'",
+        "MSG_ID=$(curl -sS --get http://mailpit:8025/mailpit/api/v1/search --data-urlencode 'query=to:level3_user1@sasanlabs.org' | jq -r '.messages[0].ID'); curl -sS \"http://mailpit:8025/mailpit/api/v1/message/${MSG_ID}\" | jq -r '.Text' ; copiar el OTP de seis dígitos.",
+        "curl -i -sS -X POST http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_3/validate -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'email=level3_user1@sasanlabs.org' --data-urlencode 'otp=<OTP_DE_MAILPIT>'",
+        "curl -i -sS -X POST http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_3/validate -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'email=level3_user1@sasanlabs.org' --data-urlencode 'otp=<OTP_DE_MAILPIT>'"
+      ],
+      "hints": [
+        "No cambies el valor entre la primera y segunda validación; la repetición es la observación.",
+        "El vencimiento se fija con LocalDateTime.now().plusMinutes(5); si la observación se retrasa, repite solo el flujo de solicitud."
+      ]
+    },
+    {
+      "title": "Nivel 4: tres intentos acotados, nueva solicitud y replay del token exitoso",
+      "route": "http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_4",
+      "method": "POST",
+      "params": {
+        "request": {
+          "email": "level4_user1@sasanlabs.org"
+        },
+        "wrong_validate": {
+          "email": "level4_user1@sasanlabs.org",
+          "otp": "<OTP_DISTINTO_DEL_MENSAJE>"
+        },
+        "correct_validate_after_cap": {
+          "email": "level4_user1@sasanlabs.org",
+          "otp": "<OTP_PRIMER_MENSAJE>"
+        },
+        "new_token_validate": {
+          "email": "level4_user1@sasanlabs.org",
+          "otp": "<OTP_SEGUNDO_MENSAJE>"
+        }
+      },
+      "headers": {
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      "body": {
+        "request": "email=level4_user1%40sasanlabs.org",
+        "validate": "email=level4_user1%40sasanlabs.org&otp=<OTP>"
+      },
+      "content_type": "application/x-www-form-urlencoded",
+      "expected": "Tras una solicitud y tres validaciones con un valor confirmado como distinto del OTP, las tres respuestas deberían ser isValid=false y el intento posterior con el OTP correcto del primer mensaje debería seguir siendo isValid=false porque attempts ya llegó a 3. Una nueva solicitud para el mismo usuario debería devolver la respuesta genérica y enviar otro OTP sin un rate limit de solicitudes. Con el segundo OTP, la primera validación debería ser exitosa y, por la ausencia de una lectura de used, el replay inmediato también se espera exitoso mientras no se hayan consumido los tres intentos. Estas son expectativas de código, no resultados ya ejecutados.",
+      "check": {
+        "kind": "contains",
+        "value": "Login successful"
+      },
+      "explanation": "El ejercicio usa solo tres errores, una comprobación posterior y una nueva solicitud; no intenta la fuerza bruta ni una ráfaga. La comparación del OTP correcto tras el tope comprueba el límite por token. La nueva solicitud comprueba que ese contador no es global. El replay posterior descubre un defecto adicional: el servicio establece used=true, pero validateOTPLevel4 nunca lo consulta.",
+      "mitigation": "Rechazar used=true antes de cualquier comparación, hacer el incremento de intentos y el consumo atómicos, y limitar solicitudes nuevas por cuenta y ventana temporal. Mantener expiración y respuesta genérica, y aplicar un límite también a la generación de tokens.",
+      "steps": [
+        "curl -i -sS -X POST http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_4 -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'email=level4_user1@sasanlabs.org'",
+        "MSG_ID=$(curl -sS --get http://mailpit:8025/mailpit/api/v1/search --data-urlencode 'query=to:level4_user1@sasanlabs.org' | jq -r '.messages[0].ID'); curl -sS \"http://mailpit:8025/mailpit/api/v1/message/${MSG_ID}\" | jq -r '.Text' ; guardar como <OTP_PRIMER_MENSAJE>.",
+        "Elegir manualmente <OTP_DISTINTO_DEL_MENSAJE> de seis dígitos y confirmar que no coincide con <OTP_PRIMER_MENSAJE>; no usar valores generados en bucle.",
+        "curl -i -sS -X POST http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_4/validate -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'email=level4_user1@sasanlabs.org' --data-urlencode 'otp=<OTP_DISTINTO_DEL_MENSAJE>'",
+        "curl -i -sS -X POST http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_4/validate -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'email=level4_user1@sasanlabs.org' --data-urlencode 'otp=<OTP_DISTINTO_DEL_MENSAJE>'",
+        "curl -i -sS -X POST http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_4/validate -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'email=level4_user1@sasanlabs.org' --data-urlencode 'otp=<OTP_DISTINTO_DEL_MENSAJE>'",
+        "curl -i -sS -X POST http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_4/validate -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'email=level4_user1@sasanlabs.org' --data-urlencode 'otp=<OTP_PRIMER_MENSAJE>'",
+        "curl -i -sS -X POST http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_4 -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'email=level4_user1@sasanlabs.org'",
+        "MSG_ID=$(curl -sS --get http://mailpit:8025/mailpit/api/v1/search --data-urlencode 'query=to:level4_user1@sasanlabs.org' | jq -r '.messages[0].ID'); curl -sS \"http://mailpit:8025/mailpit/api/v1/message/${MSG_ID}\" | jq -r '.Text' ; guardar como <OTP_SEGUNDO_MENSAJE>.",
+        "curl -i -sS -X POST http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_4/validate -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'email=level4_user1@sasanlabs.org' --data-urlencode 'otp=<OTP_SEGUNDO_MENSAJE>'",
+        "curl -i -sS -X POST http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_4/validate -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'email=level4_user1@sasanlabs.org' --data-urlencode 'otp=<OTP_SEGUNDO_MENSAJE>'"
+      ],
+      "hints": [
+        "El cuarto intento con el primer token debe hacerse después de los tres errores; no lo confundas con una nueva solicitud.",
+        "Para que el control sea válido, <OTP_DISTINTO_DEL_MENSAJE> debe ser distinto del valor de Mailpit; si coincidiera por casualidad, descarta el flujo y solicita uno nuevo."
+      ]
+    },
+    {
+      "title": "Nivel 5: control positivo de uso único y rate limit de solicitudes",
+      "route": "http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_5",
+      "method": "POST",
+      "params": {
+        "one_time_user": {
+          "email": "level5_user1@sasanlabs.org"
+        },
+        "one_time_validate": {
+          "email": "level5_user1@sasanlabs.org",
+          "otp": "<OTP_DE_MAILPIT>"
+        },
+        "rate_limit_user": {
+          "email": "level5_user2@sasanlabs.org",
+          "requests": 4
+        }
+      },
+      "headers": {
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      "body": {
+        "request": "email=level5_user1%40sasanlabs.org",
+        "validate": "email=level5_user1%40sasanlabs.org&otp=<OTP_DE_MAILPIT>"
+      },
+      "content_type": "application/x-www-form-urlencoded",
+      "expected": "En una cuenta con estado limpio, la primera solicitud de level5_user1 debería ser genérica y emitir un OTP; validar ese OTP debería dar isValid=true y repetirlo debería dar isValid=false. Para level5_user2, las primeras tres solicitudes dentro de quince minutos deberían poder responder isValid=true y la cuarta debería responder isValid=false con content=Too many OTP requests, please wait. Si la base ya contiene tokens de una ejecución anterior, el control de rate limit queda inconcluso y debe repetirse con un laboratorio reiniciado, no compensarse con más solicitudes.",
+      "check": {
+        "kind": "json",
+        "path": "isValid",
+        "value": false
+      },
+      "explanation": "Este nivel sirve como contraste positivo de seguridad. La solicitud usa SecureRandom y no guarda el OTP en claro: solo conserva un HMAC con una clave aleatoria en memoria. La validación verifica used, attempts, HMAC y expiración. El replay debe fallar aunque el HTTP siga siendo 200. La cuenta separada level5_user2 evita mezclar, dentro del mismo recorrido, el token usado con la cuenta que prueba el límite de tres solicitudes.",
+      "mitigation": "El código ya incorpora las medidas observables: generación criptográfica, HMAC, vencimiento, uso único, límite de tres intentos, rate limit de tres solicitudes en quince minutos, bloqueo por email:nivel y respuesta genérica. En una implementación distribuida, mover el consumo, los contadores y el bloqueo a una transacción o almacén compartido; considerar gestión de claves y rotación en lugar de una clave exclusivamente en memoria.",
+      "steps": [
+        "curl -i -sS -X POST http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_5 -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'email=level5_user1@sasanlabs.org'",
+        "MSG_ID=$(curl -sS --get http://mailpit:8025/mailpit/api/v1/search --data-urlencode 'query=to:level5_user1@sasanlabs.org' | jq -r '.messages[0].ID'); curl -sS \"http://mailpit:8025/mailpit/api/v1/message/${MSG_ID}\" | jq -r '.Text' ; copiar como <OTP_DE_MAILPIT>.",
+        "curl -i -sS -X POST http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_5/validate -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'email=level5_user1@sasanlabs.org' --data-urlencode 'otp=<OTP_DE_MAILPIT>'",
+        "curl -i -sS -X POST http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_5/validate -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'email=level5_user1@sasanlabs.org' --data-urlencode 'otp=<OTP_DE_MAILPIT>'",
+        "curl -i -sS -X POST http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_5 -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'email=level5_user2@sasanlabs.org'",
+        "curl -i -sS -X POST http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_5 -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'email=level5_user2@sasanlabs.org'",
+        "curl -i -sS -X POST http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_5 -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'email=level5_user2@sasanlabs.org'",
+        "curl -i -sS -X POST http://target:9090/VulnerableApp/OTPVulnerability/LEVEL_5 -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'email=level5_user2@sasanlabs.org'"
+      ],
+      "hints": [
+        "El valor que debe evaluarse es el booleano JSON isValid, no el código HTTP; los errores lógicos también se devuelven con HTTP 200.",
+        "Para verificar el rate limit usa una cuenta de nivel 5 que no haya sido usada recientemente y detente en la cuarta solicitud; no repitas después del rechazo."
+      ]
+    }
+  ],
+  "limitations": [
+    "No se ejecutaron los ejercicios contra target ni Mailpit desde este análisis; todos los expected son inferencias de código y tests del commit indicado. No se promete que el laboratorio esté levantado, que target resuelva o que la API de Mailpit use exactamente /mailpit/api/v1 en toda configuración.",
+    "El estado es persistente: tokens, contador de intentos y ventanas de rate limit pueden quedar de ejecuciones anteriores. Las conclusiones de estado limpio requieren una instancia de laboratorio reiniciada o una cuenta sembrada no utilizada; no se debe borrar datos ni compensar con ráfagas.",
+    "Los pasos evitan deliberadamente la fuerza bruta completa de LEVEL_1, la predicción automatizada de la semilla de LEVEL_2 y cualquier volumen que pueda convertirse en DoS. Unas pocas respuestas de error no prueban por sí solas que un límite sea infinito; la ausencia de límites se atribuye aquí a la revisión de OTPService.java.",
+    "El endpoint de solicitud y el endpoint /validate responden con el bean {content,isValid} y suelen usar HTTP 200 para éxito y fallo lógico. El verificador sugerido debe inspeccionar JSON content/isValid; no debe usar 200 como prueba de autenticación.",
+    "La consulta de Mailpit mediante jq es una comodidad del entorno Kali. Si la instalación no expone /mailpit/api/v1, usar la interfaz autorizada http://mailpit:8025/mailpit para identificar manualmente el último mensaje; no consultar ni extraer información ajena al usuario del ejercicio.",
+    "El HMAC de LEVEL_5 usa una clave aleatoria solo en memoria; un reinicio puede volver inutilizables tokens emitidos antes del reinicio. Eso es una consideración operativa del código, no una demostración de vulnerabilidad del nivel.",
+    "No se debe otorgar puntaje por hacer clic en la interfaz: la UI solo muestra textContent y delega en estas rutas. Un reflejo de texto no probaría ejecución XSS, un HTTP 200 no probaría IDOR, y un resultado visual o un click no sustituye la comprobación de la respuesta JSON y del estado de token.",
+    "Los tests unitarios usan mocks y no cubren una integración HTTP completa. OTPVulnerabilityTest tiene una prueba llamada allLevels_ShouldHandleNullEmail, pero el cuerpo mostrado solo ejercita level1; no debe interpretarse como cobertura exhaustiva de los cinco niveles."
+  ]
+}

@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#121619">
+  <meta name="description" content="VulnerableApp Academy: laboratorio didáctico de seguridad web.">
+  <title>VA / ACADEMY</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div id="app" class="app-shell">
+    <section id="auth-screen" class="auth-screen" aria-labelledby="auth-title">
+      <div class="auth-backdrop" aria-hidden="true"></div>
+      <div class="auth-card panel">
+        <div class="brand-lockup auth-brand">
+          <span class="brand-mark" aria-hidden="true">VA</span>
+          <span><strong>ACADEMY</strong><small>VULNERABLEAPP LAB</small></span>
+        </div>
+        <p class="eyebrow">ACCESO AL LABORATORIO // LOCAL DOCKER</p>
+        <h1 id="auth-title">Entrar al centro de entrenamiento</h1>
+        <p class="muted">Practica con evidencia, no con suposiciones. Crea una cuenta local para guardar tus resultados.</p>
+        <div class="auth-tabs" role="tablist" aria-label="Tipo de acceso">
+          <button class="tab-button is-active" type="button" role="tab" aria-selected="true" aria-controls="login-panel" data-auth-tab="login">Iniciar sesión</button>
+          <button class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="register-panel" data-auth-tab="register">Crear cuenta</button>
+        </div>
+        <form id="login-panel" class="auth-form" data-auth-form="login" role="tabpanel" novalidate>
+          <label for="login-username">Usuario</label>
+          <input id="login-username" name="username" autocomplete="username" required minlength="1" maxlength="80" placeholder="operador" autofocus>
+          <label for="login-password">Contraseña</label>
+          <input id="login-password" name="password" type="password" autocomplete="current-password" required minlength="8" placeholder="mínimo 8 caracteres">
+          <button class="button button-primary button-wide" type="submit">Conectar al laboratorio <span aria-hidden="true">↗</span></button>
+        </form>
+        <form id="register-panel" class="auth-form is-hidden" data-auth-form="register" role="tabpanel" novalidate>
+          <label for="register-username">Nuevo usuario</label>
+          <input id="register-username" name="username" autocomplete="username" required minlength="1" maxlength="80" placeholder="analista">
+          <label for="register-password">Contraseña</label>
+          <input id="register-password" name="password" type="password" autocomplete="new-password" required minlength="8" placeholder="mínimo 8 caracteres">
+          <p class="field-hint">Usa al menos 8 caracteres. El backend valida el resto de reglas.</p>
+          <button class="button button-primary button-wide" type="submit">Registrar y entrar <span aria-hidden="true">↗</span></button>
+        </form>
+        <p id="auth-feedback" class="feedback" role="status" aria-live="polite"></p>
+        <div class="auth-note"><span class="status-dot is-online" aria-hidden="true"></span><span>Conexión esperada: API local. No se cargan recursos externos.</span></div>
+      </div>
+    </section>
+
+    <div id="workspace" class="workspace is-hidden">
+      <header class="topbar">
+        <div class="brand-lockup">
+          <span class="brand-mark" aria-hidden="true">VA</span>
+          <span><strong>ACADEMY</strong><small>VULNERABLEAPP LAB</small></span>
+        </div>
+        <div class="topbar-center" aria-label="Estado del progreso">
+          <span class="eyebrow">SESIÓN DE ENTRENAMIENTO</span>
+          <span id="session-status" class="status-chip"><span class="status-dot" aria-hidden="true"></span> sincronizando</span>
+        </div>
+        <div class="topbar-actions">
+          <div class="score-block" title="Puntos obtenidos y máximo definido por el backend">
+            <span class="score-label">XP</span>
+            <strong id="score-value">—</strong><span id="score-maximum" class="score-max">/ —</span>
+          </div>
+          <div class="progress-block">
+            <span class="score-label">PROGRESO</span>
+            <strong id="progress-value">—%</strong>
+          </div>
+          <button id="refresh-button" class="icon-button" type="button" title="Actualizar progreso" aria-label="Actualizar progreso">↻</button>
+          <button id="logout-button" class="button button-ghost" type="button">Cerrar sesión</button>
+        </div>
+      </header>
+
+      <div class="mobile-toolbar">
+        <button id="chapters-toggle" class="button button-ghost" type="button" aria-expanded="false" aria-controls="chapter-panel">☰ Capítulos</button>
+        <button id="workspace-focus" class="button button-ghost" type="button">⌁ Enfoque</button>
+      </div>
+
+      <main class="layout-grid">
+        <aside id="chapter-panel" class="sidebar panel" aria-label="Capítulos del laboratorio">
+          <div class="panel-heading">
+            <div><span class="eyebrow">MAPA DE OPERACIONES</span><h2>Capítulos</h2></div>
+            <span id="family-count" class="counter">—</span>
+          </div>
+          <p class="sidebar-intro">Elige una familia para leer su guía. El panel no ejecuta ataques.</p>
+          <nav id="family-nav" class="family-nav" aria-label="Familias de vulnerabilidades">
+            <p class="empty-state">Cargando catálogo…</p>
+          </nav>
+          <div class="sidebar-footer">
+            <a class="local-link" href="/VulnerableApp/" target="_blank" rel="noopener">Abrir VulnerableApp <span>↗</span></a>
+            <a class="local-link" href="/mailpit/" target="_blank" rel="noopener">Abrir Mailpit <span>↗</span></a>
+            <a class="local-link" href="/kali/vnc.html?autoconnect=1&amp;resize=remote&amp;path=kali/websockify" target="_blank" rel="noopener">Abrir Kali en pestaña <span>↗</span></a>
+          </div>
+        </aside>
+
+        <section class="content-column" aria-label="Briefing y misión">
+          <section class="briefing panel">
+            <div class="briefing-copy">
+              <span class="eyebrow">BRIEFING // <span id="briefing-index">00</span></span>
+              <h1 id="briefing-title">Selecciona un capítulo para comenzar</h1>
+              <p id="briefing-concept" class="lead">El catálogo del laboratorio aparecerá aquí cuando la sesión esté sincronizada.</p>
+            </div>
+            <div class="briefing-meta">
+              <span class="tag tag-amber">MODO DIDÁCTICO</span>
+              <span class="tag tag-turquoise">EVIDENCIA PRIMERO</span>
+            </div>
+          </section>
+
+          <section class="level-guide panel" aria-labelledby="guide-title">
+            <div class="section-heading">
+              <div><span class="eyebrow">INTELIGENCIA DE CAPÍTULO</span><h2 id="guide-title">Guía y niveles</h2></div>
+              <span id="level-count" class="counter">—</span>
+            </div>
+            <div id="guide-content" class="guide-content">
+              <p class="empty-state">Sin capítulo seleccionado.</p>
+            </div>
+          </section>
+
+          <section class="mission-panel panel" aria-labelledby="mission-title">
+            <div class="section-heading mission-heading">
+              <div><span class="eyebrow">OBJETIVO DE CAMPO</span><h2 id="mission-title">Selecciona una misión</h2></div>
+              <span id="mission-state" class="state-badge">SIN SELECCIÓN</span>
+            </div>
+            <div id="mission-content" class="mission-empty">
+              <p>Selecciona una misión de la lista de capítulos. Aquí aparecerán el criterio verificable, el comando de referencia y el editor de solicitud.</p>
+            </div>
+          </section>
+
+          <section id="evidence-panel" class="evidence-panel panel" aria-labelledby="evidence-title">
+            <div class="section-heading">
+              <div><span class="eyebrow">REGISTRO DEL LABORATORIO</span><h2 id="evidence-title">Evidencia devuelta</h2></div>
+              <span id="evidence-state" class="state-badge">SIN EVIDENCIA TODAVÍA</span>
+            </div>
+            <div class="evidence-grid">
+              <div>
+                <p class="criterion-label">Criterio del verificador</p>
+                <p id="evidence-criterion" class="criterion-copy">Selecciona una misión para ver qué debe demostrar tu solicitud.</p>
+              </div>
+              <div class="evidence-summary">
+                <span>HTTP</span><strong id="evidence-status">—</strong>
+              </div>
+            </div>
+            <div class="evidence-command-wrap">
+              <div class="code-caption"><span>Ejemplo didáctico del catálogo; no es log de ejecución</span><button id="copy-evidence-command" class="text-button" type="button" disabled>Copiar</button></div>
+              <pre id="evidence-command" class="code-block">Sin comando de referencia todavía</pre>
+            </div>
+            <div class="evidence-runner-wrap">
+              <p class="criterion-label">EVIDENCIA DEL RUNNER</p>
+              <pre id="evidence-runner" class="response-block">Sin evidencia del runner todavía</pre>
+            </div>
+            <pre id="evidence-body" class="response-block" aria-live="polite">Sin evidencia todavía</pre>
+            <details id="evidence-details" class="disclosure is-hidden">
+              <summary>Ver cabeceras y detalle de evaluación</summary>
+              <pre id="evidence-meta" class="response-block"></pre>
+            </details>
+          </section>
+        </section>
+
+        <aside class="right-column" aria-label="Herramientas de apoyo">
+          <section class="tutor-panel panel" aria-labelledby="tutor-title">
+            <div class="section-heading">
+              <div><span class="eyebrow">TUTOR / QWEN</span><h2 id="tutor-title">Sala de análisis</h2></div>
+              <span class="tag tag-turquoise">SIN AUTO-ATAQUE</span>
+            </div>
+            <p class="tutor-disclaimer">El tutor explica y propone. No marca misiones ni ejecuta herramientas sin tu aprobación explícita.</p>
+            <div id="tutor-log" class="tutor-log" aria-live="polite">
+              <div class="tutor-message tutor-system"><span class="message-label">SISTEMA</span><p>Selecciona una misión y formula una pregunta concreta para recibir orientación.</p></div>
+            </div>
+            <form id="tutor-form" class="tutor-form">
+              <label class="sr-only" for="tutor-message">Pregunta para el tutor</label>
+              <textarea id="tutor-message" rows="3" maxlength="2000" placeholder="¿Qué evidencia debería observar en esta misión?"></textarea>
+              <div class="form-actions"><span id="tutor-limit" class="field-hint">allow_tools: false</span><button class="button button-secondary" type="submit">Consultar tutor</button></div>
+            </form>
+            <div id="tool-approval" class="tool-approval is-hidden"></div>
+          </section>
+
+          <section class="kali-panel panel" aria-labelledby="kali-title">
+            <div class="section-heading"><div><span class="eyebrow">ENTORNO OPCIONAL</span><h2 id="kali-title">Escritorio Kali</h2></div><span class="tag tag-muted">LAZY</span></div>
+            <p class="muted">Abre el escritorio solo cuando lo necesites. El iframe no se carga por defecto.</p>
+            <label class="switch-row"><input id="kali-toggle" type="checkbox"><span class="switch" aria-hidden="true"></span><span>Mostrar escritorio embebido</span></label>
+            <div id="kali-frame-wrap" class="kali-frame-wrap is-hidden"><iframe id="kali-frame" title="Escritorio Kali local" loading="lazy" src="about:blank"></iframe><a class="frame-link" href="/kali/vnc.html?autoconnect=1&amp;resize=remote&amp;path=kali/websockify" target="_blank" rel="noopener">Abrir en pestaña nueva ↗</a></div>
+          </section>
+
+          <section class="history-panel panel" aria-labelledby="history-title">
+            <div class="section-heading"><div><span class="eyebrow">TELEMETRÍA PERSONAL</span><h2 id="history-title">Historial</h2></div><button id="export-button" class="text-button" type="button">Descargar JSON</button></div>
+            <div id="history-list" class="history-list"><p class="empty-state">Aún no hay eventos locales.</p></div>
+          </section>
+        </aside>
+      </main>
+      <footer class="app-footer"><span>VA / ACADEMY // laboratorio local</span><span id="footer-user">sin usuario</span><span>Teclado: Tab navega · Esc cierra paneles</span></footer>
+    </div>
+  </div>
+  <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>

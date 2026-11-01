@@ -1,0 +1,575 @@
+{
+  "id": "jwt",
+  "title": "Familia JWT: validadores vulnerables, transporte de tokens y controles seguros",
+  "concept": "La clase JWTVulnerability expone sus métodos mediante @VulnerableAppRequestMapping(value = LEVEL_n); la anotación es una especialización de Spring @RequestMapping y por defecto usa GET. El controlador central publica cada nombre de vulnerabilidad y nivel bajo /VulnerableApp/{nombre}/{LEVEL}; para esta familia el nombre es JWTVulnerability, por lo que las rutas anotadas son /VulnerableApp/JWTVulnerability/LEVEL_1 a LEVEL_10 y LEVEL_13 a LEVEL_19. Los niveles 1 a 16 muestran implementaciones deliberadamente vulnerables y los niveles 17 a 19 son variantes marcadas Variant.SECURE. El código separa el transporte del token (query JWT, cookie JWT o cabecera Authorization) de la verificación: los validadores vulnerables recalculan firmas con reglas inseguras o confían en datos del encabezado, mientras que los seguros fijan algoritmo y clave, rechazan tokens malformados y no reflejan el token recibido. Las claves publicadas en SymmetricAlgoKeys.json son HS256/password para LOW y HS256/12309jansdu912jnas^90nqwq!@!#oqihr82343n para HIGH; los niveles seguros no usan esas claves publicadas, sino claves aleatorias generadas al crear la instancia. El recurso JWTVulnerabilityPayload.properties solo aporta el payload documental del ataque none; los demás tokens de las tarjetas aparecen como constantes en los tests.",
+  "source_files": [
+    "src/main/java/org/sasanlabs/service/vulnerability/jwt/IJWTTokenGenerator.java",
+    "src/main/java/org/sasanlabs/service/vulnerability/jwt/IJWTValidator.java",
+    "src/main/java/org/sasanlabs/service/vulnerability/jwt/JWTVulnerability.java",
+    "src/main/java/org/sasanlabs/service/vulnerability/jwt/bean/JWTUtils.java",
+    "src/main/java/org/sasanlabs/service/vulnerability/jwt/impl/JWTValidator.java",
+    "src/main/java/org/sasanlabs/service/vulnerability/jwt/impl/LibBasedJWTGenerator.java",
+    "src/main/java/org/sasanlabs/service/vulnerability/jwt/keys/JWTAlgorithmKMS.java",
+    "src/main/java/org/sasanlabs/service/vulnerability/jwt/keys/KeyStrength.java",
+    "src/main/java/org/sasanlabs/service/vulnerability/jwt/keys/SymmetricAlgorithmKey.java",
+    "src/main/resources/attackvectors/JWTVulnerabilityPayload.properties",
+    "src/main/resources/scripts/JWT/SymmetricAlgoKeys.json",
+    "src/main/resources/static/templates/JWTVulnerability/LEVEL_1/JWT_Level1.html",
+    "src/main/resources/static/templates/JWTVulnerability/LEVEL_1/JWT_Level1.js",
+    "src/main/resources/static/templates/JWTVulnerability/LEVEL_2/JWT_Level2.html",
+    "src/main/resources/static/templates/JWTVulnerability/LEVEL_2/JWT_Level2.js",
+    "src/main/resources/static/templates/JWTVulnerability/LEVEL_7/JWT_Level.html",
+    "src/main/resources/static/templates/JWTVulnerability/LEVEL_7/JWT_Level.js",
+    "src/main/resources/static/templates/JWTVulnerability/LEVEL_13/HeaderInjection_Level13.html",
+    "src/main/resources/static/templates/JWTVulnerability/LEVEL_13/HeaderInjection_Level13.js",
+    "src/main/resources/templates/JWTVulnerability/keys/private_key.pem",
+    "src/main/resources/templates/JWTVulnerability/keys/public_crt.pem",
+    "src/test/java/org/sasanlabs/service/vulnerability/jwt/JWTVulnerabilityTest.java",
+    "src/test/java/org/sasanlabs/service/vulnerability/jwt/SecureECJWTTest.java",
+    "src/test/java/org/sasanlabs/service/vulnerability/jwt/bean/JWTUtilsTest.java",
+    "src/test/java/org/sasanlabs/service/vulnerability/jwt/impl/JWTValidatorTest.java",
+    "src/main/java/org/sasanlabs/internal/utility/annotations/VulnerableAppRequestMapping.java",
+    "src/main/java/org/sasanlabs/internal/utility/annotations/RequestParameterLocation.java",
+    "src/main/java/org/sasanlabs/controller/VulnerableAppRestController.java"
+  ],
+  "levels": [
+    {
+      "route": "/VulnerableApp/JWTVulnerability/LEVEL_1",
+      "method": "GET",
+      "parameters": {
+        "query": ["JWT opcional; si falta, se genera un token; si existe, se valida"],
+        "headers": []
+      },
+      "behavior": "Usa customHMACValidator con HS256 y la clave HIGH. El token válido produce 200 y no se devuelve en content; un token inválido produce 401 y se refleja en content. La UI JavaScript envía JWT en la URL.",
+      "vulnerable": true,
+      "notes": "CLIENT_SIDE_VULNERABLE_JWT / JWT_URL_EXPOSING_SECURE_INFORMATION: el token viaja como parámetro de consulta y el endpoint entrega un token recién generado en el cuerpo. El validador de firma de este nivel sí fija HS256, por lo que la debilidad documentada es la exposición por URL, no un bypass de firma."
+    },
+    {
+      "route": "/VulnerableApp/JWTVulnerability/LEVEL_2",
+      "method": "GET",
+      "parameters": {
+        "query": ["fetch=true para generar un token; sin fetch se lee Cookie: JWT=<token>"],
+        "headers": ["Cookie: JWT=<token>"]
+      },
+      "behavior": "Genera o valida un JWT HS256 HIGH en cookie y emite Set-Cookie. El cookie generado no añade HttpOnly ni Secure.",
+      "vulnerable": true,
+      "notes": "CLIENT_SIDE_VULNERABLE_JWT / COOKIE_CONTAINING_JWT_TOKEN_SECURITY_ATTRIBUTES_MISSING. Para una petición de validación el código espera una cabecera Cookie; usar fetch=true evita el camino que itera una lista de cookies ausente."
+    },
+    {
+      "route": "/VulnerableApp/JWTVulnerability/LEVEL_3",
+      "method": "GET",
+      "parameters": {
+        "query": ["fetch=true para generar un token; sin fetch se lee Cookie: JWT=<token>"],
+        "headers": ["Cookie: JWT=<token>"]
+      },
+      "behavior": "Igual que LEVEL_2, pero añade el atributo textual httponly al Set-Cookie; no añade Secure.",
+      "vulnerable": true,
+      "notes": "CLIENT_SIDE_VULNERABLE_JWT / COOKIE_WITH_HTTPONLY_WITHOUT_SECURE_FLAG_BASED_JWT_VULNERABILITY. La comparación de cabeceras con LEVEL_2 es el control natural: aparece HttpOnly, pero sigue faltando Secure."
+    },
+    {
+      "route": "/VulnerableApp/JWTVulnerability/LEVEL_4",
+      "method": "GET",
+      "parameters": {
+        "query": ["fetch=true para generar un token con clave LOW; sin fetch se lee Cookie: JWT=<token>"],
+        "headers": ["Cookie: JWT=<token>"]
+      },
+      "behavior": "Usa customHMACValidator con HS256 y la clave LOW configurada como password; añade httponly, pero no Secure.",
+      "vulnerable": true,
+      "notes": "Combina CLIENT_SIDE_VULNERABLE_JWT por el cookie sin Secure con INSECURE_CONFIGURATION_JWT / COOKIE_BASED_LOW_KEY_STRENGTH_JWT_VULNERABILITY. El test firma el token de demostración con la clave LOW."
+    },
+    {
+      "route": "/VulnerableApp/JWTVulnerability/LEVEL_5",
+      "method": "GET",
+      "parameters": {
+        "query": ["fetch=true para generar; sin fetch se lee Cookie: JWT=<token>"],
+        "headers": ["Cookie: JWT=<token>" ]
+      },
+      "behavior": "Usa customHMACNullByteVulnerableValidator. Si la firma recibida contiene %00, corta el texto de firma antes de recalcular HS256; añade httponly, pero no Secure.",
+      "vulnerable": true,
+      "notes": "La constante NULL_BYTE_TOKEN de los tests termina la firma válida con %00extra y es aceptada por este nivel. El mismo valor enviado a LEVEL_17 debe ser rechazado. No se usa ningún comando del sistema: %00 solo es parte del texto del token."
+    },
+    {
+      "route": "/VulnerableApp/JWTVulnerability/LEVEL_6",
+      "method": "GET",
+      "parameters": {
+        "query": ["fetch=true para generar; sin fetch se lee Cookie: JWT=<token>"],
+        "headers": ["Cookie: JWT=<token>" ]
+      },
+      "behavior": "Usa customHMACNoneAlgorithmVulnerableValidator: si alg es none devuelve válido sin verificar firma; en otros casos cae al validador HMAC. Añade httponly, pero no Secure.",
+      "vulnerable": true,
+      "notes": "SERVER_SIDE_VULNERABLE_JWT / COOKIE_BASED_NONE_ALGORITHM_JWT_VULNERABILITY. El payload documental de attackvectors/JWTVulnerabilityPayload.properties usa un token sin firma; LEVEL_17 lo rechaza."
+    },
+    {
+      "route": "/VulnerableApp/JWTVulnerability/LEVEL_7",
+      "method": "GET",
+      "parameters": {
+        "query": ["fetch=true para generar; sin fetch se lee una o más cabeceras Authorization"],
+        "headers": ["Authorization: <token>" ]
+      },
+      "behavior": "Aunque la anotación describe cookie, el método consume Authorization. Usa el validador none vulnerable y devuelve/eco la cabecera Authorization recibida; fetch genera un token HS256 HIGH y lo devuelve en esa cabecera.",
+      "vulnerable": true,
+      "notes": "Es un caso especial para scanners que normalmente no tocan Authorization. El código no elimina prefijo Bearer en este nivel y no exige una sola cabecera."
+    },
+    {
+      "route": "/VulnerableApp/JWTVulnerability/LEVEL_8",
+      "method": "GET",
+      "parameters": {
+        "query": ["fetch=true para generar; sin fetch se lee Cookie: JWT=<token>"],
+        "headers": ["Cookie: JWT=<token>" ]
+      },
+      "behavior": "Obtiene la clave pública RSA del KMS y llama a confusionAlgorithmVulnerableValidator, que lee alg del token y puede tratar esa clave pública como secreto HMAC. Añade httponly, pero no Secure.",
+      "vulnerable": true,
+      "notes": "SERVER_SIDE_VULNERABLE_JWT / COOKIE_BASED_KEY_CONFUSION_JWT_VULNERABILITY. KEY_CONFUSION_TOKEN de los tests es un HS256 firmado con la representación de la clave pública y se acepta aquí; no se ejecuta ningún proceso externo."
+    },
+    {
+      "route": "/VulnerableApp/JWTVulnerability/LEVEL_9",
+      "method": "GET",
+      "parameters": {
+        "query": ["fetch=true para generar; sin fetch se lee Cookie: JWT=<token>"],
+        "headers": ["Cookie: JWT=<token>" ]
+      },
+      "behavior": "Usa jwkKeyHeaderPublicKeyTrustingVulnerableValidator: si alg es asimétrico, construye el verificador desde el objeto jwk que viene en el encabezado JWT. Añade httponly, pero no Secure.",
+      "vulnerable": true,
+      "notes": "SERVER_SIDE_VULNERABLE_JWT / COOKIE_BASED_FOR_JWK_HEADER_BASED_JWT_VULNERABILITY, relacionado con CVE-2018-0114. El test crea un token con un par RSA atacante en memoria; curl por sí solo puede repetir el token generado por fetch, pero no firma un JWK atacante sin una herramienta criptográfica adicional."
+    },
+    {
+      "route": "/VulnerableApp/JWTVulnerability/LEVEL_10",
+      "method": "GET",
+      "parameters": {
+        "query": ["fetch=true para generar; sin fetch se lee Cookie: JWT=<token>"],
+        "headers": ["Cookie: JWT=<token>" ]
+      },
+      "behavior": "Usa customHMACEmptyTokenVulnerableValidator, que considera válido un token cuya separación por puntos no produce partes; en la práctica los tests usan .. y el método acepta ese caso. Añade httponly, pero no Secure.",
+      "vulnerable": true,
+      "notes": "SERVER_SIDE_VULNERABLE_JWT / COOKIE_BASED_EMPTY_TOKEN_JWT_VULNERABILITY. El test comprueba que EMPTY_TOKEN=.. es aceptado por este nivel y rechazado por los seguros."
+    },
+    {
+      "route": "/VulnerableApp/JWTVulnerability/LEVEL_11",
+      "method": "GET",
+      "parameters": {
+        "query": ["Ninguno aplicable: no hay mapping activo"],
+        "headers": []
+      },
+      "behavior": "El método getVulnerablePayloadLevelUnsecure11CookieBased existe en la clase y usa PEM estáticos para genericJWTTokenValidator RS256, pero la anotación @VulnerableAppRequestMapping está comentada; el controlador de endpoints no lo registra.",
+      "vulnerable": false,
+      "notes": "No es una ruta reproducible en el despliegue anotado. Se documenta para no confundir código legado con un endpoint activo; no debe evaluarse con curl como si existiera."
+    },
+    {
+      "route": "/VulnerableApp/JWTVulnerability/LEVEL_12",
+      "method": "GET",
+      "parameters": {
+        "query": ["Ninguno: no existe método/anotación LEVEL_12 en esta familia"],
+        "headers": []
+      },
+      "behavior": "No hay implementación ni @VulnerableAppRequestMapping para LEVEL_12 en JWTVulnerability.java.",
+      "vulnerable": false,
+      "notes": "La ausencia es intencionalmente informativa para la enumeración: un 404 en esta ruta sería coherente con el código revisado y no es evidencia de una vulnerabilidad JWT."
+    },
+    {
+      "route": "/VulnerableApp/JWTVulnerability/LEVEL_13",
+      "method": "GET",
+      "parameters": {
+        "query": ["fetch=true para generar; sin fetch se lee Cookie: JWT=<token>"],
+        "headers": ["Cookie: JWT=<token>" ]
+      },
+      "behavior": "Está anotado como HEADER_INJECTION. Lee cookie JWT, valida con el verificador que confía en jwk y construye Set-Cookie concatenando el valor recibido con ; httponly. fetch genera un token RSA con JWK en su cabecera.",
+      "vulnerable": true,
+      "notes": "No se envía CRLF ni ningún payload de inyección en el ejercicio: la verificación segura se limita a observar el flujo con un token legítimo de fetch. El riesgo de construir una cabecera con entrada recibida se determina por revisión de código; el comportamiento efectivo puede depender del contenedor HTTP."
+    },
+    {
+      "route": "/VulnerableApp/JWTVulnerability/LEVEL_14",
+      "method": "GET",
+      "parameters": {
+        "query": ["fetch=true para generar; sin fetch se lee Cookie: JWT=<token>"],
+        "headers": ["Cookie: JWT=<token>" ]
+      },
+      "behavior": "Usa HMAC HS256 con la clave LOW password y el validador normal; añade httponly, pero no Secure.",
+      "vulnerable": true,
+      "notes": "INSECURE_CONFIGURATION_JWT / COOKIE_BASED_VERY_WEAK_KEY_STRENGTH_JWT_VULNERABILITY. Es un duplicado deliberado del uso de clave débil de LEVEL_4 con tarjeta propia; WEAK_KEY_TOKEN de los tests es el control positivo seguro para laboratorio."
+    },
+    {
+      "route": "/VulnerableApp/JWTVulnerability/LEVEL_15",
+      "method": "GET",
+      "parameters": {
+        "query": ["fetch=true para generar; sin fetch se lee Cookie: JWT=<token>"],
+        "headers": ["Cookie: JWT=<token>" ]
+      },
+      "behavior": "No verifica la firma. Para un cookie que contiene tres partes separadas por punto devuelve isValid=true, sin llamar a un validador criptográfico; fetch solo genera un token de referencia.",
+      "vulnerable": true,
+      "notes": "SERVER_SIDE_VULNERABLE_JWT / COOKIE_BASED_MISSING_SIGNATURE_VERIFICATION_JWT_VULNERABILITY. UNVERIFIED_SIGNATURE_TOKEN con firma textual garbage-not-a-real-signature es aceptado aquí y rechazado por LEVEL_17."
+    },
+    {
+      "route": "/VulnerableApp/JWTVulnerability/LEVEL_16",
+      "method": "GET",
+      "parameters": {
+        "query": ["fetch=true para generar; sin fetch se lee Cookie: JWT=<token>"],
+        "headers": ["Cookie: JWT=<token>" ]
+      },
+      "behavior": "Ignora el alg declarado al verificar y siempre recalcula HMAC con HS256 y la clave HIGH. El test HS384_HEADER_TOKEN tiene cabecera alg HS384 pero firma compatible con el cálculo HS256 que usa el código.",
+      "vulnerable": true,
+      "notes": "INSECURE_CONFIGURATION_JWT / COOKIE_BASED_ALGORITHM_DOWNGRADE_JWT_VULNERABILITY. LEVEL_17 fija HS256 y rechaza el encabezado HS384, por lo que sirve de control negativo."
+    },
+    {
+      "route": "/VulnerableApp/JWTVulnerability/LEVEL_17",
+      "method": "GET",
+      "parameters": {
+        "query": ["fetch=true para recibir un token de la instancia; sin fetch se valida una sola Authorization"],
+        "headers": ["Authorization: <token> o Bearer <token>" ]
+      },
+      "behavior": "Variante segura. Genera un HMAC key aleatorio de 32 bytes por instancia, fija HS256, usa SignedJWT/MACVerifier y acepta como máximo una cabecera Authorization, con prefijo Bearer opcional sin distinguir mayúsculas. En fallo devuelve 401 y content null sin reflejar el token.",
+      "vulnerable": false,
+      "notes": "El marcado Variant.SECURE y los tests prueban tokens bound a la instancia, rechazo de none, clave débil, byte nulo, token vacío, firma no verificada, HS384, cabecera repetida y tokens firmados con la clave publicada."
+    },
+    {
+      "route": "/VulnerableApp/JWTVulnerability/LEVEL_18",
+      "method": "GET",
+      "parameters": {
+        "query": ["fetch=true para recibir un token RSA de la instancia; sin fetch se valida una sola Authorization"],
+        "headers": ["Authorization: <token> o Bearer <token>" ]
+      },
+      "behavior": "Variante segura. Genera un par RSA de 2048 bits aleatorio por instancia, fija RS256 y verifica con su propia clave pública; ignora claves jwk del token y no usa la clave PKCS12 del KMS. No refleja Authorization.",
+      "vulnerable": false,
+      "notes": "Los tests prueban rechazo de confusión HS/RSA, JWK de atacante, otra clave RSA, none, tokens malformados, algoritmos alternativos y la clave RSA publicada por KMS."
+    },
+    {
+      "route": "/VulnerableApp/JWTVulnerability/LEVEL_19",
+      "method": "GET",
+      "parameters": {
+        "query": ["fetch=true para recibir un token EC de la instancia; sin fetch se valida una sola Authorization"],
+        "headers": ["Authorization: <token> o Bearer <token>" ]
+      },
+      "behavior": "Variante segura. Genera un par EC P-256 aleatorio por instancia, fija ES256 y verifica con ECDSAVerifier; rechaza JWK de atacante, ES384, tokens de otros niveles, malformados y cabeceras ausentes o repetidas.",
+      "vulnerable": false,
+      "notes": "SecureECJWTTest confirma que solo la cabecera Authorization es aceptada; un parámetro query jwt no participa. La clave cambia al crear otra instancia."
+    }
+  ],
+  "exercises": [
+    {
+      "title": "LEVEL_1: exposición del JWT en la URL frente a validación normal",
+      "route": "/VulnerableApp/JWTVulnerability/LEVEL_1",
+      "method": "GET",
+      "params": {"JWT": "<TOKEN_HS256_HIGH_OBTENIDO_DEL_PRIMERA_RESPUESTA>"},
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "La primera petición sin JWT genera 200 y entrega un token en content. Reenviarlo como query JWT produce 200/isValid=true; añadir un carácter al token debe producir 401/isValid=false y el código fuente prevé que lo refleje en content.",
+      "check": {"kind": "json", "path": "isValid", "value": true},
+      "explanation": "La plantilla LEVEL_1.js concatena el valor en la URL y el método acepta @RequestParam Map. La firma se valida con la clave HIGH, pero el transporte expone el token a URL, historial, proxies y logs.",
+      "mitigation": "No poner credenciales o JWT en query strings; usar una cabecera Authorization o cookie HttpOnly/Secure/SameSite con política de expiración, y no reflejar tokens inválidos en la respuesta.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_1",
+        "Copiar el campo content del JSON anterior y sustituirlo literalmente en TOKEN_HS256_HIGH.",
+        "curl -i --get http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_1 --data-urlencode 'JWT=<TOKEN_HS256_HIGH>'",
+        "curl -i --get http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_1 --data-urlencode 'JWT=<TOKEN_HS256_HIGH_MODIFICADO>'"
+      ],
+      "hints": ["El token de la primera respuesta es una credencial de laboratorio, no lo compartas fuera del entorno.", "Un 200 solo demuestra el resultado que expresa este endpoint; no demuestra una sesión real ni autorización de negocio."]
+    },
+    {
+      "title": "LEVEL_2: cookie JWT sin atributos de seguridad",
+      "route": "/VulnerableApp/JWTVulnerability/LEVEL_2",
+      "method": "GET",
+      "params": {"fetch": "true"},
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "200 con content y una cabecera Set-Cookie que contiene JWT=; la rama fetch del código no añade HttpOnly ni Secure.",
+      "check": {"kind": "manual", "value": "Inspeccionar Set-Cookie: debe contener JWT= y, según el código, no debe contener HttpOnly ni Secure"},
+      "explanation": "El token se mantiene en una cookie, pero el método construye Set-Cookie con solo JWT=<token>. El ejercicio no necesita ejecutar JavaScript ni extraer cookies.",
+      "mitigation": "Emitir Secure; HttpOnly; SameSite=Lax/Strict según el caso, limitar Path/Domain y aplicar expiración y rotación.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_2 --data-urlencode 'fetch=true'",
+        "Guardar el valor JWT recibido en Set-Cookie solo para la siguiente petición de laboratorio.",
+        "curl -i http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_2 -H 'Cookie: JWT=<TOKEN_DEL_SET_COOKIE>'"
+      ],
+      "hints": ["El segundo comando es una comprobación funcional de la cookie; el primer encabezado es la evidencia de configuración.", "No puntuar por hacer click en la UI: revisar la cabecera HTTP."]
+    },
+    {
+      "title": "LEVEL_3: HttpOnly presente pero Secure ausente",
+      "route": "/VulnerableApp/JWTVulnerability/LEVEL_3",
+      "method": "GET",
+      "params": {"fetch": "true"},
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "200 con Set-Cookie JWT=<token>; httponly y sin Secure. Es el control comparativo de LEVEL_2.",
+      "check": {"kind": "header", "header": "Set-Cookie", "value": "httponly"},
+      "explanation": "El código añade la cadena httponly tanto en fetch como al reemitir una cookie, pero nunca añade Secure.",
+      "mitigation": "Mantener HttpOnly y añadir Secure en despliegues HTTPS; configurar SameSite y evitar aceptar cookies de transporte inseguro.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_3 --data-urlencode 'fetch=true'",
+        "curl -i --get http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_2 --data-urlencode 'fetch=true'",
+        "Comparar ambas líneas Set-Cookie: LEVEL_3 debe contener httponly; ninguna de las dos ramas fuente añade Secure."
+      ],
+      "hints": ["header comprueba presencia, no ausencia; la ausencia de Secure se revisa manualmente en la línea completa.", "No interpretar que HttpOnly evita CSRF o que la presencia de una cookie prueba autenticación de negocio."]
+    },
+    {
+      "title": "LEVEL_4: clave HMAC LOW reproducible en laboratorio",
+      "route": "/VulnerableApp/JWTVulnerability/LEVEL_4",
+      "method": "GET",
+      "params": {},
+      "headers": {"Cookie": "JWT=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhdHRhY2tlciIsImFkbWluIjp0cnVlfQ.-d0dKlq4zHY09jm50snO-JOwUuaBj8IxyGix5xFXa8s"},
+      "body": null,
+      "content_type": null,
+      "expected": "El token de tarjeta firmado con la clave LOW password debe seguir el camino válido (200/isValid=true); el mismo valor en LEVEL_17 debe ser 401, porque la clave segura es aleatoria por instancia.",
+      "check": {"kind": "json", "path": "isValid", "value": true},
+      "explanation": "SymmetricAlgoKeys.json contiene literalmente la clave LOW password y el nivel la usa para verificar HS256. El valor es un token de entrenamiento estático, no una instrucción de cracking.",
+      "mitigation": "Usar secretos aleatorios de alta entropía gestionados fuera del código, rotarlos y no compartir claves entre validadores vulnerables y seguros.",
+      "steps": [
+        "curl -i http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_4 -H 'Cookie: JWT=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhdHRhY2tlciIsImFkbWluIjp0cnVlfQ.-d0dKlq4zHY09jm50snO-JOwUuaBj8IxyGix5xFXa8s'",
+        "curl -i http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_17 -H 'Authorization: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhdHRhY2tlciIsImFkbWluIjp0cnVlfQ.-d0dKlq4zHY09jm50snO-JOwUuaBj8IxyGix5xFXa8s'"
+      ],
+      "hints": ["El primer token es la constante WEAK_KEY_TOKEN de los tests.", "El segundo comando es un control negativo entre niveles, no una prueba de que exista autorización de negocio."]
+    },
+    {
+      "title": "LEVEL_5: byte nulo codificado en la firma",
+      "route": "/VulnerableApp/JWTVulnerability/LEVEL_5",
+      "method": "GET",
+      "params": {},
+      "headers": {"Cookie": "JWT=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.MZiW2KkIRI6GhKsu16Me7-3IpS4nBw1W47CW67QAqS0%00extra"},
+      "body": null,
+      "content_type": null,
+      "expected": "El token NULL_BYTE_TOKEN de los tests debe ser aceptado por LEVEL_5 (200/isValid=true). El mismo texto en Authorization de LEVEL_17 debe ser rechazado.",
+      "check": {"kind": "json", "path": "isValid", "value": true},
+      "explanation": "El validador vulnerable busca %00 mediante URLEncoder y corta la parte posterior antes de recalcular la firma. curl solo transporta el marcador textual %00; no se ejecuta ni se escribe nada.",
+      "mitigation": "Parsear JWT con una biblioteca que rechace entradas no canónicas, verificar la firma sobre el token exacto recibido y comparar la firma de forma constante; no emular terminación de cadenas C.",
+      "steps": [
+        "curl -i http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_5 -H 'Cookie: JWT=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.MZiW2KkIRI6GhKsu16Me7-3IpS4nBw1W47CW67QAqS0%00extra'",
+        "curl -i http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_17 -H 'Authorization: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.MZiW2KkIRI6GhKsu16Me7-3IpS4nBw1W47CW67QAqS0%00extra'"
+      ],
+      "hints": ["No cambies %00 por un byte real en la terminal: la implementación busca la representación URL-encoded %00.", "El control positivo solo demuestra la diferencia entre dos validadores del laboratorio."]
+    },
+    {
+      "title": "LEVEL_6: algoritmo none sin firma",
+      "route": "/VulnerableApp/JWTVulnerability/LEVEL_6",
+      "method": "GET",
+      "params": {},
+      "headers": {"Cookie": "JWT=eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJhdHRhY2tlciIsImFkbWluIjp0cnVlfQ."},
+      "body": null,
+      "content_type": null,
+      "expected": "NONE_ALGORITHM_TOKEN debe producir 200/isValid=true en LEVEL_6, mientras el mismo token en LEVEL_17 debe producir 401/isValid=false.",
+      "check": {"kind": "json", "path": "isValid", "value": true},
+      "explanation": "customHMACNoneAlgorithmVulnerableValidator devuelve true cuando alg es none antes de comprobar la firma. El payload se limita a claims de prueba y no accede a ningún recurso.",
+      "mitigation": "Permitir únicamente algoritmos configurados por servidor, exigir firma no vacía y comprobar algoritmo, clave y firma antes de aceptar claims.",
+      "steps": [
+        "curl -i http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_6 -H 'Cookie: JWT=eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJhdHRhY2tlciIsImFkbWluIjp0cnVlfQ.'",
+        "curl -i http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_17 -H 'Authorization: eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJhdHRhY2tlciIsImFkbWluIjp0cnVlfQ.'"
+      ],
+      "hints": ["El punto final final es intencional: el JWT none no tiene firma.", "El segundo 401 es el control positivo de la defensa, no una promesa sobre otros componentes de la aplicación."]
+    },
+    {
+      "title": "LEVEL_7: token none en Authorization y eco de cabecera",
+      "route": "/VulnerableApp/JWTVulnerability/LEVEL_7",
+      "method": "GET",
+      "params": {},
+      "headers": {"Authorization": "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJhdHRhY2tlciIsImFkbWluIjp0cnVlfQ."},
+      "body": null,
+      "content_type": null,
+      "expected": "El nivel especial para scanners consume Authorization, acepta el token none y devuelve una cabecera Authorization con el valor recibido; LEVEL_17 debe rechazarlo y no reflejarlo.",
+      "check": {"kind": "header", "header": "Authorization", "value": "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJhdHRhY2tlciIsImFkbWluIjp0cnVlfQ."},
+      "explanation": "La anotación conserva una descripción de cookie, pero el código obtiene requestEntity.getHeaders().get(HttpHeaders.AUTHORIZATION). No añade ni quita Bearer en esta rama.",
+      "mitigation": "No devolver credenciales en cabeceras de respuesta, validar Authorization con algoritmo fijo y rechazar none; aplicar una política de una sola cabecera.",
+      "steps": [
+        "curl -i http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_7 -H 'Authorization: eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJhdHRhY2tlciIsImFkbWluIjp0cnVlfQ.'",
+        "curl -i http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_17 -H 'Authorization: eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJhdHRhY2tlciIsImFkbWluIjp0cnVlfQ.'"
+      ],
+      "hints": ["Usar -i permite observar la respuesta y la posible cabecera Authorization.", "La presencia de una cabecera reflejada es evidencia de eco, no prueba de ejecución XSS ni de una sesión válida fuera de este endpoint."]
+    },
+    {
+      "title": "LEVEL_8: confusión de algoritmo con clave pública",
+      "route": "/VulnerableApp/JWTVulnerability/LEVEL_8",
+      "method": "GET",
+      "params": {},
+      "headers": {"Cookie": "JWT=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhdHRhY2tlciIsImFkbWluIjp0cnVlfQ.an2AXi8z3uCi71XWiIXA-4T5DMNoy2uqh9sr7WEI238"},
+      "body": null,
+      "content_type": null,
+      "expected": "KEY_CONFUSION_TOKEN debe ser aceptado por LEVEL_8 (200/isValid=true). El control de la misma cadena en Authorization de LEVEL_18 debe ser 401.",
+      "check": {"kind": "json", "path": "isValid", "value": true},
+      "explanation": "El validador lee alg del encabezado y genericJWTTokenValidator usa la clave pública como bytes HMAC cuando alg empieza por HS. El token de test es una cadena estática y no ejecuta código.",
+      "mitigation": "Separar rutas de verificación simétrica y asimétrica, fijar RS256 en el servidor y usar una clave privada para firmar; jamás convertir una clave pública en secreto HMAC.",
+      "steps": [
+        "curl -i http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_8 -H 'Cookie: JWT=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhdHRhY2tlciIsImFkbWluIjp0cnVlfQ.an2AXi8z3uCi71XWiIXA-4T5DMNoy2uqh9sr7WEI238'",
+        "curl -i http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_18 -H 'Authorization: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhdHRhY2tlciIsImFkbWluIjp0cnVlfQ.an2AXi8z3uCi71XWiIXA-4T5DMNoy2uqh9sr7WEI238'"
+      ],
+      "hints": ["El primer transporte es Cookie y el control seguro usa Authorization porque los niveles seguros no consumen cookies.", "No interpretar un 200 como IDOR: aquí solo se observa el resultado del verificador JWT."]
+    },
+    {
+      "title": "LEVEL_9: confianza en JWK suministrado en el encabezado",
+      "route": "/VulnerableApp/JWTVulnerability/LEVEL_9",
+      "method": "GET",
+      "params": {"fetch": "true"},
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "fetch=true debe generar un JWT RSA con objeto jwk en su encabezado, devolverlo en content y emitir Set-Cookie; repetir ese token en Cookie debe seguir el camino válido. Esto es una reproducción funcional, no una falsificación con clave atacante.",
+      "check": {"kind": "json", "path": "isValid", "value": true},
+      "explanation": "El token de fetch es firmado por el propio par RSA del KMS, por lo que sirve como baseline. La vulnerabilidad de código aparece porque el verificador obtiene la clave pública del JWK del token; crear un JWK atacante requiere firmar un JWT y no se fuerza aquí con un comando peligroso.",
+      "mitigation": "Ignorar jwk/jku suministrados por el cliente y seleccionar una clave pública de confianza por configuración o kid validado contra un almacén permitido.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_9 --data-urlencode 'fetch=true'",
+        "Comprobar manualmente que el primer segmento decodificado del content contiene jwk; no alterar el token.",
+        "curl -i http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_9 -H 'Cookie: JWT=<TOKEN_RSA_CON_JWK_DEL_CONTENT>'",
+        "curl -i http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_18 -H 'Authorization: <TOKEN_RSA_CON_JWK_DEL_CONTENT>'"
+      ],
+      "hints": ["La última petición es control negativo: LEVEL_18 usa una clave RSA aleatoria de su instancia y no confía en el JWK.", "La aceptación de un token legítimo generado por servidor no demuestra por sí sola la explotación con una clave atacante; esa incertidumbre queda explícita."]
+    },
+    {
+      "title": "LEVEL_10: token vacío estructuralmente aceptado",
+      "route": "/VulnerableApp/JWTVulnerability/LEVEL_10",
+      "method": "GET",
+      "params": {},
+      "headers": {"Cookie": "JWT=.."},
+      "body": null,
+      "content_type": null,
+      "expected": "El valor exacto .. debe ser considerado válido por LEVEL_10 (200/isValid=true) aunque no contiene un JWT firmado; LEVEL_17 debe devolver 401.",
+      "check": {"kind": "json", "path": "isValid", "value": true},
+      "explanation": "customHMACEmptyTokenVulnerableValidator usa split sin límite y trata un arreglo vacío como válido; el test documenta .. como EMPTY_TOKEN.",
+      "mitigation": "Exigir exactamente tres segmentos Base64URL no vacíos, parsear encabezado y claims y verificar una firma compatible con algoritmo/clave fijados.",
+      "steps": [
+        "curl -i http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_10 -H 'Cookie: JWT=..'",
+        "curl -i http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_17 -H 'Authorization: ..'"
+      ],
+      "hints": ["No agregues payloads ni solicitudes repetidas; una sola petición basta.", "Un 401 en el control seguro muestra rechazo del formato en ese validador, no una garantía universal para otros endpoints."]
+    },
+    {
+      "title": "LEVEL_13: observar la reemisión Set-Cookie sin probar CRLF",
+      "route": "/VulnerableApp/JWTVulnerability/LEVEL_13",
+      "method": "GET",
+      "params": {"fetch": "true"},
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "fetch=true devuelve un token RSA con JWK y Set-Cookie; al repetirlo en Cookie el código valida usando el JWK y vuelve a construir Set-Cookie. No se intenta introducir saltos de línea.",
+      "check": {"kind": "header", "header": "Set-Cookie", "value": "JWT="},
+      "explanation": "El vector está anotado HEADER_INJECTION porque el valor de cookie termina concatenado en una cabecera Set-Cookie. El laboratorio solo verifica la ruta legítima y deja la explotación de caracteres de control fuera del ejercicio seguro.",
+      "mitigation": "No concatenar entrada de cookie en cabeceras; usar APIs de cookie estructuradas que rechacen caracteres de control y validar el token antes de emitir cualquier respuesta.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_13 --data-urlencode 'fetch=true'",
+        "curl -i http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_13 -H 'Cookie: JWT=<TOKEN_RSA_CON_JWK_DEL_CONTENT>'"
+      ],
+      "hints": ["Usa solo el token de fetch y no intentes CRLF, codificaciones de salto de línea ni cabeceras adicionales.", "header comprueba la presencia de Set-Cookie; no demuestra que un contenedor permita inyección de cabeceras."]
+    },
+    {
+      "title": "LEVEL_14: clave muy débil y control con nivel seguro",
+      "route": "/VulnerableApp/JWTVulnerability/LEVEL_14",
+      "method": "GET",
+      "params": {},
+      "headers": {"Cookie": "JWT=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhdHRhY2tlciIsImFkbWluIjp0cnVlfQ.-d0dKlq4zHY09jm50snO-JOwUuaBj8IxyGix5xFXa8s"},
+      "body": null,
+      "content_type": null,
+      "expected": "WEAK_KEY_TOKEN debe producir 200/isValid=true en LEVEL_14; el mismo token como Authorization en LEVEL_17 debe producir 401.",
+      "check": {"kind": "json", "path": "isValid", "value": true},
+      "explanation": "El método selecciona KeyStrength.LOW y usa la clave password. Se contrasta exactamente con la misma cadena en el nivel seguro, cuya clave no está publicada.",
+      "mitigation": "Eliminar claves cortas o memorables, generar secretos aleatorios con longitud adecuada y mantener la clave fuera del repositorio y de las respuestas.",
+      "steps": [
+        "curl -i http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_14 -H 'Cookie: JWT=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhdHRhY2tlciIsImFkbWluIjp0cnVlfQ.-d0dKlq4zHY09jm50snO-JOwUuaBj8IxyGix5xFXa8s'",
+        "curl -i http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_17 -H 'Authorization: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhdHRhY2tlciIsImFkbWluIjp0cnVlfQ.-d0dKlq4zHY09jm50snO-JOwUuaBj8IxyGix5xFXa8s'"
+      ],
+      "hints": ["El token está tomado literalmente de JWTVulnerabilityTest y se limita a claims de entrenamiento.", "No atribuir éxito a conocer una clave fuera de este laboratorio: la clave se incluye solo en el recurso de pruebas."]
+    },
+    {
+      "title": "LEVEL_15: firma no verificada",
+      "route": "/VulnerableApp/JWTVulnerability/LEVEL_15",
+      "method": "GET",
+      "params": {},
+      "headers": {"Cookie": "JWT=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhdHRhY2tlciIsImFkbWluIjp0cnVlfQ.garbage-not-a-real-signature"},
+      "body": null,
+      "content_type": null,
+      "expected": "El token con firma textual garbage-not-a-real-signature tiene tres segmentos y debe producir 200/isValid=true en LEVEL_15; LEVEL_17 debe devolver 401 y content null.",
+      "check": {"kind": "json", "path": "isValid", "value": true},
+      "explanation": "El código comentado lo reconoce explícitamente: comprueba solo parts.length == 3 y no invoca verificación criptográfica.",
+      "mitigation": "Verificar la firma antes de leer claims privilegiados, fijar algoritmo y clave, y rechazar firmas ausentes, vacías o malformadas.",
+      "steps": [
+        "curl -i http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_15 -H 'Cookie: JWT=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhdHRhY2tlciIsImFkbWluIjp0cnVlfQ.garbage-not-a-real-signature'",
+        "curl -i http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_17 -H 'Authorization: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhdHRhY2tlciIsImFkbWluIjp0cnVlfQ.garbage-not-a-real-signature'"
+      ],
+      "hints": ["No cambies el payload: la prueba compara únicamente el criterio estructural del nivel.", "Que el JSON diga isValid=true solo prueba la decisión de este endpoint; no implica acceso a una operación de negocio."]
+    },
+    {
+      "title": "LEVEL_16: encabezado HS384 aceptado durante cálculo HS256",
+      "route": "/VulnerableApp/JWTVulnerability/LEVEL_16",
+      "method": "GET",
+      "params": {},
+      "headers": {"Cookie": "JWT=eyJhbGciOiJIUzM4NCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhdHRhY2tlciIsImFkbWluIjp0cnVlfQ.U_G_yJxTg00enVZVtyUm4EBrD1anO0ILUfT2YYW88yM"},
+      "body": null,
+      "content_type": null,
+      "expected": "HS384_HEADER_TOKEN debe producir 200/isValid=true en LEVEL_16 porque la firma del test es compatible con el cálculo HS256 del servidor; el nivel seguro debe rechazarlo.",
+      "check": {"kind": "json", "path": "isValid", "value": true},
+      "explanation": "customHMACValidator no compara el alg del header con el algoritmo recibido y LEVEL_16 siempre le pasa HS256. El header declara HS384, creando una discrepancia verificable sin ejecutar nada.",
+      "mitigation": "Comparar exactamente el algoritmo declarado con el permitido antes de verificar, o usar SignedJWT/MACVerifier configurado con una política fija.",
+      "steps": [
+        "curl -i http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_16 -H 'Cookie: JWT=eyJhbGciOiJIUzM4NCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhdHRhY2tlciIsImFkbWluIjp0cnVlfQ.U_G_yJxTg00enVZVtyUm4EBrD1anO0ILUfT2YYW88yM'",
+        "curl -i http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_17 -H 'Authorization: eyJhbGciOiJIUzM4NCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhdHRhY2tlciIsImFkbWluIjp0cnVlfQ.U_G_yJxTg00enVZVtyUm4EBrD1anO0ILUfT2YYW88yM'"
+      ],
+      "hints": ["El token consta en JWTValidatorTest como HS384_HEADER_TOKEN.", "Usar el control seguro evita atribuir la aceptación solo a un formato JWT bien formado."]
+    },
+    {
+      "title": "LEVEL_17: flujo seguro HMAC con token generado por la instancia",
+      "route": "/VulnerableApp/JWTVulnerability/LEVEL_17",
+      "method": "GET",
+      "params": {"fetch": "true"},
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "fetch=true devuelve un token HS256 en content. Reenviarlo en una única Authorization, con o sin prefijo Bearer, produce 200/isValid=true; un token inválido, ausencia o dos cabeceras debe producir 401 y no reflejar el token.",
+      "check": {"kind": "json", "path": "isValid", "value": true},
+      "explanation": "secureHMACValidator fija HS256, usa MACVerifier y la clave in-memory de 32 bytes. getSingleAuthorizationToken exige exactamente una cabecera y elimina Bearer de forma case-insensitive.",
+      "mitigation": "Conservar el patrón seguro: clave aleatoria protegida por instancia/gestor de secretos, algoritmo explícito, validación completa, rechazo de duplicados y respuestas sin credenciales.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_17 --data-urlencode 'fetch=true'",
+        "curl -i http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_17 -H 'Authorization: <TOKEN_HS256_DEL_CONTENT>'",
+        "curl -i http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_17 -H 'Authorization: Bearer <TOKEN_HS256_DEL_CONTENT>'",
+        "curl -i http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_17 -H 'Authorization: <TOKEN_HS256_DEL_CONTENT_MODIFICADO>'"
+      ],
+      "hints": ["La clave cambia si cambia la instancia de JWTVulnerability; no reutilices un token obtenido de otra instancia.", "Verifica manualmente que la respuesta de validación no contiene una cabecera Authorization de eco."]
+    },
+    {
+      "title": "LEVEL_18: flujo seguro RSA con clave propia de la instancia",
+      "route": "/VulnerableApp/JWTVulnerability/LEVEL_18",
+      "method": "GET",
+      "params": {"fetch": "true"},
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "fetch=true devuelve un token RS256. Reenviarlo en Authorization produce 200/isValid=true; los tokens HS256, JWK de otra clave, la clave PKCS12 publicada y el token alterado deben producir 401.",
+      "check": {"kind": "json", "path": "isValid", "value": true},
+      "explanation": "secureRSAValidator fija RS256 y verifica con inmemRsaKeyPair.getPublic(). El test verifica expresamente que no se consulta getAsymmetricAlgorithmKey ni se confía en jwk del token.",
+      "mitigation": "Fijar RS256/clave pública confiable por configuración, rotar pares con identificación controlada y no aceptar claves transportadas por el cliente.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_18 --data-urlencode 'fetch=true'",
+        "curl -i http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_18 -H 'Authorization: <TOKEN_RS256_DEL_CONTENT>'",
+        "curl -i http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_18 -H 'Authorization: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhdHRhY2tlciIsImFkbWluIjp0cnVlfQ.an2AXi8z3uCi71XWiIXA-4T5DMNoy2uqh9sr7WEI238'"
+      ],
+      "hints": ["La segunda petición es el control positivo con el token de la misma respuesta fetch.", "El tercer comando reutiliza un token de confusión solo como control negativo; no necesita generar claves ni tocar el sistema."]
+    },
+    {
+      "title": "LEVEL_19: flujo seguro EC ES256 y rechazo de JWK atacante",
+      "route": "/VulnerableApp/JWTVulnerability/LEVEL_19",
+      "method": "GET",
+      "params": {"fetch": "true"},
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "fetch=true devuelve un token ES256. Reenviarlo en Authorization produce 200/isValid=true; una cabecera ausente, repetida, un token HS/RSA, ES384 o un token alterado debe producir 401 sin eco.",
+      "check": {"kind": "json", "path": "isValid", "value": true},
+      "explanation": "secureECValidator fija ES256 y usa la clave EC P-256 in-memory. SecureECJWTTest demuestra que el parámetro query jwt no participa y que un JWK firmado por una clave atacante se rechaza.",
+      "mitigation": "Fijar curva/algoritmo, usar la clave pública del servidor y rechazar JWK/JWKS suministrados por el cliente; conservar el rechazo de cabeceras ausentes o duplicadas.",
+      "steps": [
+        "curl -i --get http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_19 --data-urlencode 'fetch=true'",
+        "curl -i http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_19 -H 'Authorization: <TOKEN_ES256_DEL_CONTENT>'",
+        "curl -i --get http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_19 --data-urlencode 'jwt=<TOKEN_ES256_DEL_CONTENT>'",
+        "curl -i http://target:9090/VulnerableApp/JWTVulnerability/LEVEL_19 -H 'Authorization: <TOKEN_ES256_DEL_CONTENT_MODIFICADO>'"
+      ],
+      "hints": ["El tercer comando verifica el control negativo documentado: query jwt no sustituye Authorization.", "No atribuir puntaje por click ni por recibir un 200 en fetch; comprobar el JSON de validación y la ausencia de eco."]
+    }
+  ],
+  "limitations": [
+    "La revisión está limitada al commit 4df80bbcd42682ecf26334f12c568e0f4a326c1a y a la familia JWT, más las anotaciones/controlador común necesarios para resolver la ruta. No se investigaron otras familias.",
+    "No se ejecutó curl contra target:9090 en esta revisión; los resultados de expected son predicciones verificables derivadas del código y de los tests, no una promesa de que el laboratorio desplegado responda igual.",
+    "Los niveles activos y anotados son 1–10 y 13–19. LEVEL_11 conserva un método sin anotación activa y LEVEL_12 no tiene implementación; por eso no se deben contar como rutas HTTP activas ni intentar puntuar con un 404.",
+    "Los niveles 2–16 dereferencian la lista de cookies cuando fetch no es true; los pasos usan fetch=true para generar o suministran Cookie explícitamente y evitan esa condición accidental. El nombre de cabecera cookie se obtiene con una búsqueda case-insensitive de Spring, pero el código interno usa el literal cookie.",
+    "Los tokens de tarjeta empleados son datos estáticos del test y solo contienen claims de laboratorio. No se incluyen comandos externos, reverse shells, lectura de secretos del host, DoS, borrado de datos, XXE/path traversal, SSRF/RFI, XSS ni inyección de comandos.",
+    "Un check json sobre isValid solo verifica la decisión declarada por el endpoint; un check header solo verifica presencia de un valor y no demuestra ausencia segura de otros atributos salvo revisión manual. Un reflejo en JSON o cabecera no prueba ejecución XSS; un 200 no prueba IDOR; no se debe atribuir puntaje por hacer click en la interfaz.",
+    "LEVEL_9 y LEVEL_13 requieren una firma para construir un JWT con JWK atacante; curl puede repetir el token legítimo producido por fetch, pero este informe no inventa una firma ni usa herramientas externas para fabricarla. La aceptación del token legítimo es baseline, no prueba completa de explotación.",
+    "La rotación de las claves in-memory de LEVEL_17–19 y el estado del contenedor pueden hacer que un token copiado desde una instancia o proceso diferente sea rechazado; esto es consistente con los tests de aislamiento por instancia."
+  ]
+}

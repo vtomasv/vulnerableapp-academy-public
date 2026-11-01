@@ -1,0 +1,157 @@
+{
+  "id": "rfi",
+  "title": "Inyección de archivo remoto basada en URL (RFI)",
+  "concept": "La familia implementa una inclusión/recuperación remota controlada por el servidor: el parámetro de consulta `url` llega sin una lista de permitidos, se convierte en `java.net.URL`, se transforma en URI y se entrega a un `RestTemplate`; el texto recibido se inserta sin escape en una envoltura HTML. El controlador se declara con `@VulnerableAppRestController(value = \"RemoteFileInclusion\")`, y cada método se expone con `@VulnerableAppRequestMapping(value = \"LEVEL_n\")`, por lo que, con la base autorizada, las rutas son `/VulnerableApp/RemoteFileInclusion/LEVEL_1` y `/VulnerableApp/RemoteFileInclusion/LEVEL_2`. La clase está activa únicamente con el perfil Spring `unsafe`. El nivel 2 añade solo una condición de presencia de un carácter NUL (`\\u0000`) en el valor, no una validación de origen, esquema, destino, redireccionamiento, tamaño ni contenido; por tanto, esa condición no constituye una mitigación de SSRF/RFI. Este documento no presume que una petición haya funcionado: describe lo que se verifica en el código y separa la observación del receptor local de un simple estado HTTP.",
+  "source_files": [
+    "src/main/java/org/sasanlabs/service/vulnerability/rfi/UrlParamBasedRFI.java",
+    "src/main/java/org/sasanlabs/internal/utility/annotations/VulnerableAppRestController.java",
+    "src/main/java/org/sasanlabs/internal/utility/annotations/VulnerableAppRequestMapping.java",
+    "src/main/java/org/sasanlabs/service/impl/EndPointsInformationProvider.java",
+    "src/main/java/org/sasanlabs/controller/VulnerableAppRestController.java",
+    "src/main/java/org/sasanlabs/internal/utility/GenericUtils.java",
+    "src/main/java/org/sasanlabs/internal/utility/LevelConstants.java",
+    "src/main/java/org/sasanlabs/vulnerability/utils/Constants.java",
+    "src/main/resources/i18n/messages_es.properties"
+  ],
+  "levels": [
+    {
+      "route": "/VulnerableApp/RemoteFileInclusion/LEVEL_1",
+      "method": "GET",
+      "parameters": {
+        "url": "Parámetro de consulta opcional en la firma HTTP, pero necesario para que el flujo intente una recuperación. Debe ser una URL absoluta aceptada por `java.net.URL`; las demás claves de la query se ignoran porque el método solo lee `queryParams.get(\"url\")`."
+      },
+      "behavior": "Obtiene `url`; si no es nulo, construye `URL`, crea un `RestTemplate` por petición y ejecuta `getForObject(url.toURI(), String.class)`. El texto recibido se concatena a un `StringBuilder` y se devuelve dentro de `<html><title>Security Testing</title><body><h1>Vulnerable Application </h1>...</body></html>`. Si falta `url`, o se produce `IOException`/`URISyntaxException`, el método conserva un payload vacío y aun así responde `HTTP 200`.",
+      "vulnerable": true,
+      "notes": "La anotación de nivel usa el método por defecto `GET` y la variante por defecto `UNSECURE`. No hay `@AttackVector`, `@ChallengeCard`, `htmlTemplate` ni archivo de tests/plantilla específico de RFI en el commit inspeccionado. El logger se inicializa con `PathTraversalVulnerability.class`, un detalle de registro que no cambia el flujo. El riesgo concreto es que el servidor realiza una solicitud a una URL controlada por el cliente y refleja el cuerpo sin escape; la demostración de este informe se limita a `receiver:8081` autorizado. Un 200 solo demuestra la envoltura/controlador, no que el receptor haya sido contactado."
+    },
+    {
+      "route": "/VulnerableApp/RemoteFileInclusion/LEVEL_2",
+      "method": "GET",
+      "parameters": {
+        "url": "Parámetro de consulta que debe contener el carácter NUL real (`\\u0000`) después de la decodificación HTTP para entrar en la rama vulnerable. La comprobación exacta es `queryParameterURL.contains(NULL_BYTE_CHARACTER)`; claves adicionales se ignoran."
+      },
+      "behavior": "Si `url` no es nulo y contiene NUL, repite exactamente la conversión a `URL`, `toURI()`, solicitud `RestTemplate` y envoltura HTML del nivel 1. Sin NUL no intenta la red y devuelve la envoltura vacía con `HTTP 200`. Las excepciones `IOException` y `URISyntaxException` también se absorben y dejan el cuerpo vacío.",
+      "vulnerable": true,
+      "notes": "El filtro de NUL es una condición de entrada frágil, no una allowlist ni una defensa de red: no verifica host, esquema, IP, DNS, redirects, tiempo, tamaño o contenido. Para transmitirlo en una query con curl se debe conservar `%00` en bruto (`--data-raw`); `--data-urlencode 'url=http://receiver:8081/%00'` suele producir `%2500`, que al decodificarse queda como los caracteres literales `%00` y no satisface `contains('\\u0000')`. El comportamiento posterior de `URL.toURI()` y del contenedor ante NUL/`%00` depende de la versión de Java y del servidor, por lo que el posible acceso al receptor se verifica de forma manual y no se promete."
+    }
+  ],
+  "exercises": [
+    {
+      "title": "Nivel 1: control positivo seguro contra el receptor local",
+      "route": "/VulnerableApp/RemoteFileInclusion/LEVEL_1",
+      "method": "GET",
+      "params": {
+        "url": "http://receiver:8081/"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "El código intenta que `target` haga un GET a `http://receiver:8081/` y, si el receptor entrega texto y la red del laboratorio lo permite, ese texto queda dentro de la envoltura HTML de la respuesta de `target`. La respuesta del controlador puede ser 200 y estar vacía incluso si la solicitud remota falló; no se declara éxito por ese estado.",
+      "check": {
+        "kind": "manual",
+        "value": "Correlacionar la hora y ruta de la solicitud en los logs o panel del receptor inocuo con la respuesta de target. Solo considerar confirmado el comportamiento servidor-a-receptor si se observa la entrada en receiver; comparar además el cuerpo devuelto por receiver, si el laboratorio lo documenta."
+      },
+      "explanation": "Es el control positivo mínimo del nivel 1: el valor permitido para esta práctica es únicamente el receptor local autorizado, no un host externo, un servicio interno distinto ni un archivo del sistema. `--data-urlencode` se usa aquí porque el valor no contiene `%00` y evita errores de escape en la query. La falta de validación de host/esquema está en el código, pero la prueba no necesita aprovechar destinos peligrosos.",
+      "mitigation": "No aceptar una URL arbitraria si la funcionalidad no es imprescindible. Si existe un caso de uso legítimo, aplicar una allowlist exacta de esquemas, hosts y puertos; resolver y validar cada dirección (incluidos redirects) contra rangos privados, loopback, link-local y metadata; imponer timeouts, límites de respuesta y controles de DNS; y no insertar el texto remoto como HTML sin escape. Registrar y bloquear errores en vez de convertirlos silenciosamente en un 200 vacío.",
+      "steps": [
+        "Desde Kali, ejecutar: `curl -i --get http://target:9090/VulnerableApp/RemoteFileInclusion/LEVEL_1 --data-urlencode 'url=http://receiver:8081/'`.",
+        "Guardar por separado los encabezados, el estado y el cuerpo de target; no interpretar `HTTP/1.1 200` como prueba de una solicitud saliente.",
+        "En el receptor autorizado, buscar una petición GET a `/` originada por la red del laboratorio y correlacionarla con la ejecución. Si receiver no expone logs consultables, marcar el resultado como no verificable, no como aprobado."
+      ],
+      "hints": [
+        "La clave debe llamarse exactamente `url`; las otras claves de consulta no son leídas por esta clase.",
+        "El código devuelve HTML genérico aunque el cuerpo remoto sea vacío; inspecciona también la evidencia independiente en receiver.",
+        "No cambies el destino a `localhost`, metadata, archivos o Internet: el receptor local es el único destino permitido para este ejercicio."
+      ]
+    },
+    {
+      "title": "Nivel 1: control negativo sin parámetro de URL",
+      "route": "/VulnerableApp/RemoteFileInclusion/LEVEL_1",
+      "method": "GET",
+      "params": {},
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "Sin `url`, el método no crea `URL`, no instancia el fetch para el receptor y devuelve la plantilla HTML con el payload vacío. Es esperable un 200 por diseño, incluso en este control negativo.",
+      "check": {
+        "kind": "manual",
+        "value": "Comparar la salida con el positivo y verificar en receiver que no apareció una petición correspondiente a esta segunda ejecución; el texto `Vulnerable Application` solo confirma la plantilla, no demuestra ausencia de tráfico por sí mismo."
+      },
+      "explanation": "Este control separa la respuesta genérica del controlador de la evidencia de inclusión. Sirve para evitar el falso positivo de contar cualquier 200 o cualquier HTML de la plantilla como prueba de RFI.",
+      "mitigation": "Para un endpoint seguro, rechazar la ausencia de un recurso requerido con un error de validación apropiado y, sobre todo, mantener una política de destinos permitidos antes de realizar cualquier conexión. No usar el 200 vacío como señal de éxito o fallo de seguridad.",
+      "steps": [
+        "Ejecutar el negativo desde Kali: `curl -i --get http://target:9090/VulnerableApp/RemoteFileInclusion/LEVEL_1`.",
+        "Comparar el cuerpo con la plantilla observada en el control positivo y revisar receiver para confirmar que no hubo una solicitud causada por esta ejecución.",
+        "Registrar por separado `status`, `body` y evidencia del receptor; un status 200 sin tráfico remoto debe quedar como control negativo, no como vulnerabilidad demostrada por sí solo."
+      ],
+      "hints": [
+        "La condición de nivel 1 es `queryParameterURL != null`; una cadena vacía no es lo mismo que parámetro ausente y puede terminar en una excepción capturada.",
+        "La respuesta siempre se envuelve con `GenericUtils.wrapPayloadInGenericVulnerableAppTemplate`, incluso cuando el payload es vacío."
+      ]
+    },
+    {
+      "title": "Nivel 2: control positivo con NUL codificado para el receptor local",
+      "route": "/VulnerableApp/RemoteFileInclusion/LEVEL_2",
+      "method": "GET",
+      "params": {
+        "url": "http://receiver:8081/%00",
+        "transport": "El `%00` debe llegar como byte NUL tras la decodificación de la query; no es un marcador para leer archivos."
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "Si el contenedor decodifica `%00` a `\\u0000` y la combinación Java URL/URI lo admite, la condición del nivel 2 se cumple e intenta contactar el receptor local; el path puede normalizarse al convertirse a URL/URI. Si el runtime rechaza o normaliza el carácter antes del fetch, el código puede devolver 200 con la envoltura vacía. Ambas posibilidades son compatibles con el código y deben distinguirse mediante receiver, no mediante el estado 200.",
+      "check": {
+        "kind": "manual",
+        "value": "Verificar primero que la solicitud HTTP enviada conserva `%00` en la query (sin convertirlo en `%2500`), y después correlacionar en receiver una petición causada por target. Si no hay petición, reportar la incertidumbre de transporte/normalización y no afirmar que el nivel fue explotado."
+      },
+      "explanation": "El nivel 2 no debe probarse con archivos ni destinos externos. El comando usa `--data-raw` de forma deliberada: `--data-urlencode 'url=http://receiver:8081/%00'` codifica el signo `%` y normalmente entrega `%2500`, que no se convierte en el carácter NUL que el código busca. La única interacción permitida sigue siendo el receptor local.",
+      "mitigation": "Eliminar la recuperación arbitraria; si se requiere una URL, aplicar allowlist de destino y protocolo, bloquear caracteres de control antes de parsear, validar el resultado después de cada redirección, limitar recursos y devolver una representación de datos escapada. Nunca tratar la presencia de NUL como una validación de seguridad.",
+      "steps": [
+        "Ejecutar en Kali, conservando `%00` en bruto: `curl -i --get 'http://target:9090/VulnerableApp/RemoteFileInclusion/LEVEL_2' --data-raw 'url=http://receiver:8081/%00'`.",
+        "No sustituir ese comando por `--data-urlencode .../%00` sin comprobar la traza: esa forma suele enviar `%2500` y activa el control negativo del nivel.",
+        "Revisar la petición recibida por receiver y el cuerpo de target. Si target devuelve 200 sin petición en receiver, anotar que el filtro pudo no coincidir o que `URL.toURI()` no permitió continuar; no atribuir éxito al status."
+      ],
+      "hints": [
+        "La comprobación del código busca el carácter NUL real (`String.valueOf((char) 0)`), no los cuatro caracteres `\\`, `u`, `0`, `0` ni la secuencia textual `%00` después de la decodificación.",
+        "Una observación de receiver es evidencia de la solicitud saliente; no es necesario ni está permitido usar un payload de shell, un archivo del host o un destino no local."
+      ]
+    },
+    {
+      "title": "Nivel 2: control negativo sin NUL",
+      "route": "/VulnerableApp/RemoteFileInclusion/LEVEL_2",
+      "method": "GET",
+      "params": {
+        "url": "http://receiver:8081/"
+      },
+      "headers": {},
+      "body": null,
+      "content_type": null,
+      "expected": "El valor es una URL válida pero no contiene `\\u0000`, por lo que la condición específica del nivel 2 es falsa y el método no intenta el fetch. Debe devolver la envoltura HTML vacía con 200; ese 200 no demuestra la ausencia salvo que se contraste con receiver.",
+      "check": {
+        "kind": "manual",
+        "value": "Comparar con el control positivo del nivel 2: no debe aparecer una petición nueva en receiver para esta ejecución. Verificar también que la query vista por el servidor no contiene un NUL real."
+      },
+      "explanation": "Este negativo demuestra la diferencia de control de flujo entre una URL ordinaria y una que intenta transportar NUL. También hace visible que el nivel 2 no es una defensa general: solo cambia la condición previa y conserva el fetch sin allowlist cuando la condición se cumple.",
+      "mitigation": "Sustituir el filtro de NUL por validación positiva de URL y destino, o eliminar por completo las solicitudes iniciadas con entrada del usuario. Rechazar entradas con caracteres de control y no ocultar fallos detrás de respuestas 200 vacías.",
+      "steps": [
+        "Ejecutar el negativo: `curl -i --get http://target:9090/VulnerableApp/RemoteFileInclusion/LEVEL_2 --data-urlencode 'url=http://receiver:8081/'`.",
+        "Comparar la respuesta y la evidencia del receptor con el positivo del nivel 2; revisar que no se haya enviado `%00` ni un byte NUL.",
+        "Documentar el resultado como `sin solicitud al receptor` solo si la observación independiente de receiver lo confirma; nunca basarlo únicamente en el status HTTP."
+      ],
+      "hints": [
+        "El mismo host receptor sirve para el contraste; no hace falta buscar otro endpoint ni salir del laboratorio.",
+        "La presencia de la plantilla HTML es común a ambos niveles y no es una señal de que el backend haya realizado una conexión."
+      ]
+    }
+  ],
+  "limitations": [
+    "La revisión se limita al commit `4df80bbcd42682ecf26334f12c568e0f4a326c1a` y a la familia `rfi` más sus anotaciones/utilidades necesarias para resolver la ruta. No se modificó código ni archivos de otras familias.",
+    "No existe un test JUnit, plantilla estática ni archivo `attackvectors/*RFI*` específico de esta familia en el árbol inspeccionado. La conducta y las rutas se derivan de `UrlParamBasedRFI`, de las anotaciones y de `EndPointsInformationProvider`; no se presenta como resultado de una ejecución de integración.",
+    "La clase tiene `@Profile(\"unsafe\")`. Si el despliegue no activa ese perfil, la ruta puede no estar registrada; este informe no convierte un 404 de un despliegue distinto en evidencia sobre la lógica del nivel.",
+    "`RestTemplate`, DNS, red Docker, versión de Java, decodificación del contenedor y política de red pueden cambiar si la llamada al receptor ocurre. En especial, el nivel 2 tiene incertidumbre por la representación y normalización de NUL/`%00`; los ejercicios lo exigen como comprobación manual.",
+    "El receptor puede no devolver un marcador conocido en su raíz, por eso los `check` de los positivos son `manual` y piden correlacionar logs o panel. Un cuerpo HTML que contenga una cadena no prueba por sí mismo que hubo una solicitud saliente.",
+    "El verificador sugerido es deliberadamente honesto: un reflejo de texto no prueba ejecución XSS; un `200` no prueba IDOR; y no se atribuye puntaje por hacer clic en una interfaz. Para esta familia, la señal fuerte es la evidencia independiente de una solicitud de `target` a `receiver`, acompañada de la comparación con un control negativo.",
+    "Los comandos no usan shells remotos, comandos externos enviados al objetivo, lectura de secretos del host, denegación de servicio ni borrado de datos. RFI/SSRF se limita al receptor local autorizado `http://receiver:8081` y no se emplean archivos locales ni destinos de metadata."
+  ]
+}
