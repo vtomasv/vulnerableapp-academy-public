@@ -932,7 +932,7 @@
     refs.kaliToggle.addEventListener('change', () => {
       const visible = refs.kaliToggle.checked;
       setVisible(refs.kaliFrameWrap, visible);
-      if (visible && refs.kaliFrame.src === 'about:blank') refs.kaliFrame.src = '/kali/vnc.html?autoconnect=1&resize=remote&path=kali/websockify';
+      if (visible && refs.kaliFrame.src === 'about:blank') refs.kaliFrame.src = '/kali/vnc.html?autoconnect=1&resize=scale&path=websockify';
     });
   }
 
