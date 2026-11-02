@@ -7,7 +7,7 @@
   <meta name="description" content="VulnerableApp Academy: laboratorio didáctico de seguridad web.">
   <title>VA / ACADEMY</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/styles.css?v=cordillera-20261102">
 </head>
 <body>
   <div id="app" class="app-shell">
@@ -41,6 +41,7 @@
           <button class="button button-primary button-wide" type="submit">Registrar y entrar <span aria-hidden="true">↗</span></button>
         </form>
         <p id="auth-feedback" class="feedback" role="status" aria-live="polite"></p>
+        <p class="project-credits">Proyecto estudiantil independiente basado en <a href="https://github.com/SasanLabs/VulnerableApp" target="_blank" rel="noopener">SasanLabs/VulnerableApp</a>, proyecto open source <a href="https://owasp.org/projects/vulnerableapp" target="_blank" rel="noopener">OWASP VulnerableApp</a>. <a href="https://postgrados.umayor.cl/docentes/ingenieria-seguridad-informacion/" target="_blank" rel="noopener">Contexto docente · Universidad Mayor</a>. Sin patrocinio institucional implícito.</p>
         <div class="auth-note"><span class="status-dot is-online" aria-hidden="true"></span><span>Conexión esperada: API local. No se cargan recursos externos.</span></div>
       </div>
     </section>
@@ -74,7 +75,57 @@
         <button id="workspace-focus" class="button button-ghost" type="button">⌁ Enfoque</button>
       </div>
 
-      <main class="layout-grid">
+      <nav class="academy-nav" aria-label="Atajos de Academy">
+        <a class="academy-nav-link is-current" href="#guided-home">Inicio guiado</a>
+        <a class="academy-nav-link" href="#missions">Misiones</a>
+        <a class="academy-nav-link" data-store-link href="#guided-help">Tienda vía Kali</a>
+        <a class="academy-nav-link" data-kali-link href="#guided-help" target="_blank" rel="noopener">Kali</a>
+        <a class="academy-nav-link" data-harness-link href="/kali/vnc.html?autoconnect=1&amp;resize=scale&amp;path=websockify" target="_blank" rel="noopener">Harness en Kali</a>
+      </nav>
+
+      <section id="guided-home" class="guided-welcome panel" aria-labelledby="guided-title">
+        <div class="guided-header">
+          <div class="guided-copy">
+            <span class="eyebrow">INICIO GUIADO // PRIMER RECORRIDO</span>
+            <h1 id="guided-title">Empezar aquí</h1>
+            <p class="lead">Aprende a observar, comparar y registrar evidencia antes de buscar una respuesta. Academy conserva tu cuenta y XP; la tienda es un escenario de datos y carrito simulados, no un sitio de compras reales.</p>
+          </div>
+          <button id="start-workshop" class="button button-primary" type="button">Comenzar taller <span aria-hidden="true">↗</span></button>
+        </div>
+        <ol class="guided-route" aria-label="Ruta recomendada del taller">
+          <li><span class="route-number">01</span><div><strong>Elegir misión</strong><p>Empieza por <code>commandInjection-02</code>: soporte de despacho y marcador benigno.</p></div></li>
+          <li><span class="route-number">02</span><div><strong>Observar tienda</strong><p>Abre Kali/noVNC y, dentro de Firefox Kali, el icono Mercado Cordillera.</p></div></li>
+          <li><span class="route-number">03</span><div><strong>Control y prueba</strong><p>Compara el control manual o usa Harness; cada llamada pide aprobación.</p></div></li>
+          <li><span class="route-number">04</span><div><strong>Registrar evidencia</strong><p>Revisa JSON, marcador y criterio; un HTTP 200 aislado no basta.</p></div></li>
+          <li><span class="route-number">05</span><div><strong>Ver XP</strong><p>Confirma el resultado en el progreso de esta misma cuenta Academy.</p></div></li>
+        </ol>
+        <div class="guided-tools" aria-label="Herramientas del recorrido">
+          <article class="guided-tool">
+            <span class="eyebrow">TIENDA / ORIGEN AISLADO</span>
+            <h2>Mercado Cordillera</h2>
+            <p>Datos y carrito ficticios para observar el flujo. No hay compras ni pagos reales. Solo se abre dentro de Kali: <code>http://target:9090/VulnerableApp/mercado/</code>. El target no se publica al Mac.</p>
+            <a class="button button-ghost guided-link" data-store-link href="#guided-help" target="_blank" rel="noopener">Abrir tienda vía Kali ↗</a>
+          </article>
+          <article class="guided-tool">
+            <span class="eyebrow">KALI / HERRAMIENTAS DEL TALLER</span>
+            <h2>Escritorio y práctica</h2>
+            <p>Kali contiene Firefox, terminal y harness. Haz doble clic en Mercado Cordillera para ver la tienda, o en Academy para volver a tu misión. No necesitas instalar herramientas en el Mac.</p>
+            <a class="button button-ghost guided-link" data-kali-link href="#guided-help" target="_blank" rel="noopener">Abrir Kali ↗</a>
+          </article>
+          <article class="guided-tool guided-tool-harness">
+            <span class="eyebrow">HARNESS / APROBACIÓN EXPLÍCITA</span>
+            <h2>Tu copiloto dentro de Kali</h2>
+            <p>En Kali abre el icono <strong>Pentest Harness</strong> y entra a <code>http://127.0.0.1:2323</code>. Usa el prompt corto solo después de revisar cada llamada.</p>
+            <div class="prompt-copy"><pre id="harness-prompt" class="prompt-block">Carga vulnerableapp-evidence. Consulta commandInjection-02 y explica el criterio. Propón primero el control con ipaddress=127.0.0.1; espera aprobación por llamada. Luego la prueba con ipaddress=127.0.0.1|printf VA_LAB_OK; espera otra aprobación. Solo con el marcador observado propone lab_submit y lab_progress. Inicia la cuenta mediante lab login en la terminal, nunca en el chat.</pre><button id="copy-harness-prompt" class="text-button" type="button">Copiar prompt</button></div>
+          </article>
+        </div>
+        <details id="guided-help" class="guided-help">
+          <summary>Ayuda y límites del recorrido</summary>
+          <div class="help-copy"><p><strong>Academy y la tienda son orígenes separados.</strong> Academy puntúa solicitudes autenticadas; la vitrina y el carrito son simulados; los retos conservan las rutas reales SasanLabs. No se comparte token por URL, almacenamiento ni <code>postMessage</code>.</p><p><strong>curl directo no da XP.</strong> Para verificar, usa la misma cuenta en Academy y en el lab request/Harness; compara primero el control, registra la respuesta real y confirma después el progreso.</p><p><strong>En Harness:</strong> cada consulta, solicitud y envío requiere una aprobación nueva. Nunca pegues contraseñas, cookies ni tokens en el chat.</p></div>
+        </details>
+      </section>
+
+      <main id="missions" class="layout-grid">
         <aside id="chapter-panel" class="sidebar panel" aria-label="Capítulos del laboratorio">
           <div class="panel-heading">
             <div><span class="eyebrow">MAPA DE OPERACIONES</span><h2>Capítulos</h2></div>
@@ -85,9 +136,9 @@
             <p class="empty-state">Cargando catálogo…</p>
           </nav>
           <div class="sidebar-footer">
-            <a class="local-link" href="/kali/vnc.html?autoconnect=1&amp;resize=scale&amp;path=websockify" target="_blank" rel="noopener" title="Abre Firefox dentro de Kali y utiliza el acceso VulnerableApp del escritorio">VulnerableApp desde Kali <span>↗</span></a>
+            <a class="local-link" data-kali-link href="/kali/vnc.html?autoconnect=1&amp;resize=scale&amp;path=websockify" target="_blank" rel="noopener" title="Abre Firefox dentro de Kali y utiliza el acceso VulnerableApp del escritorio">VulnerableApp desde Kali <span>↗</span></a>
             <a class="local-link" href="/mailpit/" target="_blank" rel="noopener">Abrir Mailpit <span>↗</span></a>
-            <a class="local-link" href="/kali/vnc.html?autoconnect=1&amp;resize=scale&amp;path=websockify" target="_blank" rel="noopener">Abrir Kali en pestaña <span>↗</span></a>
+            <a class="local-link" data-kali-link href="/kali/vnc.html?autoconnect=1&amp;resize=scale&amp;path=websockify" target="_blank" rel="noopener">Abrir Kali en pestaña <span>↗</span></a>
           </div>
         </aside>
 
@@ -173,10 +224,10 @@
           </section>
 
           <section class="kali-panel panel" aria-labelledby="kali-title">
-            <div class="section-heading"><div><span class="eyebrow">ENTORNO OPCIONAL</span><h2 id="kali-title">Escritorio Kali</h2></div><span class="tag tag-muted">LAZY</span></div>
-            <p class="muted">Abre el escritorio solo cuando lo necesites. El iframe no se carga por defecto.</p>
+            <div class="section-heading"><div><span class="eyebrow">HERRAMIENTAS INTERNAS</span><h2 id="kali-title">Escritorio Kali</h2></div><span class="tag tag-muted">BAJO DEMANDA</span></div>
+            <p class="muted">Dentro de Kali abre Mercado Cordillera, Academy o Pentest Harness desde sus iconos. El escritorio se carga solo al solicitarlo.</p>
             <label class="switch-row"><input id="kali-toggle" type="checkbox"><span class="switch" aria-hidden="true"></span><span>Mostrar escritorio embebido</span></label>
-            <div id="kali-frame-wrap" class="kali-frame-wrap is-hidden"><iframe id="kali-frame" title="Escritorio Kali local" loading="lazy" src="about:blank"></iframe><a class="frame-link" href="/kali/vnc.html?autoconnect=1&amp;resize=scale&amp;path=websockify" target="_blank" rel="noopener">Abrir en pestaña nueva ↗</a></div>
+            <div id="kali-frame-wrap" class="kali-frame-wrap is-hidden"><iframe id="kali-frame" title="Escritorio Kali local" loading="lazy" src="about:blank"></iframe><a class="frame-link" data-kali-link href="/kali/vnc.html?autoconnect=1&amp;resize=scale&amp;path=websockify" target="_blank" rel="noopener">Abrir en pestaña nueva ↗</a></div>
           </section>
 
           <section class="history-panel panel" aria-labelledby="history-title">
@@ -185,10 +236,11 @@
           </section>
         </aside>
       </main>
-      <footer class="app-footer"><span>VA / ACADEMY // laboratorio local</span><span id="footer-user">sin usuario</span><span>Teclado: Tab navega · Esc cierra paneles</span></footer>
+      <p class="project-credits">Proyecto estudiantil independiente basado en <a href="https://github.com/SasanLabs/VulnerableApp" target="_blank" rel="noopener">SasanLabs/VulnerableApp</a>, proyecto open source <a href="https://owasp.org/projects/vulnerableapp" target="_blank" rel="noopener">OWASP VulnerableApp</a>. <a href="https://postgrados.umayor.cl/docentes/ingenieria-seguridad-informacion/" target="_blank" rel="noopener">Contexto docente · Universidad Mayor</a>. Sin patrocinio institucional implícito.</p>
+      <footer class="app-footer"><span>VA / ACADEMY // laboratorio local</span><span id="footer-user">sin usuario</span><span>Teclado: Tab navega · Esc cierra paneles</span><nav class="footer-links" aria-label="Ayuda persistente"><a href="#guided-home">Inicio</a><a href="#guided-help">Ayuda</a></nav></footer>
     </div>
   </div>
   <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
-  <script src="/static/app.js" defer></script>
+  <script src="/static/app.js?v=cordillera-20261102" defer></script>
 </body>
 </html>

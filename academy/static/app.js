@@ -4,6 +4,28 @@
   const TOKEN_KEY = 'va_session_token';
   const POLL_MS = 8000;
   const API_BASE = window.__ACADEMY_API_BASE__ || '';
+  const BUSINESS_CONTEXT = Object.freeze({
+    authentication: 'Cuenta, identidad y acceso de compradores y operadores.',
+    cachepoisoning: 'Catálogo, precios y respuestas que pueden quedar compartidas entre visitantes.',
+    clickjacking: 'Promociones y acciones de compra que no deben quedar expuestas a marcos ajenos.',
+    commandinjection: 'Soporte y despacho: campos operativos que nunca deben convertirse en comandos.',
+    cryptographicfailures: 'Facturación y datos personales que requieren protección criptográfica.',
+    deserialization: 'Integraciones de pedidos que reciben objetos y mensajes de proveedores.',
+    fileupload: 'Imágenes y documentos del catálogo cargados por equipos comerciales.',
+    idor: 'Pedidos y perfiles: cada referencia debe autorizar el objeto de la cuenta correcta.',
+    jwt: 'Sesiones de cuenta y permisos de operadores representados en tokens.',
+    ldapinjection: 'Directorio de proveedores y equipos internos consultado desde formularios.',
+    openredirect: 'Campañas y enlaces de despacho que deben llevar a destinos conocidos.',
+    otp: 'Códigos de acceso temporal para recuperar una cuenta sin reutilización.',
+    passwordreset: 'Recuperación de cuentas de clientes y soporte postventa.',
+    pathtraversal: 'Documentos de despacho y archivos internos que deben permanecer en su carpeta.',
+    rfi: 'Integraciones y proveedores que entregan contenido remoto al servidor.',
+    sessionmanagement: 'Sesiones activas de compradores, soporte y administración.',
+    sqlinjection: 'Inventario y búsquedas de productos que deben usar consultas controladas.',
+    ssrf: 'Integraciones con proveedores: el servidor solo debe consultar destinos autorizados.',
+    xss: 'Reseñas y mensajes del catálogo que se muestran a otros visitantes.',
+    xxe: 'Órdenes XML de proveedores y logística que no deben resolver entidades externas.',
+  });
 
   const state = {
     token: null,
@@ -63,6 +85,9 @@
     refreshButton: document.querySelector('#refresh-button'),
     logoutButton: document.querySelector('#logout-button'),
     exportButton: document.querySelector('#export-button'),
+    startWorkshop: document.querySelector('#start-workshop'),
+    harnessPrompt: document.querySelector('#harness-prompt'),
+    copyHarnessPrompt: document.querySelector('#copy-harness-prompt'),
     toastRegion: document.querySelector('#toast-region'),
   };
 
@@ -188,6 +213,84 @@
     return state.catalog && Array.isArray(state.catalog.missions) ? state.catalog.missions : [];
   }
 
+  function missionFamilyId(mission) {
+    return normalizeFamilyId(mission && (mission.family_id || mission.familyId || mission.family));
+  }
+
+  function familyForMission(mission) {
+    const familyId = missionFamilyId(mission);
+    if (!familyId) return null;
+    return normalizeFamilies(state.catalog).find((family) => normalizeFamilyId(family.id) === familyId) || null;
+  }
+
+  function businessContextForMission(mission) {
+    return BUSINESS_CONTEXT[missionFamilyId(mission)] || 'Flujo comercial del laboratorio: observa primero el control y registra solo evidencia verificable.';
+  }
+
+  function kaliUrl() {
+    if (window.location.protocol !== 'http:') return '';
+    const base = new URL(window.location.href);
+    // Direct Academy access inside Kali must return to the gateway for noVNC.
+    if (base.hostname === 'academy') { base.hostname = 'gateway'; base.port = '8080'; }
+    return new URL('/kali/vnc.html?autoconnect=1&resize=scale&path=websockify', base).toString();
+  }
+
+  function storeUrl() {
+    // The vulnerable target is internal-only. This link opens the Kali desktop.
+    return kaliUrl();
+  }
+
+  function updateLocalLinks() {
+    const market = storeUrl();
+    const kali = kaliUrl();
+    document.querySelectorAll('[data-store-link]').forEach((link) => {
+      if (market) {
+        link.href = market;
+        link.removeAttribute('aria-disabled');
+      } else {
+        link.href = '#guided-help';
+        link.setAttribute('aria-disabled', 'true');
+      }
+    });
+    document.querySelectorAll('[data-kali-link], [data-harness-link]').forEach((link) => {
+      if (kali) {
+        link.href = kali;
+        link.removeAttribute('aria-disabled');
+      } else {
+        link.href = '#guided-help';
+        link.setAttribute('aria-disabled', 'true');
+      }
+    });
+  }
+
+  function missionDeepLink(missionId) {
+    const url = new URL(window.location.href);
+    url.hash = `mission=${encodeURIComponent(missionId)}`;
+    return url.toString();
+  }
+
+  function readMissionHash() {
+    const hash = window.location.hash.replace(/^#/, '');
+    if (!hash) return '';
+    const params = new URLSearchParams(hash.startsWith('?') ? hash : `?${hash}`);
+    return params.get('mission') || '';
+  }
+
+  function syncMissionHash(missionId) {
+    if (!missionId) return;
+    const nextHash = `#mission=${encodeURIComponent(missionId)}`;
+    if (window.location.hash === nextHash) return;
+    const url = new URL(window.location.href);
+    url.hash = nextHash.slice(1);
+    window.history.replaceState(null, '', url.toString());
+  }
+
+  function revealNode(node) {
+    if (!node) return;
+    const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    node.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
+  }
+
   function familyMissions(family) {
     if (!family) return [];
     const missions = allMissions();
@@ -275,7 +378,11 @@
           missionList.append(missionButton);
         });
       }
-      body.append(missionList);
+      const missionDisclosure = createElement('details', { className: 'mission-disclosure' }, [
+        createElement('summary', { text: `Ver las ${missions.length} misiones de esta familia` }),
+        missionList,
+      ]);
+      body.append(missionDisclosure);
       details.append(body);
       details.addEventListener('toggle', () => {
         if (details.open) selectFamily(family, false);
@@ -351,6 +458,7 @@
 
   function selectMission(mission, family = state.selectedFamily) {
     state.selectedMission = mission || null;
+    if (mission) syncMissionHash(mission.id);
     resetEvidence();
     if (family) selectFamilyWithoutMission(family);
     renderMission();
@@ -394,6 +502,57 @@
     return mission && mission.command !== undefined && mission.command !== null ? String(mission.command) : '';
   }
 
+  function ssrfRequestExample(fileurl) {
+    return JSON.stringify({ method: 'GET', params: { fileurl }, headers: {}, body: '', content_type: '' }, null, 2);
+  }
+
+  function renderSsrfTutorial() {
+    const control = ssrfRequestExample('not-a-url');
+    const receiver = ssrfRequestExample('http://receiver:8081/');
+    const tutorial = createElement('article', { className: 'mission-tutorial' }, [
+      createElement('div', { className: 'tutorial-heading' }, [
+        createElement('span', { className: 'eyebrow', text: 'TALLER RECOMENDADO // SSRF-01' }),
+        createElement('strong', { text: 'Observa primero; envía solo cuando decidas hacerlo' }),
+      ]),
+      createElement('p', { className: 'tutorial-intro', text: 'La misión compara una URL inválida con una consulta al receptor inocuo del laboratorio. Ningún ejemplo se ejecuta ni se copia al editor automáticamente.' }),
+      createElement('div', { className: 'tutorial-grid' }, [
+        createElement('div', { className: 'tutorial-step' }, [
+          createElement('span', { className: 'route-number', text: '01' }),
+          createElement('div', {}, [createElement('strong', { text: 'Control sintáctico' }), createElement('p', { text: 'Usa fileurl=not-a-url. Espera HTTP 200 con isValid=false y content=Provided URL not valid; 200 por sí solo no demuestra nada.' }), createElement('pre', { className: 'tutorial-code', text: control })]),
+        ]),
+        createElement('div', { className: 'tutorial-step' }, [
+          createElement('span', { className: 'route-number', text: '02' }),
+          createElement('div', {}, [createElement('strong', { text: 'Prueba autorizada' }), createElement('p', { text: 'Después, y solo hacia el receptor local, usa fileurl=http://receiver:8081/. No uses archivos, metadata, IP privadas distintas ni destinos externos.' }), createElement('pre', { className: 'tutorial-code', text: receiver })]),
+        ]),
+        createElement('div', { className: 'tutorial-step tutorial-step-wide' }, [
+          createElement('span', { className: 'route-number', text: '03' }),
+          createElement('div', {}, [createElement('strong', { text: 'Cómo leer el marcador' }), createElement('p', { text: 'En Evidencia devuelta, revisa el JSON real: isValid=true y content contiene VA_LAB_RECEIVER. Si usas Harness, compara control y prueba, aprueba cada llamada y solo después pide lab_submit y lab_progress.' })]),
+        ]),
+      ]),
+    ]);
+    return tutorial;
+  }
+
+  function diagnosticRequestExample(value) {
+    return JSON.stringify({ method: 'GET', params: { ipaddress: value }, headers: {}, body: '', content_type: '' }, null, 2);
+  }
+
+  function renderDiagnosticTutorial() {
+    return createElement('article', { className: 'mission-tutorial' }, [
+      createElement('span', { className: 'eyebrow', text: 'PRIMER TALLER // SOPORTE DE MERCADO CORDILLERA' }),
+      createElement('h3', { text: 'Del diagnóstico de despacho a una evidencia real' }),
+      createElement('p', { text: 'El soporte ficticio ofrece un diagnóstico de conectividad. La ruta real de SasanLabs es CommandInjection/LEVEL_1. No se cambia el reto: se le da contexto comercial.' }),
+      createElement('ol', { className: 'steps-list' }, [
+        createElement('li', { text: 'Abre «Tienda vía Kali». Dentro del escritorio, abre el icono Mercado Cordillera en Firefox. Ve a Retos del taller y elige commandInjection-02.' }),
+        createElement('li', { text: 'Control: ipaddress=127.0.0.1. Observa el JSON; no debe contener VA_LAB_OK. El ping puede fallar por permisos y eso no impide estudiar el reto.' }),
+        createElement('li', { text: 'Prueba benigna: ipaddress=127.0.0.1|printf VA_LAB_OK. El marcador solo demuestra que el dato llegó a una shell; no lee archivos ni abre conexiones externas.' }),
+        createElement('li', { text: 'La tienda no otorga XP. Vuelve a Academy o ejecuta lab login en la terminal Kali con esta misma cuenta; luego lab request commandInjection-02 --method GET --param \'ipaddress=127.0.0.1|printf VA_LAB_OK\'.' }),
+        createElement('li', { text: 'Academy contrasta la respuesta real y asigna 100 XP una sola vez. El harness es opcional: cada llamada requiere una aprobación nueva.' }),
+      ]),
+      createElement('p', { className: 'muted', text: 'Los botones de abajo solo cargan ejemplos: revisa el editor antes de enviarlos. Un HTTP 200 no basta para completar la misión.' }),
+    ]);
+  }
+
   function renderMission() {
     const mission = state.selectedMission;
     if (!mission) {
@@ -405,22 +564,28 @@
       return;
     }
     const completed = isCompleted(mission.id);
+    if (String(mission.id) === 'commandInjection-02') refs.harnessPrompt.textContent = 'Carga vulnerableapp-evidence. Consulta la misión commandInjection-02. Primero propón el control GET con ipaddress=127.0.0.1; espera mi aprobación. Después propón la prueba local con ipaddress=127.0.0.1|printf VA_LAB_OK; espera otra aprobación. Solo con el marcador real VA_LAB_OK propone lab_submit y lab_progress. La cuenta ya se autentica mediante lab login en la terminal de Kali; no pidas credenciales en el chat. No uses destinos externos ni otras órdenes.';
     refs.missionTitle.textContent = displayValue(mission.title, `Misión ${mission.id}`);
     refs.missionState.textContent = completed ? 'COMPLETADA' : 'ABIERTA';
     refs.missionState.className = `state-badge ${completed ? 'state-success' : ''}`;
     const content = createElement('div', { className: 'mission-content' });
+    if (String(mission.id) === 'ssrf-01') content.append(renderSsrfTutorial());
+    if (String(mission.id) === 'commandInjection-02') content.append(renderDiagnosticTutorial());
     const top = createElement('div', { className: 'mission-overview' }, [
       createElement('p', { className: 'lead', text: displayValue(mission.description, 'El backend no publicó una descripción para esta misión.') }),
       createElement('div', { className: 'mission-facts' }, [
         createElement('span', { className: 'fact-chip' }, [createElement('small', { text: 'RUTA' }), createElement('code', { text: displayValue(mission.route, 'ruta local') })]),
         createElement('span', { className: 'fact-chip' }, [createElement('small', { text: 'MÉTODO' }), createElement('code', { text: displayValue(mission.method, 'REQ') })]),
         createElement('span', { className: 'fact-chip' }, [createElement('small', { text: 'RECOMPENSA DEFINIDA' }), createElement('strong', { text: isManualMission(mission) ? '0 XP' : (mission.points !== undefined && mission.points !== null ? `${mission.points} XP` : 'por backend') })]),
+        createElement('a', { className: 'button button-ghost mission-store-link', href: storeUrl(mission.id) || '#guided-help', target: '_blank', rel: 'noopener', text: 'Abrir tienda vía Kali ↗', title: 'En Firefox Kali abre http://target:9090/VulnerableApp/mercado/ y elige esta misión' }),
+        createElement('button', { className: 'text-button mission-copy-link', type: 'button', text: 'Copiar enlace' }),
       ]),
     ]);
     content.append(top);
 
     const split = createElement('div', { className: 'mission-split' });
     const docs = createElement('div', { className: 'mission-docs' });
+    docs.append(createElement('div', { className: 'doc-block business-context' }, [createElement('p', { className: 'criterion-label', text: 'Contexto comercial' }), createElement('p', { text: businessContextForMission(mission) })]));
     docs.append(createElement('div', { className: 'doc-block' }, [createElement('p', { className: 'criterion-label', text: 'Criterio verificable' }), createElement('p', { className: 'criterion-copy', text: missionCheckText(mission) })]));
     if (mission.explanation) docs.append(createElement('div', { className: 'doc-block' }, [createElement('p', { className: 'criterion-label', text: 'Por qué importa' }), createElement('p', { text: mission.explanation })]));
     if (mission.mitigation) docs.append(createElement('div', { className: 'doc-block mitigation-block' }, [createElement('p', { className: 'criterion-label', text: 'Mitigación' }), createElement('p', { text: mission.mitigation })]));
@@ -435,6 +600,32 @@
     requestTextarea.value = makeRequestTemplate(mission);
     const help = createElement('p', { className: 'editor-help', text: isManualMission(mission) ? 'Esta solicitud puede servir para observar la respuesta, pero esta misión requiere revisión manual y no es puntuable. Usa objetos JSON con parámetros y headers de texto; no se envían valores malformados.' : 'Edita solo la solicitud que deseas enviar: el laboratorio ejecuta únicamente la solicitud del alumno contra el target y evalúa la evidencia devuelta. No es un botón de “completar” y no se rellena con un exploit al seleccionar la misión.' });
     const editorActions = createElement('div', { className: 'editor-actions' });
+    if (String(mission.id) === 'ssrf-01') {
+      const examples = createElement('div', { className: 'editor-example-actions' }, [
+        createElement('button', { className: 'button button-ghost', type: 'button', dataset: { ssrfExample: 'control' }, text: 'Cargar control (no envía)' }),
+        createElement('button', { className: 'button button-ghost', type: 'button', dataset: { ssrfExample: 'receiver' }, text: 'Cargar prueba autorizada (no envía)' }),
+      ]);
+      examples.querySelector('[data-ssrf-example="control"]').addEventListener('click', () => {
+        requestTextarea.value = ssrfRequestExample('not-a-url');
+        requestTextarea.focus();
+        showToast('Control cargado en el editor; todavía no se ha enviado.', 'info');
+      });
+      examples.querySelector('[data-ssrf-example="receiver"]').addEventListener('click', () => {
+        requestTextarea.value = ssrfRequestExample('http://receiver:8081/');
+        requestTextarea.focus();
+        showToast('Prueba autorizada cargada; revisa y envíala solo si lo decides.', 'info');
+      });
+      editorActions.append(examples);
+    }
+    if (String(mission.id) === 'commandInjection-02') {
+      const examples = createElement('div', { className: 'editor-example-actions' });
+      [['control', '127.0.0.1', 'Cargar control (no envía)'], ['marker', '127.0.0.1|printf VA_LAB_OK', 'Cargar marcador benigno (no envía)']].forEach(([name, value, label]) => {
+        const button = createElement('button', { className: 'button button-ghost', type: 'button', text: label, dataset: { diagnosticExample: name } });
+        button.addEventListener('click', () => { requestTextarea.value = diagnosticRequestExample(value); requestTextarea.focus(); showToast('Ejemplo cargado; todavía no se ha enviado.', 'info'); });
+        examples.append(button);
+      });
+      editorActions.append(examples);
+    }
     const sendButton = createElement('button', { className: 'button button-primary', type: 'button', text: 'Enviar mi prueba al laboratorio' });
     sendButton.addEventListener('click', () => submitAttempt(requestTextarea, sendButton));
     editorActions.append(sendButton);
@@ -453,6 +644,8 @@
     commandCopyButton.addEventListener('click', () => copyText(commandText, commandCopyButton));
     content.append(command);
     replaceContent(refs.missionContent, content);
+    const copyMissionLink = refs.missionContent.querySelector('.mission-copy-link');
+    if (copyMissionLink) copyMissionLink.addEventListener('click', () => copyText(missionDeepLink(mission.id), copyMissionLink));
     refs.evidenceCriterion.textContent = missionCheckText(mission);
   }
 
@@ -826,7 +1019,12 @@
       renderFamilyNav();
       renderMe(me);
       const families = normalizeFamilies(state.catalog);
-      if (families.length) selectFamily(families[0], false);
+      updateLocalLinks();
+      const requestedMission = findMission(readMissionHash());
+      const firstMission = requestedMission || findMission('ssrf-01') || allMissions()[0] || null;
+      const firstFamily = familyForMission(firstMission) || families[0] || null;
+      if (firstMission && firstFamily) selectMission(firstMission, firstFamily);
+      else if (firstFamily) selectFamily(firstFamily, false);
       setSessionStatus('sincronizado', true);
       state.sessionReady = true;
       startPolling();
@@ -913,6 +1111,25 @@
     }
   }
 
+  function startWorkshop() {
+    const mission = findMission('commandInjection-02') || allMissions()[0] || null;
+    const family = familyForMission(mission);
+    if (!mission || !family) {
+      showToast('El catálogo todavía no contiene una misión recomendada.', 'error');
+      return;
+    }
+    selectMission(mission, family);
+    revealNode(refs.missionTitle);
+    showToast('Primera misión: soporte/diagnóstico. Abre la tienda en Firefox dentro de Kali y compara el control.', 'info');
+  }
+
+  function handleMissionHash() {
+    if (!state.sessionReady) return;
+    const mission = findMission(readMissionHash());
+    if (!mission || (state.selectedMission && String(state.selectedMission.id) === String(mission.id))) return;
+    selectMission(mission, familyForMission(mission));
+  }
+
   function setupTabs() {
     refs.authTabs.forEach((tab) => tab.addEventListener('click', () => {
       const target = tab.dataset.authTab;
@@ -932,7 +1149,7 @@
     refs.kaliToggle.addEventListener('change', () => {
       const visible = refs.kaliToggle.checked;
       setVisible(refs.kaliFrameWrap, visible);
-      if (visible && refs.kaliFrame.src === 'about:blank') refs.kaliFrame.src = '/kali/vnc.html?autoconnect=1&resize=scale&path=websockify';
+      if (visible && refs.kaliFrame.src === 'about:blank') refs.kaliFrame.src = kaliUrl() || '/kali/vnc.html?autoconnect=1&resize=scale&path=websockify';
     });
   }
 
@@ -942,7 +1159,7 @@
       refs.chaptersToggle.setAttribute('aria-expanded', visible ? 'true' : 'false');
     });
     document.querySelector('#workspace-focus').addEventListener('click', () => {
-      refs.missionTitle.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      revealNode(refs.missionTitle);
     });
     document.addEventListener('keydown', (event) => {
       if (event.key !== 'Escape') return;
@@ -958,7 +1175,10 @@
     refs.logoutButton.addEventListener('click', () => logout(true));
     refs.refreshButton.addEventListener('click', () => refreshProgress(false));
     refs.exportButton.addEventListener('click', exportProgress);
+    refs.startWorkshop.addEventListener('click', startWorkshop);
+    refs.copyHarnessPrompt.addEventListener('click', () => copyText(refs.harnessPrompt.textContent, refs.copyHarnessPrompt));
     refs.tutorForm.addEventListener('submit', submitTutor);
+    window.addEventListener('hashchange', handleMissionHash);
     setupKaliToggle();
     setupMobileControls();
   }

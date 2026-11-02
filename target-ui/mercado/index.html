@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Mercado Cordillera: tienda ficticia y laboratorio guiado de seguridad web.">
+  <title>Mercado Cordillera · Laboratorio ficticio</title>
+  <link rel="stylesheet" href="store.css">
+  <script defer src="store.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Saltar al contenido principal</a>
+  <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+
+  <header class="site-header">
+    <div class="utility-bar">
+      <div class="shell utility-inner">
+        <p><span class="utility-dot" aria-hidden="true"></span> Laboratorio ficticio · sin pagos reales · sin XP desde esta tienda</p>
+        <div class="utility-links">
+          <a id="academy-return-global" class="academy-link" data-academy-link href="http://localhost:8080/">Volver a Academy</a>
+          <a href="/VulnerableApp/original/">Abrir experiencia técnica original</a>
+        </div>
+      </div>
+    </div>
+    <div class="shell header-main">
+      <a class="brand" href="#inicio" data-view="home" aria-label="Mercado Cordillera, inicio">
+        <span class="brand-mark" aria-hidden="true">⌃</span>
+        <span><strong>Mercado</strong><em>Cordillera</em></span>
+      </a>
+      <form id="global-search" class="search-form" role="search">
+        <label class="sr-only" for="global-search-input">Buscar productos o retos</label>
+        <input id="global-search-input" type="search" autocomplete="off" placeholder="¿Qué estás buscando? Productos o retos...">
+        <button type="submit" aria-label="Buscar">Buscar</button>
+      </form>
+      <button id="cart-toggle" class="cart-trigger" type="button" aria-controls="cart-panel" aria-expanded="false">
+        <span class="cart-icon" aria-hidden="true">▱</span>
+        <span>Bolsa</span>
+        <strong id="cart-count">0</strong>
+      </button>
+    </div>
+    <nav class="main-nav" aria-label="Navegación principal">
+      <div class="shell nav-inner">
+        <a href="#inicio" data-view="home">Inicio</a>
+        <a href="#catalogo" data-view="catalog">Catálogo</a>
+        <a href="#pedidos" data-view="orders">Mis pedidos</a>
+        <a href="#cuenta" data-view="account">Mi cuenta</a>
+        <a href="#soporte" data-view="support">Soporte</a>
+        <a href="#retos" data-view="challenges">Retos del taller <span class="nav-count">189</span></a>
+        <a href="#administracion" data-view="admin">Backoffice pedagógico</a>
+      </div>
+    </nav>
+  </header>
+
+  <main id="main-content">
+    <section id="page-home" class="page-section is-active" data-page="home" aria-labelledby="home-title">
+      <div class="shell">
+        <div class="hero-grid">
+          <div class="hero-copy">
+            <p class="eyebrow">Despacho imaginario desde la precordillera</p>
+            <h1 id="home-title">Equipamiento con <span>historia de campo.</span></h1>
+            <p class="hero-lede">Una tienda chilena ficticia para recorrer un laboratorio de seguridad sin perder el hilo del negocio. Compra tranquilo: aquí no se cobran pedidos ni se alteran cuentas.</p>
+            <div class="hero-actions">
+              <a class="button button-primary" href="#catalogo" data-view="catalog">Explorar catálogo</a>
+              <a class="button button-secondary" href="#retos" data-view="challenges">Ir a los retos</a>
+            </div>
+            <div class="hero-note">
+              <span class="note-icon" aria-hidden="true">✦</span>
+              <p><strong>Hecho para aprender.</strong> La vitrina es pedagógica: el backend vulnerable conserva sus rutas técnicas originales y la tienda solo ayuda a darles contexto.</p>
+            </div>
+          </div>
+          <div class="hero-art" aria-label="Ilustración tipográfica de la cordillera">
+            <div class="sun-disc"></div>
+            <div class="mountain mountain-back"></div>
+            <div class="mountain mountain-front"></div>
+            <div class="hero-stamp"><span>MC</span><small>Ruta 01<br>Campo seguro</small></div>
+          </div>
+        </div>
+
+        <section class="story-strip" aria-labelledby="story-title">
+          <div>
+            <p class="eyebrow">La bitácora</p>
+            <h2 id="story-title">De la vitrina a la práctica</h2>
+          </div>
+          <p>Mercado Cordillera es un negocio inventado sobre un laboratorio existente. No afirmamos que Java sea el backend de un ecommerce: aquí la adaptación pedagógica superpone una narrativa de catálogo al servicio VulnerableApp para que cada ruta tenga una historia, un control benigno y una forma clara de volver a la Academia.</p>
+          <a class="text-link" href="#retos" data-view="challenges">Conocer el recorrido <span aria-hidden="true">→</span></a>
+        </section>
+
+        <section class="featured-section" aria-labelledby="featured-title">
+          <div class="section-heading">
+            <div><p class="eyebrow">Selección de la semana</p><h2 id="featured-title">Tres básicos, cero humo</h2></div>
+            <a class="text-link" href="#catalogo" data-view="catalog">Ver todo <span aria-hidden="true">→</span></a>
+          </div>
+          <div id="featured-products" class="product-grid"></div>
+        </section>
+
+        <section class="onboarding-card" aria-labelledby="onboarding-title">
+          <div class="onboarding-mark" aria-hidden="true">◎</div>
+          <div>
+            <p class="eyebrow">Antes de probar</p>
+            <h2 id="onboarding-title">Una ruta segura para empezar</h2>
+            <p>Elige un reto, lee su control benigno y marca la confirmación explícita antes de enviar una solicitud. La respuesta se muestra como texto acotado; un HTTP 200 no significa que el ejercicio haya sido exitoso.</p>
+            <p class="onboarding-terminal"><strong>¿Necesitas harness o terminal?</strong> Desde tu Mac abre la Kali del laboratorio según tu entorno y usa allí <code>lab login</code> y <code>lab request</code>. No pegues credenciales, tokens ni sesiones en esta tienda.</p>
+          </div>
+          <a class="button button-secondary" href="#retos" data-view="challenges">Abrir guía de retos</a>
+        </section>
+      </div>
+    </section>
+
+    <section id="page-catalog" class="page-section" data-page="catalog" aria-labelledby="catalog-title" hidden>
+      <div class="shell">
+        <div class="page-heading">
+          <div><p class="eyebrow">Colección cordillerana</p><h1 id="catalog-title">Catálogo</h1></div>
+          <p>Productos ilustrativos, precios en CLP y una bolsa local sin checkout real.</p>
+        </div>
+        <div class="catalog-toolbar">
+          <div class="category-tabs" role="group" aria-label="Filtrar productos por categoría">
+            <button class="category-tab is-active" type="button" data-category="all">Todo</button>
+            <button class="category-tab" type="button" data-category="trekking">Trekking</button>
+            <button class="category-tab" type="button" data-category="campamento">Campamento</button>
+            <button class="category-tab" type="button" data-category="audio">Audio de ruta</button>
+          </div>
+          <p id="catalog-result-count" class="result-count" aria-live="polite"></p>
+        </div>
+        <div id="catalog-products" class="product-grid product-grid-wide"></div>
+      </div>
+    </section>
+
+    <section id="page-orders" class="page-section" data-page="orders" aria-labelledby="orders-title" hidden>
+      <div class="shell narrow-shell">
+        <div class="page-heading"><div><p class="eyebrow">Bitácora de despacho</p><h1 id="orders-title">Mis pedidos</h1></div><span class="status-pill">Modo demostración</span></div>
+        <div class="content-card order-card">
+          <div class="order-topline"><span class="order-number">MC-0001</span><span class="order-status">Ruta simulada</span></div>
+          <h2>Tu próxima salida a la montaña</h2>
+          <p>Este pedido ficticio representa una conversación de negocio: catálogo, despacho y soporte. No hay una orden persistida, cobro, cuenta real ni conexión con la Academia.</p>
+          <div class="order-items"><span>Mochila Andina</span><strong>$39.990</strong><span>Despacho Cordillera</span><strong>Gratis · simulación</strong></div>
+          <div class="card-actions"><button class="button button-primary" type="button" data-view="catalog">Armar una bolsa local</button><a class="button button-secondary" href="#retos" data-view="challenges" data-mission="passwordReset-01">Relacionar con una práctica</a></div>
+        </div>
+        <div class="info-grid">
+          <article class="content-card"><p class="eyebrow">Estado</p><h2>Sin transacción</h2><p>El estado nunca se envía a un servicio de pagos. La bolsa vive solo en esta pestaña.</p></article>
+          <article class="content-card"><p class="eyebrow">Aprendizaje</p><h2>Flujos con cuidado</h2><p>Explora recuperación de contraseñas como práctica, no como un mecanismo de compra.</p><a class="text-link" href="#retos" data-view="challenges" data-mission="passwordReset-01">Abrir reto sugerido →</a></article>
+        </div>
+      </div>
+    </section>
+
+    <section id="page-account" class="page-section" data-page="account" aria-labelledby="account-title" hidden>
+      <div class="shell narrow-shell">
+        <div class="page-heading"><div><p class="eyebrow">Perfil de expedición</p><h1 id="account-title">Mi cuenta</h1></div><span class="status-pill">Perfil ficticio</span></div>
+        <div class="account-layout">
+          <article class="content-card account-card"><div class="avatar" aria-hidden="true">VC</div><h2>Visitante Cordillera</h2><p class="muted">Sesión local de demostración · sin credenciales</p><dl class="definition-list"><div><dt>Preferencia</dt><dd>Rutas de baja huella</dd></div><div><dt>Despacho</dt><dd>Valle central · ficticio</dd></div><div><dt>Privacidad</dt><dd>No se guarda en almacenamiento</dd></div></dl><a class="button button-secondary" href="#retos" data-view="challenges" data-mission="authentication-01">Estudiar autenticación</a></article>
+          <article class="content-card"><p class="eyebrow">Nota de laboratorio</p><h2>Una cuenta no es un token</h2><p>Esta vista no inicia sesión y no comparte credenciales con Academy. Si una misión necesita autenticación o cookies, sigue las instrucciones técnicas y usa el original o el cliente de Kali con datos del laboratorio.</p><a class="text-link" href="/VulnerableApp/original/">Abrir endpoint original →</a></article>
+        </div>
+      </div>
+    </section>
+
+    <section id="page-support" class="page-section" data-page="support" aria-labelledby="support-title" hidden>
+      <div class="shell narrow-shell">
+        <div class="page-heading"><div><p class="eyebrow">Acompañamiento de ruta</p><h1 id="support-title">Soporte</h1></div><span class="status-pill">Atención ficticia</span></div>
+        <div class="support-grid">
+          <article class="content-card support-card"><span class="support-icon" aria-hidden="true">✉</span><h2>¿La respuesta no coincide?</h2><p>Compara primero el método, la ruta exacta y el control negativo. En el laboratorio las respuestas pueden ser HTTP 200 aunque el criterio JSON no se cumpla.</p><a class="button button-primary" href="#retos" data-view="challenges" data-mission="authentication-01">Revisar un control JSON</a></article>
+          <article class="content-card support-card"><span class="support-icon" aria-hidden="true">⌁</span><h2>¿Necesitas contexto de navegador?</h2><p>Para XSS, CSRF, archivos y ejercicios marcados como navegador, el texto de fetch no ejecuta HTML ni JavaScript. Abre el endpoint real o la experiencia original y trabaja desde Kali cuando corresponda.</p><a class="button button-secondary" href="#retos" data-view="challenges" data-mission="xss-01">Abrir práctica de contexto</a></article>
+          <article class="content-card support-card"><span class="support-icon" aria-hidden="true">↗</span><h2>Contacto de aprendizaje</h2><p>La Academia conserva la misión, la cuenta y cualquier puntuación. Esta tienda solo ofrece una guía y un request same-origin controlado.</p><a class="text-link" href="#retos" data-view="challenges">Ir a Retos del taller →</a></article>
+        </div>
+      </div>
+    </section>
+
+    <section id="page-admin" class="page-section" data-page="admin" aria-labelledby="admin-title" hidden>
+      <div class="shell">
+        <div class="page-heading">
+          <div><p class="eyebrow">Panel de acompañamiento</p><h1 id="admin-title">Administración pedagógica</h1><p class="heading-lede">Una vista de docente para leer el taller, no para administrar cuentas ni alterar XP.</p></div>
+          <span class="status-pill">Solo lectura</span>
+        </div>
+        <div class="admin-grid">
+          <article class="content-card admin-stat"><p class="eyebrow">Misiones</p><strong id="admin-mission-count">189</strong><p>Entradas servidas desde el catálogo exacto de Academy.</p></article>
+          <article class="content-card admin-stat"><p class="eyebrow">Familias</p><strong id="admin-family-count">20</strong><p>Áreas disponibles para ordenar la conversación técnica.</p></article>
+          <article class="content-card admin-stat"><p class="eyebrow">Puntos del catálogo</p><strong id="admin-points-total">—</strong><p>Referencia informativa; esta tienda nunca adjudica XP.</p></article>
+        </div>
+        <div class="admin-layout">
+          <article class="content-card">
+            <p class="eyebrow">Fuente controlada</p>
+            <h2>Una vitrina, una fuente de verdad</h2>
+            <p>El target sirve <code>catalog.json</code>, construido directamente desde <code>academy/data/catalog.json</code>. Esta interfaz no reescribe rutas, métodos, criterios ni puntajes: solo los presenta como texto.</p>
+            <div class="admin-source"><span>Estado de carga</span><strong id="admin-catalog-status">Esperando catálogo…</strong></div>
+            <div class="card-actions"><a class="button button-primary" href="#retos" data-view="challenges">Abrir mapa de retos</a><a class="button button-secondary" href="#cuenta" data-view="account">Ver cuenta ficticia</a></div>
+          </article>
+          <article class="content-card">
+            <p class="eyebrow">Primera práctica sugerida</p>
+            <h2>Diagnóstico benigno</h2>
+            <p>Para <code>commandInjection-02</code>, el editor puede cargar el único marcador permitido: <code>127.0.0.1|printf VA_LAB_OK</code>. Revisar y copiar no ejecuta nada; enviar requiere confirmación explícita.</p>
+            <a class="text-link" href="#retos" data-view="challenges" data-mission="commandInjection-02">Abrir commandInjection-02 →</a>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="page-challenges" class="page-section" data-page="challenges" aria-labelledby="challenges-title" hidden>
+      <div class="shell">
+        <div class="page-heading challenges-heading">
+          <div><p class="eyebrow">Laboratorio · mapa de prácticas</p><h1 id="challenges-title">Retos del taller</h1><p class="heading-lede">20 familias · 189 misiones · rutas técnicas exactas, contexto comercial en español.</p></div>
+          <div class="challenge-links"><a class="button button-secondary" id="academy-return" data-academy-link href="http://localhost:8080/">Volver a Academy</a><a class="text-link" href="/VulnerableApp/original/">Ver original →</a></div>
+        </div>
+        <div class="challenge-onboarding">
+          <strong>Cómo recorrerlo:</strong> busca por título o área, selecciona una misión y revisa el control benigno. El selector usa el catálogo local exacto. La tienda no adjudica XP ni guarda tokens; Academy valida la misión desde su propio origen.
+        </div>
+        <div class="challenge-toolbar">
+          <div class="field-group"><label for="challenge-search">Buscar misión o área</label><input id="challenge-search" type="search" autocomplete="off" placeholder="Ej.: autenticación, archivo, SSRF..."></div>
+          <div class="field-group"><label for="family-filter">Área del taller</label><select id="family-filter"><option value="all">Todas las familias</option></select></div>
+          <div class="field-group"><label for="mission-select">Nivel / misión exacta</label><select id="mission-select"><option value="">Selecciona una misión</option></select></div>
+        </div>
+        <div class="challenge-layout">
+          <aside class="family-panel" aria-labelledby="families-title"><div class="panel-heading"><div><p class="eyebrow">Áreas</p><h2 id="families-title">Mapa de familias</h2></div><span id="family-count" class="panel-count">0</span></div><div id="family-list" class="family-list"><p class="loading-copy">Cargando catálogo local…</p></div></aside>
+          <div class="mission-column">
+            <div class="panel-heading mission-list-heading"><div><p class="eyebrow">Misiones disponibles</p><h2 id="mission-list-title">Selecciona una familia</h2></div><span id="mission-count" class="panel-count">0</span></div>
+            <div id="mission-list" class="mission-list"><p class="empty-copy">El catálogo aparecerá aquí sin iniciar ninguna solicitud.</p></div>
+            <article id="mission-detail" class="mission-detail" aria-live="polite">
+              <div class="empty-detail"><span aria-hidden="true">⌁</span><h2>Tu mesa de práctica está lista</h2><p>Selecciona un nivel para ver la ruta exacta, el criterio de verificación y el editor de solicitud.</p></div>
+            </article>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <aside id="cart-panel" class="cart-panel" role="dialog" aria-modal="true" aria-labelledby="cart-title" aria-hidden="true" inert>
+    <div class="cart-panel-head"><div><p class="eyebrow">Bolsa local</p><h2 id="cart-title">Tu selección</h2></div><button id="cart-close" class="icon-button" type="button" aria-label="Cerrar bolsa">×</button></div>
+    <div id="cart-items" class="cart-items"><p class="empty-copy">Todavía no has elegido equipo.</p></div>
+    <div class="cart-summary"><div><span>Subtotal simulado</span><strong id="cart-total">$0</strong></div><p>Sin pago, despacho real ni persistencia.</p><button id="cart-review" class="button button-primary" type="button">Revisar pedido ficticio</button></div>
+  </aside>
+  <div id="cart-scrim" class="scrim" hidden></div>
+
+  <footer class="site-footer">
+    <div class="shell footer-grid">
+      <div><a class="brand footer-brand" href="#inicio" data-view="home"><span class="brand-mark" aria-hidden="true">⌃</span><span><strong>Mercado</strong><em>Cordillera</em></span></a><p>Una adaptación pedagógica cálida sobre un laboratorio vulnerable. Ficción comercial, prácticas reales y ningún cobro.</p></div>
+      <div><p class="footer-label">Atajos</p><a href="#catalogo" data-view="catalog">Catálogo</a><a href="#retos" data-view="challenges">Retos del taller</a><a href="#administracion" data-view="admin">Backoffice pedagógico</a><a href="/VulnerableApp/original/">Experiencia original</a></div>
+      <div><p class="footer-label">Entornos</p><p>Academy en Kali: <code>http://gateway:8080/</code></p><p>Academy en Mac: <code>http://localhost:8080/</code></p><p>Target solo en Kali: <code>http://target:9090/</code></p></div>
+      <div><p class="footer-label">Créditos y contexto</p><p>Origen vulnerable: <a href="https://github.com/SasanLabs/VulnerableApp" target="_blank" rel="noopener noreferrer">SasanLabs/VulnerableApp</a></p><p>Proyecto OWASP: <a href="https://owasp.org/projects/vulnerableapp" target="_blank" rel="noopener noreferrer">OWASP VulnerableApp</a></p><a href="https://postgrados.umayor.cl/docentes/ingenieria-seguridad-informacion/" target="_blank" rel="noopener noreferrer">Contexto docente</a></div>
+    </div>
+    <div class="shell footer-bottom"><span>© Laboratorio Cordillera · ficción</span><span>CLP · Intl.NumberFormat es-CL</span></div>
+  </footer>
+</body>
+</html>

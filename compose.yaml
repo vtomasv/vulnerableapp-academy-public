@@ -171,7 +171,8 @@ services:
     networks:
       - lab
       - control
-    pids_limit: 512
+    init: true
+    pids_limit: ${KALI_PIDS_LIMIT:-1024}
     cpus: ${KALI_CPUS:-2.0}
     mem_limit: ${KALI_MEMORY:-3g}
     restart: unless-stopped

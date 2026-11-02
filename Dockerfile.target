@@ -8,6 +8,9 @@ RUN mkdir -p src/main/resources/scripts/training \
     && ./gradlew --no-daemon --stacktrace bootJar -x test
 RUN mkdir -p /unpacked && cd /unpacked \
     && jar xf /build/build/libs/VulnerableApp-1.0.0.jar
+COPY target-overlay/AcademyNavigation.java /tmp/AcademyNavigation.java
+RUN javac -cp '/unpacked/BOOT-INF/classes:/unpacked/BOOT-INF/lib/*' \
+    -d /unpacked/BOOT-INF/classes /tmp/AcademyNavigation.java
 
 FROM eclipse-temurin:17-jre
 
@@ -26,6 +29,13 @@ RUN apt-get update \
     && printf 'VA_LAB_FILE' > /tmp/va-training.txt
 
 COPY --from=builder /unpacked /app
+
+RUN mkdir -p /app/BOOT-INF/classes/static/original \
+    && sed 's|<head>|<head><base href="/VulnerableApp/">|' \
+       /app/BOOT-INF/classes/static/index.html > /app/BOOT-INF/classes/static/original/index.html
+COPY target-ui/ /app/BOOT-INF/classes/static/
+COPY academy/data/catalog.json /app/BOOT-INF/classes/static/mercado/catalog.json
+RUN chmod -R a+rX /app/BOOT-INF/classes/static
 
 ENV SERVER_PORT=9090 \
     SERVER_SERVLET_CONTEXT_PATH=/VulnerableApp \

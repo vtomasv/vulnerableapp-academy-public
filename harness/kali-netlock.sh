@@ -15,7 +15,9 @@ apply_rules() {
   {
     printf '*filter\n:INPUT ACCEPT [0:0]\n:FORWARD DROP [0:0]\n:OUTPUT DROP [0:0]\n'
     printf '%s\n' '-A OUTPUT -o lo -j ACCEPT' '-A OUTPUT -d 127.0.0.11 -p udp --dport 53 -j ACCEPT' '-A OUTPUT -d 127.0.0.11 -p tcp --dport 53 -j ACCEPT' '-A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT'
-    for spec in 'academy 8000' 'target 9090' 'receiver 8081' 'mailpit 8025' 'ollama 11434'; do
+    # Gateway is only the browser return path to Academy; harness HTTP tools
+    # retain their five-service allowlist and do not accept gateway as a target.
+    for spec in 'academy 8000' 'target 9090' 'receiver 8081' 'mailpit 8025' 'ollama 11434' 'gateway 8080'; do
       set -- $spec
       host=$1; port=$2
       for ip in $(getent ahostsv4 "$host" 2>/dev/null | awk '{print $1}' | sort -u); do

@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "brand": "Mercado Cordillera",
+  "families": {
+    "authentication": {"title": "Autenticación y contraseñas", "area": "Identidad", "summary": "Sesiones de acceso, almacenamiento de contraseñas y señales de autenticación.", "ctaMission": "authentication-01"},
+    "cachePoisoning": {"title": "Caché compartida", "area": "Entrega web", "summary": "Cómo una caché puede mezclar respuestas, cabeceras y contenido personalizado.", "ctaMission": "cachePoisoning-01"},
+    "clickjacking": {"title": "Protección de marcos", "area": "Navegador", "summary": "Clics engañosos, iframes y cabeceras que delimitan una interfaz.", "ctaMission": "clickjacking-01"},
+    "commandInjection": {"title": "Inyección de comandos", "area": "Servidor", "summary": "Entradas que llegan a una orden del sistema y controles de validación.", "ctaMission": "commandInjection-01"},
+    "cryptographicFailures": {"title": "Fallos criptográficos", "area": "Secretos", "summary": "Contraseñas, hashes y decisiones criptográficas que necesitan contexto.", "ctaMission": "cryptographicFailures-01"},
+    "deserialization": {"title": "Deserialización insegura", "area": "Datos confiables", "summary": "Cookies y objetos que no deberían poder elegir su forma en el servidor.", "ctaMission": "deserialization-01"},
+    "fileupload": {"title": "Carga de archivos", "area": "Archivos", "summary": "Validación de nombres, tipos, contenido y límites de cargas.", "ctaMission": "fileupload-01"},
+    "idor": {"title": "Acceso a objetos", "area": "Autorización", "summary": "La diferencia entre reconocer una sesión y autorizar cada objeto.", "ctaMission": "idor-01"},
+    "jwt": {"title": "Tokens JWT", "area": "Sesiones", "summary": "Transporte y validación criptográfica de tokens en rutas controladas.", "ctaMission": "jwt-01"},
+    "ldapInjection": {"title": "Inyección LDAP", "area": "Directorios", "summary": "Filtros de directorio construidos con entradas de consulta.", "ctaMission": "ldapInjection-01"},
+    "openRedirect": {"title": "Redirecciones abiertas", "area": "Navegación", "summary": "Destinos controlados por el cliente y el valor real de Location.", "ctaMission": "openRedirect-01"},
+    "otp": {"title": "Códigos OTP", "area": "Verificación", "summary": "Emisión, caducidad, intentos y reutilización de códigos de un solo uso.", "ctaMission": "otp-01"},
+    "passwordReset": {"title": "Recuperación de cuenta", "area": "Soporte", "summary": "Tokens de recuperación, estados y límites de un flujo de contraseña.", "ctaMission": "passwordReset-01"},
+    "pathTraversal": {"title": "Rutas y archivos", "area": "Archivos", "summary": "Normalización de nombres y lectura acotada bajo un directorio permitido.", "ctaMission": "pathTraversal-01"},
+    "rfi": {"title": "Inclusión remota", "area": "Servidor", "summary": "Solicitudes salientes controladas por una URL y sus límites.", "ctaMission": "rfi-01"},
+    "sessionManagement": {"title": "Gestión de sesiones", "area": "Sesiones", "summary": "Fijación, predicción, expiración y controles de sesión en el laboratorio.", "ctaMission": "sessionManagement-01"},
+    "sqlInjection": {"title": "Inyección SQL", "area": "Datos", "summary": "Consultas y controles de entrada sin confundir un 200 con una evidencia.", "ctaMission": "sqlInjection-01"},
+    "ssrf": {"title": "Solicitudes SSRF", "area": "Servidor", "summary": "Un control benigno al receptor local para entender solicitudes desde servidor.", "ctaMission": "ssrf-01"},
+    "xss": {"title": "XSS y contexto de navegador", "area": "Navegador", "summary": "Reflejo, escape y la diferencia entre texto recibido y ejecución real.", "ctaMission": "xss-01"},
+    "xxe": {"title": "Entidades XML", "area": "Datos", "summary": "Procesamiento XML, entidades y controles de archivos o red locales.", "ctaMission": "xxe-01"}
+  }
+}

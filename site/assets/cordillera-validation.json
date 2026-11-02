@@ -1,0 +1,102 @@
+{
+  "date": "2026-11-02",
+  "ui": {
+    "ok": true,
+    "manual_score": 100,
+    "control_no_xp": true,
+    "families": 20,
+    "missions": 189,
+    "store_real_endpoint": true,
+    "admin": true,
+    "original_available": true,
+    "responsive": [
+      {
+        "page": "academy",
+        "width": 390,
+        "overflow": false
+      },
+      {
+        "page": "academy",
+        "width": 768,
+        "overflow": false
+      },
+      {
+        "page": "academy",
+        "width": 1200,
+        "overflow": false
+      },
+      {
+        "page": "academy",
+        "width": 1440,
+        "overflow": false
+      },
+      {
+        "page": "academy",
+        "width": 1512,
+        "overflow": false
+      },
+      {
+        "page": "mercado",
+        "width": 390,
+        "overflow": false
+      },
+      {
+        "page": "mercado",
+        "width": 768,
+        "overflow": false
+      },
+      {
+        "page": "mercado",
+        "width": 1200,
+        "overflow": false
+      },
+      {
+        "page": "mercado",
+        "width": 1440,
+        "overflow": false
+      },
+      {
+        "page": "mercado",
+        "width": 1512,
+        "overflow": false
+      }
+    ]
+  },
+  "backend_tests": {
+    "passed": 10,
+    "mocks_where_declared": true
+  },
+  "helper_tests": {
+    "passed": 22,
+    "failed": 0,
+    "skipped": 0
+  },
+  "existing_progress_preserved": true,
+  "target_public": false,
+  "pages_static_only": true,
+  "harness": {
+    "real_model": true,
+    "replay": false,
+    "model": "huihui_ai/Qwen3.8-abliterated:27b",
+    "score": 100,
+    "mission": "commandInjection-02",
+    "approvals": [
+      "skill",
+      "lab_missions",
+      "lab_submit",
+      "lab_progress"
+    ],
+    "distinct_approval_keys": 4,
+    "page_errors": []
+  },
+  "site": {
+    "widths": [
+      390,
+      768,
+      1512
+    ],
+    "assets": true,
+    "anchors": true,
+    "no_overflow": true
+  }
+}

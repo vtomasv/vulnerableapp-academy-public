@@ -1,5 +1,7 @@
 # Validación y límites de prueba
 
+La revisión posterior de inicio guiado, tienda chilena y navegador del Mac está en [Validación de Mercado Cordillera](VALIDACION_CORDILLERA.md). Las secciones históricas siguientes conservan su alcance original.
+
 ## Pruebas Docker reales de esta ampliación
 
 El laboratorio se construyó y arrancó con Docker/Compose real en Linux ARM64. Se compilaron el Java original y el motor `S1N6H/pentest-harness` del commit fijado; se instalaron las herramientas, XFCE, VNC/noVNC, Node y el runtime del harness en Kali. Los inicializadores de secretos y pesos terminaron con código 0 y los servicios residentes quedaron saludables, incluidos los tres bloqueos de salida de target, Kali y gateway.

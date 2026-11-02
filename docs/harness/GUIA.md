@@ -10,19 +10,21 @@ En la carpeta del repositorio, desde Windows, Linux o macOS:
 docker compose up --build -d
 ```
 
-Abrir `http://localhost:8080`, registrar una cuenta individual y pulsar **Abrir Kali**. En el escritorio noVNC, abrir **Harness del taller**. Si se prefiere una terminal de Kali:
+Abrir `http://localhost:8080`, registrar una cuenta individual y entrar en **Comenzar taller → Retos del taller → commandInjection-02** como soporte diagnóstico. **Abrir Kali** muestra el escritorio noVNC; **Abrir tienda** usa `http://localhost:8080/kali/vnc.html?autoconnect=1&resize=scale&path=websockify`. En Firefox de Kali, el icono **Mercado Cordillera** abre `http://target:9090/VulnerableApp/mercado/`; el backend original opcional está en `http://target:9090/VulnerableApp/original/`.
+
+En el escritorio noVNC, abrir **Harness del taller**. Si se prefiere una terminal de Kali:
 
 ```bash
 firefox-esr http://127.0.0.1:2323
 ```
 
-Aceptar la pantalla inicial del motor y, si solicita una carpeta, usar `/home/kali`. El preset predeterminado debe ser **Taller VulnerableApp**, no uno de pentesting genérico. No iniciar una segunda copia del servidor. Las explicaciones, razones de aprobación, catálogo y resultados docentes están en español; algunos controles del motor original aparecen como **Allow once**, **Reject** y **Choose workspace**: significan permitir una sola llamada, rechazarla y elegir la carpeta del trabajo.
+Aceptar la pantalla inicial del motor y, si solicita una carpeta, usar `/home/kali`. El preset predeterminado debe ser **Taller VulnerableApp**, no uno de pentesting genérico. No iniciar una segunda copia del servidor. El harness se abre **dentro de Kali** en `http://127.0.0.1:2323`; no existe enlace ni puerto host `2323`. Las explicaciones, razones de aprobación, catálogo y resultados docentes están en español; algunos controles del motor original aparecen como **Allow once**, **Reject** y **Choose workspace**: significan permitir una sola llamada, rechazarla y elegir la carpeta del trabajo.
 
 El perfil 27B exige suficiente memoria en la VM de Docker. Los pesos tienen aproximadamente 18 GB de descarga y la inferencia requiere memoria adicional. El modelo usa el backend CPU dentro de Docker en Mac: no se presenta como una prueba de Metal ni se cambia a Ollama nativo de forma oculta. Consultar la guía de prueba del Mac y las medidas reales que acompañan esta versión.
 
 ## 2. Vincular la cuenta, sin entregar credenciales al modelo
 
-En una terminal de Kali:
+En una terminal de Kali, ejecutar:
 
 ```bash
 lab login
@@ -31,7 +33,7 @@ lab status
 
 Usar la misma cuenta del portal. No pegar la contraseña, cookies ni tokens en el chat. La sesión del CLI queda en un archivo privado del usuario de Kali; el helper utiliza esa sesión para pedir evaluación a Academy. La clave del runner pertenece a otro usuario y no se entrega al agente.
 
-Cada alumno debe usar su propia instancia Compose, o turnarse cerrando tanto la sesión del portal como la del CLI. El puntaje es individual por cuenta, pero el escritorio y el target son compartidos dentro de una misma instancia.
+Cada alumno debe usar su propia instancia Compose, o turnarse cerrando tanto la sesión del portal como la del CLI. El puntaje es individual por cuenta, pero el escritorio y el target son compartidos dentro de una misma instancia. La cuenta ficticia de Mercado Cordillera no es una cuenta de Academy.
 
 ## 3. Qué puede hacer el harness
 
@@ -60,15 +62,15 @@ nmap -sT -n -Pn -sV --version-light -p 9090 target
 
 El helper resuelve una IP de un nombre permitido y limita el reconocimiento. Si el fingerprint no termina, puede confirmar el mismo IP/puerto con otro Nmap TCP acotado. Un puerto abierto no implica que la versión esté identificada; leer ambos resultados sin atribuir un producto por una heurística de Nmap.
 
-## 5. Elegir una misión sin adivinar su ID
+## 5. Elegir `commandInjection-02` sin adivinar su ID
 
 Enviar:
 
-> Carga vulnerableapp-http y consulta lab_missions con family sqlInjection y limit 8. Muéstrame cuáles son controles, cuáles tienen evaluación automática y qué evidencia requieren. No ejecutes solicitudes todavía.
+> Carga vulnerableapp-http y consulta lab_missions con mission_id commandInjection-02. Muéstrame el control, el método, la ruta fija, los parámetros y la evidencia que requiere. No ejecutes solicitudes todavía.
 
-Luego consultar un ID preciso, por ejemplo:
+Luego, si necesitas comprobar el registro exacto, consulta de nuevo el ID preciso:
 
-> Consulta lab_missions para mission_id sqlInjection-07. Explica su método, ruta fija, parámetros, criterio y mitigación. No asumas que un HTTP 200 demuestra el objetivo.
+> Consulta lab_missions para mission_id commandInjection-02. Explica su método, ruta fija, parámetros, criterio y mitigación. No asumas que un HTTP 200 demuestra el objetivo.
 
 Las plantillas de la misión se leen del mismo catálogo versionado que usa el laboratorio. Si una plantilla contiene controles y payloads separados, seleccionar sus parámetros planos para cada solicitud; no mandar ambos diccionarios como un solo valor. Una práctica guiada/manual puede ser correcta sin conceder XP automático.
 

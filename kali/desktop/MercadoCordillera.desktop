@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Mercado Cordillera
+Comment=Tienda chilena ficticia y retos reales del taller
+Exec=firefox-esr http://target:9090/VulnerableApp/mercado/
+Icon=applications-internet
+Terminal=false
+Categories=Education;

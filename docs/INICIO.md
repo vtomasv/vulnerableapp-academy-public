@@ -12,9 +12,9 @@ Descarga el repositorio como ZIP o clónalo si ya usas Git. Extrae la carpeta co
 docker compose up --build -d
 ```
 
-No copies `.env.example` si quieres usar el perfil predeterminado: Compose ya contiene valores de respaldo. El modelo actual es **`huihui_ai/Qwen3.8-abliterated:27b`**, descargado dentro de Docker. Sus pesos ocupan aproximadamente 18 GB, más imágenes y cachés. No uses la orientación antigua de 16 GB de RAM/40 GB de disco del 1,7B. La prueba real M3 Max/128 GB usó una VM Docker con 64 GiB y 16 CPU, con límite Ollama 48 GiB/12 CPU. Otros equipos requieren dimensionamiento y prueba propios. Si cambias puerto o recursos, crea `.env` antes del arranque. Ver [Guía Mac y 27B](MAC_27B.md) para medidas, contexto 16K y límites.
+No copies `.env.example` si quieres usar el perfil predeterminado: Compose ya contiene valores de respaldo. El modelo actual es **`huihui_ai/Qwen3.8-abliterated:27b`**, descargado dentro de Docker. Sus pesos ocupan aproximadamente 18 GB, más imágenes y cachés. No uses la orientación antigua de 16 GB de RAM/40 GB de disco del 1,7B. La prueba real M3 Max/128 GB usó una VM Docker con 64 GiB y 16 CPU, con límite Ollama 48 GiB/12 CPU. Otros equipos requieren dimensionamiento y prueba propios. Si ajustas recursos, crea `.env` antes del arranque sin cambiar el gateway fijo. Ver [Guía Mac y 27B](MAC_27B.md) para medidas, contexto 16K y límites.
 
-Abre `http://localhost:8080`. Si cambiaste `LAB_PORT`, utiliza ese puerto. La primera carga del modelo puede ser lenta en CPU; consulta el estado sin repetir la descarga:
+Abre `http://localhost:8080`. Compose publica únicamente el gateway en `127.0.0.1:8080`; no abras ni publiques puertos adicionales para target, tienda, VNC, harness u Ollama. Consulta el estado sin repetir la descarga:
 
 ```console
 docker compose ps
@@ -23,13 +23,13 @@ docker compose logs --tail=80 model-init ollama academy kali target
 
 ## Tu identidad y tu progreso
 
-Registra un nombre de alumno y una contraseña exclusiva para el laboratorio. Estas cuentas pertenecen al portal pedagógico, **no** a las cuentas vulnerables de la aplicación original. Cada alumno tiene sus propios intentos y puntos en SQLite. El progreso vive en un volumen Docker y sobrevive a `stop`, `start`, `restart` y `down` sin `-v`.
+Registra un nombre de alumno y una contraseña exclusiva para el laboratorio. Estas cuentas pertenecen al portal pedagógico, **no** a las cuentas vulnerables de la aplicación original ni a la cuenta ficticia de Mercado Cordillera. Cada alumno tiene sus propios intentos y puntos en SQLite. El progreso vive en un volumen Docker y sobrevive a `stop`, `start`, `restart` y `down` sin `-v`.
 
 El escritorio Kali es compartido por las cuentas del mismo Compose. El puntaje es individual, pero los archivos y ventanas del escritorio no son espacios privados. Para talleres simultáneos, cada alumno debe ejecutar su propio Compose en su equipo. Si varios alumnos se turnan en uno, deben cerrar sesión del portal y del cliente `lab`, o utilizar sesiones terminal separadas. Las semillas y modificaciones del target son compartidas: restablecer una contraseña en un ejercicio puede afectar al siguiente alumno.
 
 ## Abrir Kali y empezar a probar
 
-En el portal, pulsa «Abrir Kali». Se abrirá noVNC con el escritorio XFCE. Si no conecta, revisa que el contenedor Kali esté saludable y que el navegador permita WebSockets. No necesitas conectar al puerto VNC nativo: solo se utiliza internamente en el contenedor.
+En el portal, pulsa «Abrir Kali». Se abrirá noVNC con el escritorio XFCE. «Abrir tienda» usa ese mismo gateway y la ruta `http://localhost:8080/kali/vnc.html?autoconnect=1&resize=scale&path=websockify`; ya dentro de Kali, el icono de Firefox **Mercado Cordillera** abre `http://target:9090/VulnerableApp/mercado/`. Si no conecta, revisa que el contenedor Kali esté saludable y que el navegador permita WebSockets. No necesitas conectar al puerto VNC nativo: solo se utiliza internamente en el contenedor.
 
 Abre la terminal de Kali. Los nombres DNS `target`, `receiver`, `mailpit` y `academy` solo existen dentro de la red del laboratorio. `localhost` dentro de Kali es Kali, no el anfitrión ni VulnerableApp.
 
@@ -44,21 +44,27 @@ Introduce las mismas credenciales que registraste en el portal. El CLI conserva 
 
 ## Flujo de una misión
 
-Primero lee el briefing y reconoce qué entrada controla el usuario, qué componente la interpreta y qué evidencia se espera. Ejecuta el comando de control benigno con `curl`; después, prueba el caso propuesto únicamente contra `target`. Mira el código HTTP, los encabezados y el cuerpo: un 200 no equivale a una vulnerabilidad.
+Primero, en Academy abre `http://localhost:8080/#mission=commandInjection-02`, entra en **Comenzar taller** y selecciona `commandInjection-02` en **Retos del taller** como soporte diagnóstico. Lee qué entrada controla el usuario, qué componente la interpreta y qué evidencia se espera. Ejecuta el comando de control benigno con `curl`; después, prueba el caso propuesto únicamente contra `target`. Mira el código HTTP, los encabezados y el cuerpo: un 200 no equivale a una vulnerabilidad.
 
 Para que el portal vincule tu evidencia con tu cuenta, reproduce la solicitud mediante `lab request` usando el identificador exacto que aparece en la misión. `curl` directo permite aprender, pero **no entrega puntos**, porque no identifica de forma fiable al alumno. `lab request` pide al runner de Kali ejecutar la solicitud real y envía su resultado al verificador del servidor.
 
 ```bash
-lab request commandInjection-02 --param 'ipaddress=127.0.0.1|printf VA_LAB_OK'
+curl -sS --noproxy '*' --get \
+  --data-urlencode 'ipaddress=127.0.0.1' \
+  http://target:9090/VulnerableApp/CommandInjection/LEVEL_1
+curl -sS --noproxy '*' --get \
+  --data-urlencode 'ipaddress=127.0.0.1|printf VA_LAB_OK' \
+  http://target:9090/VulnerableApp/CommandInjection/LEVEL_1
+lab request commandInjection-02 --method GET --param 'ipaddress=127.0.0.1|printf VA_LAB_OK'
 ```
 
-El identificador anterior sigue el formato del catálogo; utiliza siempre el mostrado en la misión por si el número cambia al regenerar el contenido. No uses una orden adicional ni sustituyas el marcador por un acceso al host. Los puntos se conceden una sola vez, aunque repitas la prueba. El portal actualiza el progreso al detectar nuevos intentos.
+El identificador anterior sigue el formato del catálogo; utiliza siempre el mostrado en la misión por si el número cambia al regenerar el contenido. No uses una orden adicional ni sustituyas el marcador por un acceso al host. La cuenta de `lab login` debe ser la misma que la de Academy, que el CLI consulta como `http://academy:8000`. Los puntos se conceden una sola vez, aunque repitas la prueba. El portal actualiza el progreso al detectar nuevos intentos. Navegar, visitar la tienda, usar `curl` o `lab_http` sin `lab request` no concede XP.
 
 Los ejercicios sin verificador automático aparecen claramente como prácticas guiadas y no suman puntos. No declaramos explotación por la sola presencia de una cadena reflejada. En las misiones XSS que usan verificación de navegador, el runner abre un Chromium de entrenamiento dentro de Kali y comprueba el marcador DOM inocuo especificado; no roba cookies.
 
 Para parámetros que contienen un NUL de entrenamiento, usa `--param-encoded` con `%00`, tal como el comando de la misión. El CLI decodifica el valor para enviarlo como JSON; el runner vuelve a codificarlo en la URL. No intentes colocar un NUL literal en argumentos de shell.
 
-Abre VulnerableApp desde el acceso de Firefox dentro de Kali. El enlace del portal conduce al escritorio, no a la aplicación vulnerable en el mismo origen que tu sesión. Mailpit también se abre dentro de Kali.
+Abre VulnerableApp desde el icono de Firefox dentro de Kali. El enlace del portal conduce al escritorio noVNC, no a la aplicación vulnerable en el mismo origen que tu sesión. La pantalla original opcional está en `http://target:9090/VulnerableApp/original/`; su selector de inglés es el selector legacy del upstream, no un error ni una app moderna faltante: la personalización del launcher no sustituye el backend original intacto. Mailpit también se abre dentro de Kali. Para volver desde Kali al gateway, usa `http://gateway:8080/`.
 
 ## Usar Qwen como tutor
 
