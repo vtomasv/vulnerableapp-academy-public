@@ -18,7 +18,7 @@ from .grading import bounded_request_size, mission_methods, target_path
 
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "huihui_ai/qwen3-abliterated:4b-v2-q4_K_M")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "huihui_ai/qwen3-abliterated:1.7b-v2-q4_K_M")
 MAX_MESSAGE = 8_000
 MAX_PROPOSALS = 3
 _ALLOWED_TOOLS = {"inspect_headers", "lab_request"}

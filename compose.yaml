@@ -39,7 +39,7 @@ services:
         OLLAMA_IMAGE: ${OLLAMA_IMAGE:-ollama/ollama:0.12.11}
     image: ${COMPOSE_PROJECT_NAME:-vulnerableapp-academy}-model-init:local
     environment:
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-huihui_ai/qwen3-abliterated:4b-v2-q4_K_M}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-huihui_ai/qwen3-abliterated:1.7b-v2-q4_K_M}
       OLLAMA_HOST: 127.0.0.1:11434
     volumes:
       - ollama_data:/root/.ollama
@@ -72,8 +72,13 @@ services:
     security_opt:
       - no-new-privileges:true
     expose: ["9090"]
+    cpus: ${TARGET_CPUS:-2.0}
+    mem_limit: ${TARGET_MEMORY:-1g}
+    pids_limit: 256
     sysctls:
       net.ipv4.ping_group_range: "0 2147483647"
+      net.ipv6.conf.all.disable_ipv6: "1"
+      net.ipv6.conf.default.disable_ipv6: "1"
     networks: [lab]
     restart: unless-stopped
     healthcheck:
@@ -109,7 +114,8 @@ services:
             iptables -A OUTPUT -d "$$ip" -p tcp --dport 8081 -j ACCEPT
           done
           iptables -A OUTPUT -j REJECT
-          if command -v ip6tables >/dev/null 2>&1; then
+          if [ "$$(cat /proc/sys/net/ipv6/conf/all/disable_ipv6 2>/dev/null || echo 0)" != "1" ]; then
+            command -v ip6tables >/dev/null 2>&1 || exit 1
             ip6tables -P OUTPUT DROP
             ip6tables -F OUTPUT
             ip6tables -A OUTPUT -o lo -j ACCEPT
@@ -145,6 +151,7 @@ services:
       DISPLAY: :99
       RUNNER_SECRET_FILE: /run/academy-secrets/harness.key
       RUNNER_BIND: 0.0.0.0:9001
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-huihui_ai/qwen3-abliterated:1.7b-v2-q4_K_M}
     volumes:
       - academy_secrets:/run/academy-secrets:ro
       - academy_progress:/var/lib/kali-progress
@@ -154,15 +161,19 @@ services:
     cap_add: ["CHOWN", "FOWNER", "DAC_OVERRIDE", "SETUID", "SETGID"]
     security_opt:
       - no-new-privileges:true
+    sysctls:
+      net.ipv6.conf.all.disable_ipv6: "1"
+      net.ipv6.conf.default.disable_ipv6: "1"
     expose: ["6080", "9001"]
     networks:
       - lab
       - control
+    pids_limit: 512
     cpus: ${KALI_CPUS:-2.0}
     mem_limit: ${KALI_MEMORY:-3g}
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "test -s /run/lab-netlock/ready && curl -fsS --max-time 2 http://127.0.0.1:9001/health >/dev/null && curl -fsS --max-time 2 http://127.0.0.1:6080/vnc.html >/dev/null && nc -z 127.0.0.1 5900"]
+      test: ["CMD-SHELL", "test -s /run/lab-netlock/ready && curl -fsS --max-time 2 http://127.0.0.1:9001/health >/dev/null && curl -fsS --max-time 2 http://127.0.0.1:6080/vnc.html >/dev/null && curl -fsS --max-time 2 http://127.0.0.1:2323/ >/dev/null && curl -fsS --max-time 2 http://127.0.0.1:11435/health >/dev/null && nc -z 127.0.0.1 5900"]
       interval: 15s
       timeout: 8s
       retries: 20
@@ -196,7 +207,8 @@ services:
             done
           done
           iptables -A OUTPUT -j REJECT
-          if command -v ip6tables >/dev/null 2>&1; then
+          if [ "$$(cat /proc/sys/net/ipv6/conf/all/disable_ipv6 2>/dev/null || echo 0)" != "1" ]; then
+            command -v ip6tables >/dev/null 2>&1 || exit 1
             ip6tables -P OUTPUT DROP
             ip6tables -F OUTPUT
             ip6tables -A OUTPUT -o lo -j ACCEPT
@@ -287,7 +299,7 @@ services:
       RUNNER_BASE_URL: http://kali:9001
       OLLAMA_URL: http://ollama:11434
       OLLAMA_BASE_URL: http://ollama:11434
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-huihui_ai/qwen3-abliterated:4b-v2-q4_K_M}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-huihui_ai/qwen3-abliterated:1.7b-v2-q4_K_M}
       RECEIVER_BASE_URL: http://receiver:8081
       MAILPIT_BASE_URL: http://mailpit:8025
       VA_LAB_FILE: /tmp/va-training.txt
@@ -320,6 +332,7 @@ services:
         condition: service_completed_successfully
     environment:
       OLLAMA_HOST: 0.0.0.0:11434
+      OLLAMA_CONTEXT_LENGTH: ${OLLAMA_CONTEXT_LENGTH:-8192}
     volumes:
       - ollama_data:/root/.ollama
     cap_drop: ["ALL"]
@@ -365,9 +378,33 @@ services:
     networks:
       - lab
       - frontend
+      - ingress
+    dns: ["192.0.2.1"]
+    sysctls:
+      net.ipv6.conf.all.disable_ipv6: "1"
+      net.ipv6.conf.default.disable_ipv6: "1"
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- --timeout=3 http://127.0.0.1:8080/health >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+
+  gateway-netlock:
+    image: ${COMPOSE_PROJECT_NAME:-vulnerableapp-academy}-kali:local
+    user: "0:0"
+    network_mode: "service:gateway"
+    depends_on:
+      gateway:
+        condition: service_started
+    entrypoint: ["/bin/sh", "/opt/academy-harness/gateway-netlock.sh"]
+    cap_drop: ["ALL"]
+    cap_add: ["NET_ADMIN"]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "iptables -C OUTPUT -j REJECT && iptables -S OUTPUT | grep -q -- '-P OUTPUT DROP'"]
       interval: 15s
       timeout: 5s
       retries: 12
@@ -390,4 +427,7 @@ networks:
     internal: true
   frontend:
     internal: true
+  ingress:
+    # Solo gateway: Docker necesita una red no-internal para publicar localhost.
+    # gateway-netlock mantiene su OUTPUT DROP con destinos internos fijos.
   model_bootstrap:

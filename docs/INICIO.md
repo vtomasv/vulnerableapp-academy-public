@@ -12,7 +12,7 @@ Descarga el repositorio como ZIP o clónalo si ya usas Git. Extrae la carpeta co
 docker compose up --build -d
 ```
 
-No copies `.env.example` si quieres usar los valores predeterminados: Compose ya tiene valores de respaldo. Si necesitas cambiar el puerto, el modelo o los recursos, crea `.env` desde el ejemplo **antes** del arranque. Las imágenes y el modelo requieren varios GB; como orientación de dimensionamiento, reserva 16 GB de RAM total para Docker y espacio libre holgado, preferentemente 25–35 GB. Son recomendaciones, no mínimos medidos ni garantías: la memoria de Chromium, Java y Qwen depende de la carga. Con poca RAM puedes seleccionar `huihui_ai/qwen3-abliterated:1.7b` en OLLAMA_MODEL; prueba su latencia y calidad antes del aula.
+No copies `.env.example` si quieres usar los valores predeterminados: Compose ya tiene valores de respaldo. Si necesitas cambiar el puerto, el modelo o los recursos, crea `.env` desde el ejemplo **antes** del arranque. Las imágenes y el modelo requieren varios GB; como orientación de dimensionamiento, reserva 16 GB de RAM total para Docker y espacio libre holgado, preferentemente 40 GB. Son recomendaciones, no mínimos medidos ni garantías: la memoria de Chromium, Java y Qwen depende de la carga. El predeterminado es `huihui_ai/qwen3-abliterated:1.7b-v2-q4_K_M`, probado con herramientas nativas. El instructor puede seleccionar `huihui_ai/qwen3-abliterated:4b-v2-q4_K_M`, pero en la CPU de prueba agotó su timeout con contexto completo; no se declara esa opción validada.
 
 Abre `http://localhost:8080`. Si cambiaste `LAB_PORT`, utiliza ese puerto. La primera carga del modelo puede ser lenta en CPU; consulta el estado sin repetir la descarga:
 

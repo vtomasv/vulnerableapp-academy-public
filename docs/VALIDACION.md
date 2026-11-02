@@ -1,57 +1,64 @@
 # Validación y límites de prueba
 
-## Resultados comprobados en esta implementación
+## Pruebas Docker reales de esta ampliación
 
-La aplicación Java original se compiló con Java 17 y `./gradlew bootJar -x test` a partir del commit `4df80bbcd42682ecf26334f12c568e0f4a326c1a`. Se arrancó una distribución expandida equivalente a la del Dockerfile, con las fixtures del taller. No se ejecutó la suite completa de tests del proyecto upstream: no se afirma que todos esos tests hayan pasado.
+El laboratorio se construyó y arrancó con Docker/Compose real en Linux ARM64. Se compilaron el Java original y el motor `S1N6H/pentest-harness` del commit fijado; se instalaron las herramientas, XFCE, VNC/noVNC, Node y el runtime del harness en Kali. Los inicializadores de secretos y pesos terminaron con código 0 y los servicios residentes quedaron saludables, incluidos los tres bloqueos de salida de target, Kali y gateway.
 
-Se ejecutaron **95 objetivos** del catálogo mediante la cadena real **API Academy → runner auténtico → curl/Chromium → target Java**, y los 95 cumplieron su criterio. También se recuperaron y verificaron los **8 retos criptográficos de niveles 2–9** de la instancia actual con los cálculos locales de `lab-crypto`, sumando **103 objetivos puntuables distintos comprobados**. El nivel 10 estaba incluido entre los primeros 95. El nivel criptográfico 1 conserva su criterio real de contraseña correcta, pero no se resolvió en esta validación: requiere inspeccionar la base de entrenamiento como indica la guía.
+Se verificaron HTTP 200 del portal en `127.0.0.1:8080` y de noVNC en `/kali/vnc.html`, procesos vivos de XFCE, VNC, websockify, runner, adaptador y harness. Solo el gateway publica un puerto de localhost. La clave del runner es inaccesible al alumno, y el proceso `kali` UID 1000 tiene cero capabilities efectivas.
 
-La prueba inicial de recetas HTTP directas detectó diferencias de formularios duplicados, codificación, expansión XML y filtros XSS. Se corrigieron las recetas reproducibles; las que no demostraron el hecho esperado quedaron explícitamente manuales y con 0 XP. El estado final del catálogo es **104 prácticas puntuables y 85 guiadas/manuales**, no 189 exploits automáticamente verificados.
+`tests/harness_tools_e2e.py` se ejecutó dentro de Kali como UID 1000: **22 PASS, 0 FAIL, 0 SKIP**. Usa el helper real, Nmap y curl auténticos y el evaluador de Academy; no reemplaza los cuerpos de los ejercicios por mocks. Comprueba:
 
-`pytest -q tests/test_backend.py` pasó **10 pruebas** de autenticación, cuentas separadas, idempotencia de puntaje, bloqueo de puntaje manual, controles, caché en varias solicitudes, validación de navegador, límites, exportación con más de 20 completados, aprobación de herramientas, extracción nativa de llamadas Ollama y rutas de assets. La suite usa mocks para pruebas unitarias de runner/modelo; no debe confundirse con una inferencia real de Qwen. Se observó un warning de compatibilidad/deprecación Starlette/httpx; no impidió ejecutar la suite.
+- Resolución y puertos TCP abiertos de `target:9090`, `receiver:8081`, `mailpit:8025`, `academy:8000` y `ollama:11434` mediante Nmap. Si el fingerprint no termina, un segundo Nmap acotado confirma el puerto; no se inventa versión.
+- SQL ciega `sqlInjection-01`: `id=999` devuelve `isCarPresent=false` y `id=100 OR 2=2` devuelve `true`.
+- Inyección de comandos `commandInjection-02`: el proceso del target produce el marcador `VA_LAB_OK`.
+- SSRF `ssrf-01`: petición al receptor local, éxito del criterio y 100 XP; repetir entrega 0 XP adicionales. Otra cuenta comienza con 0 XP.
+- Rechazo de servicios/IP externos, misión desconocida, ruta/cabeceras de enrutamiento no permitidas, CRLF y cuerpo excesivo.
+- Sesión privada del CLI, clave inaccesible, capabilities cero y salida externa bloqueada.
 
-Se verificó con una cadena real que el primer intento correcto entrega 100 XP, repetirlo entrega 0 XP adicionales y otra cuenta permanece en 0. El runner rechaza solicitudes sin la clave de servicio con HTTP 401. La exportación mantiene todos los identificadores completados, en vez de recortar listas a veinte entradas.
+Los pesos Qwen comunitarios se descargaron realmente dentro de `model-init`. Su API nativa de Ollama produjo una llamada real `lab_discover` con `service=all`; no se usó replay. El recorrido completo de modelo → aprobación del harness → herramienta tiene un test separado, `tests/harness_ui_e2e.py`: su estado y las capturas se documentan en [Validación del harness](harness/VALIDACION.md). Un test unitario o una llamada nativa al modelo no equivalen a ese recorrido integrado.
 
-Se comprobó sintaxis Python, JavaScript y shell. El manifiesto se validó con el parser real de Compose v2 mediante `docker compose config --quiet`, sin arrancar un daemon. La prueba funcional del portal utiliza Chromium y Playwright 1.64.1: registra un alumno, envía un JSON explícito, observa 100 XP y comprueba el catálogo y cierre de sesión. La prueba completa de UI terminó sin errores JS ni desbordamiento horizontal a 390 px de ancho; también validó cierre de sesión. Las capturas están en `docs/images/`; consulta `tests/ui_smoke.py` para repetirla.
+También pasó `tests/harness_score_e2e.py`: Qwen 1,7B cargó `vulnerableapp-evidence`, pidió una segunda aprobación para `lab_submit` y el evaluador confirmó `ssrf-01` con 100 XP en una cuenta nueva. El resultado se leyó del API autenticado de Academy; no se tomó como prueba el puntaje escrito por el modelo. La aprobación del skill y la del intento tenían IDs distintos.
 
-## Lo que no se probó aquí
+## Correcciones detectadas al probar Docker
 
-**No había un motor Docker disponible en este entorno.** No se ejecutó `docker compose up` de todo el stack, ni builds de todas las imágenes, ni el escritorio XFCE/noVNC real dentro de Kali. No se verificaron las reglas iptables en contenedores, la descarga de pesos de Ollama, la inferencia real del modelo seleccionado ni la compatibilidad de Docker Desktop en Windows/macOS o todas las arquitecturas.
+Se eliminaron file capabilities del binario Nmap durante el build: Kali rolling las instala, pero son incompatibles con el runtime `cap_drop: ALL` y `no-new-privileges`. Se conserva Nmap TCP `-sT`, sin conceder NET_RAW ni NET_ADMIN al alumno.
 
-No se afirma aislamiento perfecto frente a escapes de contenedores, canales DNS, vulnerabilidades del kernel, del navegador o diferencias de Docker. Las reglas y redes están implementadas; falta su verificación de runtime en el equipo de destino. La variante Qwen3 ablacionada y su etiqueta se verificaron en la ficha pública del autor, no mediante un benchmark de calidad de respuestas.
+Se retiró `curl --proto-redir =none`, rechazado por curl de Kali. El runner no usa `-L` y no sigue redirects. Se corrigió la importación del cliente `lab` sin extensión. El launcher fuerza su propia raíz de presets; por eso el preset docente se copia también a esa raíz oficial, sin modificar el código del motor.
 
-## Comprobaciones que debe realizar el instructor
+Docker no materializó el puerto de un gateway conectado solo a redes internas. Se añadió una red de entrada exclusiva de gateway y su namespace conserva OUTPUT DROP con destinos fijos, IPv6 deshabilitado y DNS externo desviado. No se solucionó debilitando la red de Kali ni publicando el target.
 
-Antes del aula, valida la configuración y arranca una instalación limpia:
+## Validación de componentes anterior
+
+El Java original se compiló con Java 17 y `./gradlew bootJar -x test` a partir de `4df80bbcd42682ecf26334f12c568e0f4a326c1a`. Antes de disponer del daemon se probaron 95 objetivos mediante API Academy → runner → curl/Chromium → target expandido, y otros 8 retos criptográficos de niveles 2–9: 103 objetivos puntuables distintos. El criptográfico nivel 1 no se resolvió en aquella validación.
+
+El catálogo conserva **104 prácticas puntuables y 85 guiadas/manuales**. No se afirma que 189 prácticas sean exploits automáticamente verificados. Las recetas que no demostraron su hecho preciso se mantuvieron manuales y con 0 XP. Tampoco se ejecutó la suite completa del proyecto Java upstream.
+
+Las diez pruebas unitarias `tests/test_backend.py` cubren autenticación, progreso, idempotencia, controles, caché, navegador, exportación y aprobación. Usan mocks de modelo/runner donde corresponde. La prueba anterior del portal registra un alumno, envía un intento y observa 100 XP, sin errores JS ni overflow a 390 px; no se confunde con el nuevo harness web.
+
+## Repetición sin instalar Python en el anfitrión
 
 ```console
 docker compose config --quiet
 docker compose up --build -d
 docker compose ps
-docker compose logs --tail=100 init model-init target-netlock lab-netlock target kali academy ollama gateway
-```
-
-Los inicializadores deben terminar con exit code 0. Los servicios residentes deben quedar healthy. Kali comprueba runner, página noVNC y VNC local. Abre el portal, crea una cuenta, conecta el escritorio y abre Firefox hacia target. Verifica Mailpit y que Qwen responde antes de ofrecerlo en clase.
-
-Desde el anfitrión comprueba los servicios desde dentro de Kali:
-
-```console
 docker compose exec --user kali kali lab doctor
-docker compose exec kali curl -fsS http://target:9090/VulnerableApp/
-docker compose exec kali curl -fsS http://127.0.0.1:6080/vnc.html
-docker compose exec kali curl -fsS http://ollama:11434/api/tags
 docker compose exec lab-netlock iptables -S OUTPUT
 docker compose exec target-netlock iptables -S OUTPUT
+docker compose exec gateway-netlock iptables -S OUTPUT
+docker compose cp tests/harness_tools_e2e.py kali:/tmp/harness_tools_e2e.py
+docker compose exec --user kali kali python3 /tmp/harness_tools_e2e.py
+docker compose cp tests/harness_ui_e2e.py kali:/tmp/harness_ui_e2e.py
+docker compose exec --user kali kali python3 /tmp/harness_ui_e2e.py
+docker compose cp tests/harness_score_e2e.py kali:/tmp/harness_score_e2e.py
+docker compose exec --user kali kali python3 /tmp/harness_score_e2e.py
 ```
 
-El modelo listado debe coincidir con OLLAMA_MODEL. Prueba una conversación y una propuesta que se ejecute solo tras aprobarla. No simules respuestas si el modelo no está disponible: el portal devuelve un error real y la guía estática permanece utilizable.
+La suite crea cuentas ficticias y deja una sesión de prueba del CLI. Para iniciar después el curso, usar `lab logout` y entrar con la cuenta del alumno. No requiere ese test para arrancar.
 
-En Linux/macOS o WSL, `sh scripts/smoke.sh` ejecuta comprobaciones de servicios, escritorio y reglas. Una conexión HTTP fallida a un gateway no basta como prueba de aislamiento; revisa también OUTPUT DROP, destinos explícitos, IPv6, DNS y la política del anfitrión. No elimines restricciones para que una prueba aparentemente pase.
+El smoke test adicional `scripts/smoke.sh` puede ejecutarse en Linux/macOS o WSL. Registra dos alumnos, repite una misión, exporta su JSON y reinicia Academy para comprobar persistencia en el equipo del aula. Para recrear target o Kali, recrea también su netlock; para gateway, incluye `gateway-netlock`.
 
-Registra dos alumnos y repite la misión `commandInjection-02`: el primero obtiene puntos una sola vez y el segundo conserva su progreso propio. Descarga el JSON, reinicia Academy y verifica que el progreso sigue allí. Revisa las familias con estados compartidos por separado; cada alumno debe usar su propio Compose para sesiones simultáneas.
+## No probado y límites
 
-Para volver a crear el target y su namespace de firewall utiliza `docker compose up -d --force-recreate target target-netlock`. Para recrear Kali, inclúyelo junto a `lab-netlock`. No hagas `down -v` como rutina de pausa: borra progreso, escritorio, correo y pesos locales.
+No se validó Docker Desktop en Windows/macOS ni x86_64. Se diseñó sin emulación forzada, pero Kali rolling y las imágenes externas pueden cambiar. Antes de clase hay que probar un equipo de cada tipo que se utilizará.
 
-## Repetir pruebas de desarrollo
-
-Las pruebas Python se incluyen como herramientas de desarrollo, no como instalación requerida en el anfitrión del alumno. `integration_stack.py` espera Academy y el runner reales, y solo admite API local o el nombre Docker academy. `integration_catalog.py` es una prueba auxiliar HTTP y no reemplaza el verificador de producción; su modo localhost transforma algunas URLs del receptor, por lo que ciertas comparaciones de Location difieren respecto del laboratorio. La cadena real `integration_stack.py` es la referencia de los 95 objetivos.
+No se ofrece garantía absoluta contra escapes del kernel, Docker, navegador, canales DNS o modificación por el dueño del anfitrión. Los datos deben ser ficticios. Una cuenta separa progreso, no el escritorio ni el target compartido: para simultaneidad, una instancia Compose por alumno.

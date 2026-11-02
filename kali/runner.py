@@ -205,8 +205,6 @@ def _http_request(args: dict[str, Any], forced_method: str | None = None) -> dic
             str(MAX_BODY),
             "--proto",
             "=http",
-            "--proto-redir",
-            "=none",
             "--noproxy",
             "*",
             "--no-keepalive",

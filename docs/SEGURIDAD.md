@@ -10,6 +10,8 @@ Las redes Docker internas reducen la salida hacia otras redes. No confundir una 
 
 Los servicios temporales de construcción y descarga del modelo necesitan Internet. El servidor Ollama de inferencia funciona después en una red interna. No sustituyas su URL por un proveedor externo ni añadas `host.docker.internal` a los destinos permitidos del harness.
 
+El gateway necesita una red `ingress` no interna para que Docker publique localhost. Solo el gateway se conecta a ella; `gateway-netlock` comparte únicamente su namespace de red y aplica OUTPUT DROP, loopback, respuestas establecidas y tres destinos internos fijos. IPv6 está deshabilitado y el DNS externo se desvía a una dirección de documentación. El usuario del gateway y el alumno no reciben NET_ADMIN.
+
 ## Harness del tutor
 
 El tutor Qwen recibe el contexto de una misión y puede proponer herramientas concretas. El alumno ve y aprueba la propuesta antes de que se ejecute. El servidor vuelve a verificar el usuario, la misión, la operación, los límites y la vigencia de la aprobación. Aprobar una herramienta no le otorga una shell ni permisos para conceder puntos.
@@ -19,6 +21,14 @@ El runner dentro de Kali autentica las llamadas con una clave de servicio que no
 La prueba de navegador, cuando una misión la necesita, ejecuta una rutina fija sobre el target y consulta un marcador DOM benigno. No acepta un programa JavaScript libre del modelo ni permite leer cookies del alumno. El navegador de prueba es efímero. Que Chromium use una configuración de contenedor no equivale a una sandbox de seguridad completa: el contenedor y las reglas de red son parte de la defensa.
 
 La salida de VulnerableApp y de las herramientas es **no confiable**. Puede contener una instrucción de prompt injection: se presenta al modelo como evidencia, no como autorización para modificar las reglas. La defensa principal no es el prompt, sino la validación externa de herramienta y destino.
+
+## Harness original dentro de Kali
+
+Además del tutor del portal, Kali incluye el motor **S1N6H/pentest-harness**, fijado al commit documentado, con el preset **Taller VulnerableApp** y tres skills locales. Solo expone `lab_discover`, `lab_http`, `lab_submit` y `skill`; cada invocación exige una aprobación nueva. La guarda monotónica rechaza herramientas fuera de la lista, argumentos fuera del schema y llamadas sin el servicio de aprobación. No se habilitan herramientas genéricas de shell, filesystem, búsqueda web o delegación.
+
+`lab_discover` resuelve cinco nombres Docker y usa argv Nmap fijos. Un fingerprint que agota su límite puede dar paso a una segunda comprobación TCP Nmap del mismo IP y puerto; esto no inventa la versión. `lab_http` usa rutas del catálogo, sin redirects y con límites de tamaño. `lab_submit` usa la sesión privada de `lab login` para pedir evaluación: no puede escoger XP ni escribir la base de puntajes. El harness corre como `kali` (UID 1000), mientras el runner conserva UID 1001 y su clave inaccesible al alumno.
+
+La API del harness y el adaptador de Ollama no publican puertos al anfitrión. Se usan desde Firefox en el escritorio noVNC. El adaptador fija un único modelo y servidor local, desactiva thinking y limita generación, contexto e hilos. Ninguna API key externa se copia al contenedor.
 
 ## Verificación y puntaje
 
@@ -34,4 +44,4 @@ Esto es una plataforma de aprendizaje, no una plataforma anti-trampas ni un exam
 
 Las conversaciones con Qwen permanecen en los servicios locales. Los registros del laboratorio pueden contener parámetros, tokens de entrenamiento y cuerpos de evidencia; no uses credenciales reales. Los volúmenes de Docker no están cifrados por esta aplicación: el cifrado del disco y sus copias corresponden al anfitrión.
 
-No publiques `.env`, la clave del harness, bases SQLite, sesiones del CLI ni volúmenes. El repositorio nuevo es privado por defecto. La licencia original y el commit fijado permiten auditar los cambios sin alterar el proyecto público original.
+No publiques `.env`, la clave del harness, bases SQLite, sesiones del CLI ni volúmenes. Este repositorio de código es público por autorización del propietario; las claves y datos se generan localmente y no se incluyen en Git. Las licencias y commits fijados permiten auditar la aplicación y el harness original.

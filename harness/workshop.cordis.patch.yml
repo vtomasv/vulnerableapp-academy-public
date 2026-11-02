@@ -1,0 +1,167 @@
+# Taller VulnerableApp Academy: overlay cerrado para el laboratorio Docker local.
+# Este archivo se aplica sobre dsh-base + dsh-web. Las tools adicionales no
+# reciben hosts/rutas: el plugin delega solamente en el helper allowlisted.
+- id: agent-default-model
+  config:
+    provider: ollama-local
+    model: huihui_ai/qwen3-abliterated:1.7b-v2-q4_K_M
+
+- id: llm-pi-ai
+  config:
+    providers:
+      ollama-local:
+        displayName: Ollama local (taller)
+        apiKeyEnv: OLLAMA_DUMMY_API_KEY
+        api: openai-completions
+        baseURL: http://127.0.0.1:11435/v1
+        defaultContextWindow: 8192
+        defaultMaxTokens: 256
+        defaultInput: [text]
+        reasoning: off
+        retryPolicy:
+          mode: normal
+          maxRetries: 0
+          backoff:
+            initialDelayMs: 1
+            maxDelayMs: 1
+            jitterRatio: 0
+        models:
+          - id: huihui_ai/qwen3-abliterated:1.7b-v2-q4_K_M
+            name: Qwen local (Ollama)
+            contextWindow: 8192
+            maxTokens: 256
+            input: [text]
+            reasoningEfforts: false
+
+- id: system-prompt
+  config:
+    persona: >-
+      Eres el tutor del taller VulnerableApp Academy. Responde en español,
+      explica cada paso con precisión y trabaja únicamente dentro del
+      laboratorio Docker autorizado. No ejecutes ni describas acciones contra
+      hosts externos. No expongas razonamiento interno: entrega conclusiones,
+      supuestos y evidencia verificable. no_think
+
+- id: skill-filesystem
+  config:
+    providerName: academy-harness
+    includeDefaultRoots: false
+    customSkillDirs:
+      - /opt/academy-harness/skills
+    watch: false
+    watchFollowSymlinks: false
+
+- id: tools
+  config:
+    # The workshop exposes only native calls; no Code Mode transport is loaded.
+    mode: native
+
+- id: agent-presets
+  config:
+    # Every new Web agent joins the exact docente composition. Its scoped
+    # skill loader sees the global workshop skill catalog and the plugin's
+    # monotonic guard still closes all non-lab tool calls.
+    default: vulnerableapp
+    includeUserRoot: false
+    roots:
+      - path: /opt/academy-harness/presets
+        trust: system
+
+# No se permite el modo Code, ejecución de shell/filesystem, delegación,
+# workflow, búsqueda web, telemetría ni proveedores remotos.
+- id: code-runtime
+  disabled: true
+- id: cordis-host-runner
+  disabled: true
+- id: ui-cordis
+  disabled: true
+- id: ui-workflow-run
+  disabled: true
+- id: ui-workflow
+  disabled: true
+- id: ui-subagent
+  disabled: true
+- id: ui-jobs
+  disabled: true
+- id: ui-goal
+  disabled: true
+- id: ui-plan
+  disabled: true
+- id: tool-bash
+  disabled: true
+- id: tool-pwsh
+  disabled: true
+- id: bash-sandbox
+  disabled: false
+- id: pwsh-sandbox
+  disabled: true
+- id: tool-jobs
+  disabled: true
+- id: tool-fs
+  disabled: true
+- id: tool-fs-search
+  disabled: true
+- id: fs-observation-policy
+  disabled: true
+- id: tool-str-replace-editor
+  disabled: true
+- id: commands
+  disabled: false
+- id: command-feedback
+  disabled: true
+- id: goal
+  disabled: true
+- id: goal-round-driver
+  disabled: true
+- id: command-goal
+  disabled: true
+- id: plan-mode
+  disabled: true
+- id: command-compact
+  disabled: true
+- id: subagent
+  disabled: false
+- id: subagent-spawn-in-process
+  disabled: true
+- id: subagent-fork-in-process
+  disabled: true
+- id: tool-subagent-control
+  disabled: true
+- id: tool-subagent-list-agents
+  disabled: true
+- id: tool-subagent
+  disabled: true
+- id: tool-subagent-fork
+  disabled: true
+- id: tool-subagent-report
+  disabled: true
+- id: workflow-worker-thread
+  disabled: true
+- id: tool-workflow
+  disabled: true
+- id: tool-result-pruner
+  disabled: true
+- id: tool-todo
+  disabled: true
+- id: tool-goal
+  disabled: true
+- id: tool-ralph
+  disabled: true
+- id: web
+  disabled: true
+- id: web-search-deepseek
+  disabled: true
+- id: tool-web
+  disabled: true
+- id: llm-deepseek
+  disabled: true
+- id: session-telemetry-otel
+  disabled: true
+
+# La UI necesita los registries commands/subagent y el provider shell para
+# sus contratos internos. No son herramientas del agente: los consumidores
+# genéricos siguen deshabilitados y el preset vulnerableapp solo aporta skills.
+# La guarda monotónica cierra cualquier herramienta adicional de otro preset.
+- insert:
+    - id: academy-workshop-plugin
+      name: /opt/academy-harness/workshop-plugin.mjs
