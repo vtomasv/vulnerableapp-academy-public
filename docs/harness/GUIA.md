@@ -1,74 +1,95 @@
-# Harness del taller: recorrido del alumno
+# Harness del taller: aprender con comandos, evidencia y progreso
 
-Este laboratorio incluye el motor original **S1N6H/pentest-harness**, compilado y fijado al commit indicado en [FUENTES.md](FUENTES.md). Su preset predeterminado es **Taller VulnerableApp**. El harness usa Ollama local, tres skills docentes y herramientas acotadas de Kali; no es un shell libre controlado por el modelo.
+El escritorio Kali incluye el motor original [S1N6H/pentest-harness](https://github.com/S1N6H/pentest-harness), fijado al commit `4638f38082bdf37cea03ad151905c4bb8662f6e9`. El preset **Taller VulnerableApp** usa exclusivamente el Ollama del Compose y `huihui_ai/Qwen3.8-abliterated:27b`. No se necesita una cuenta de proveedor, una API key externa ni un Ollama instalado en el anfitrión. Una respuesta del modelo nunca sustituye la evidencia del servidor.
 
-## 1. Abrir el laboratorio
+## 1. Entrar en el escritorio y en el agente
 
-Desde la carpeta del repositorio en Windows, Linux o macOS, ejecutar:
+En la carpeta del repositorio, desde Windows, Linux o macOS:
 
 ```bash
-docker compose up --build
+docker compose up --build -d
 ```
 
-La primera construcción necesita Internet para las imágenes, paquetes y pesos. Una vez preparado el volumen del modelo, las redes de ejecución son internas. Abrir el portal en `http://localhost:8080`, crear una cuenta propia y entrar en **Kali**. En el escritorio noVNC, abrir **Harness del taller** o ejecutar en una terminal de Kali:
+Abrir `http://localhost:8080`, registrar una cuenta individual y pulsar **Abrir Kali**. En el escritorio noVNC, abrir **Harness del taller**. Si se prefiere una terminal de Kali:
 
 ```bash
 firefox-esr http://127.0.0.1:2323
 ```
 
-Elegir el preset **Taller VulnerableApp**, no el preset genérico de pentesting. Si la interfaz pide una carpeta de trabajo, usar `/home/kali`. El harness y el adaptador arrancan automáticamente: no es necesario ejecutar otra copia del servidor, instalar Node ni aportar una API key externa.
+Aceptar la pantalla inicial del motor y, si solicita una carpeta, usar `/home/kali`. El preset predeterminado debe ser **Taller VulnerableApp**, no uno de pentesting genérico. No iniciar una segunda copia del servidor. Las explicaciones, razones de aprobación, catálogo y resultados docentes están en español; algunos controles del motor original aparecen como **Allow once**, **Reject** y **Choose workspace**: significan permitir una sola llamada, rechazarla y elegir la carpeta del trabajo.
 
-## 2. Vincular el progreso individual
+El perfil 27B exige suficiente memoria en la VM de Docker. Los pesos tienen aproximadamente 18 GB de descarga y la inferencia requiere memoria adicional. El modelo usa el backend CPU dentro de Docker en Mac: no se presenta como una prueba de Metal ni se cambia a Ollama nativo de forma oculta. Consultar la guía de prueba del Mac y las medidas reales que acompañan esta versión.
 
-En la terminal de Kali:
+## 2. Vincular la cuenta, sin entregar credenciales al modelo
+
+En una terminal de Kali:
 
 ```bash
 lab login
 lab status
 ```
 
-Usar la misma cuenta del portal. No escribir la contraseña ni el token en el chat del modelo. El progreso pertenece a esa cuenta; la API de Academy es quien valida el objetivo y concede XP. Para clases simultáneas, usar **una instancia Compose por alumno**. No compartir en paralelo una misma terminal o escritorio Kali: `lab login` es una sesión local por usuario Unix.
+Usar la misma cuenta del portal. No pegar la contraseña, cookies ni tokens en el chat. La sesión del CLI queda en un archivo privado del usuario de Kali; el helper utiliza esa sesión para pedir evaluación a Academy. La clave del runner pertenece a otro usuario y no se entrega al agente.
 
-## 3. Reconocer las máquinas del Compose
+Cada alumno debe usar su propia instancia Compose, o turnarse cerrando tanto la sesión del portal como la del CLI. El puntaje es individual por cuenta, pero el escritorio y el target son compartidos dentro de una misma instancia.
 
-Enviar al harness:
+## 3. Qué puede hacer el harness
 
-> Carga el skill vulnerableapp-scope. Después usa lab_discover con service all para reconocer las máquinas de este laboratorio. Explica IP, servicio, puerto y el comando Nmap real. No explotes nada todavía.
+| Herramienta nativa | Operación real | Qué no autoriza |
+|---|---|---|
+| `lab_discover` | Resolver y comprobar los nombres/puertos fijos con Nmap TCP acotado. | No acepta IP, subred, puerto o destino arbitrarios. |
+| `lab_missions` | Leer el catálogo público local; filtrar familia o consultar un ID exacto con paginación limitada. | No envía solicitudes, no lee archivos elegidos por el modelo y no concede XP. |
+| `lab_http` | Ejecutar una solicitud al endpoint que fija la misión y mostrar respuesta/evidencia. | No sigue redirecciones ni concede puntos. |
+| `lab_submit` | Pedir a Academy que reproduzca y evalúe el intento con el runner. | El modelo no calcula, cambia ni escribe el puntaje. |
+| `lab_progress` | Consultar el progreso que Academy reporta para la cuenta iniciada con `lab login`. | No lee SQLite ni cuentas ajenas. |
+| `skill` | Cargar uno de los tres skills docentes instalados. | No instala código, no modifica políticas y no abre herramientas genéricas. |
 
-Cada llamada necesita una aprobación única en el panel del harness. Aprobar el skill no autoriza el siguiente escaneo. Los nombres permitidos son `target`, `receiver`, `mailpit`, `academy` y `ollama`. `all` significa esos cinco nombres, no una subred ni otros proyectos Docker. Sus puertos son 9090, 8081, 8025, 8000 y 11434 respectivamente; sus IP se asignan dinámicamente.
+Todas las llamadas, incluso leer un skill o consultar progreso, requieren una aprobación nueva. El panel muestra la operación, misión, método y resumen acotado de argumentos; oculta valores de tipo credencial. Revisarlo antes de elegir **Allow once**. Un permiso anterior no se reutiliza. **Reject** impide ejecutar esa llamada; no autoriza al modelo a repetirla ni a usar otra herramienta para lograr lo rechazado.
 
-El comando real de una comprobación manual equivalente, dentro de Kali, es:
+## 4. Reconocer exclusivamente las máquinas del Compose
+
+Enviar al chat:
+
+> Carga vulnerableapp-scope. Después propón lab_discover con service all. Explica los nombres, IP, puerto y comando Nmap observados. No explotes nada y espera la aprobación de cada llamada.
+
+`all` significa solo `target:9090`, `receiver:8081`, `mailpit:8025`, `academy:8000` y `ollama:11434`, no una subred ni otros proyectos Docker. Las IP cambian entre instalaciones. Un comando manual equivalente dentro de Kali es:
 
 ```bash
 nmap -sT -n -Pn -sV --version-light -p 9090 target
 ```
 
-La herramienta muestra el comando con la IP resuelta y sus límites de tiempo. Un timeout o un puerto no confirmado deben explicarse como tales, nunca transformarse en un descubrimiento inventado.
+El helper resuelve una IP de un nombre permitido y limita el reconocimiento. Si el fingerprint no termina, puede confirmar el mismo IP/puerto con otro Nmap TCP acotado. Un puerto abierto no implica que la versión esté identificada; leer ambos resultados sin atribuir un producto por una heurística de Nmap.
 
-## 4. Comparar un control y un payload HTTP
+## 5. Elegir una misión sin adivinar su ID
 
-Abrir en el portal la misión deseada y copiar su identificador, ruta y receta. El catálogo completo está también en `/opt/vulnerableapp-academy/docs/TALLER.md`.
+Enviar:
 
-Ejemplo de inyección SQL ciega, misión `sqlInjection-01`:
+> Carga vulnerableapp-http y consulta lab_missions con family sqlInjection y limit 8. Muéstrame cuáles son controles, cuáles tienen evaluación automática y qué evidencia requieren. No ejecutes solicitudes todavía.
 
-> Carga vulnerableapp-http. Usa lab_http para sqlInjection-01 con GET, params {"id":"999"}, headers {}, body null. Explica el control. Luego propón, sin ejecutar aún, el cambio a {"id":"100 OR 2=2"}.
+Luego consultar un ID preciso, por ejemplo:
 
-Tras revisar el control, aprobar por separado el segundo intento. Los comandos manuales equivalentes son:
+> Consulta lab_missions para mission_id sqlInjection-07. Explica su método, ruta fija, parámetros, criterio y mitigación. No asumas que un HTTP 200 demuestra el objetivo.
+
+Las plantillas de la misión se leen del mismo catálogo versionado que usa el laboratorio. Si una plantilla contiene controles y payloads separados, seleccionar sus parámetros planos para cada solicitud; no mandar ambos diccionarios como un solo valor. Una práctica guiada/manual puede ser correcta sin conceder XP automático.
+
+## 6. Hacer primero el control y después el cambio
+
+Ejemplo de SQL ciega `sqlInjection-01`, práctica de contraste sin XP automático:
 
 ```bash
 curl -sS --noproxy '*' --get --data-urlencode 'id=999' http://target:9090/VulnerableApp/BlindSQLInjectionVulnerability/LEVEL_1
 curl -sS --noproxy '*' --get --data-urlencode 'id=100 OR 2=2' http://target:9090/VulnerableApp/BlindSQLInjectionVulnerability/LEVEL_1
 ```
 
-Comparar los cuerpos JSON, no solo el estado `200`. Esta misión es una práctica manual de contraste y no concede XP automáticamente. El harness admite GET, POST y PUT según el catálogo, parámetros de texto, cabeceras válidas y cuerpo de hasta 16 KiB. No acepta un host o una ruta arbitrarios; la ruta procede del identificador de misión. No sigue redirects.
+En el chat:
 
-## 5. Registrar una misión con puntaje
+> Para sqlInjection-01, propón lab_http con method GET, params {"id":"999"}, headers {}, body null. Espera aprobación. Explica el resultado observado y después prepara, sin ejecutar aún, el cambio a {"id":"100 OR 2=2"}.
 
-Ejemplo local de SSRF, misión `ssrf-01`:
+Comparar los cuerpos JSON y el comportamiento frente al control, no solo el código HTTP. La segunda solicitud requiere otra aprobación. El helper muestra el comando/solicitud acotados y el resultado que recibió: no rellenar una respuesta faltante con lo que el modelo espera ver.
 
-> Carga vulnerableapp-evidence. Para ssrf-01, prepara lab_submit con request GET, params {"fileurl":"http://receiver:8081/"}, headers {}, body null. Antes de ejecutarlo explica que el destino es el receptor inocuo del Compose y espera mi aprobación. Después informa solo el éxito y XP que devuelva Academy.
+## 7. Registrar un resultado con XP
 
-Una comprobación manual del mismo endpoint es:
+Ejemplo de SSRF usando exclusivamente el receptor inocuo del Compose:
 
 ```bash
 curl -sS --noproxy '*' --get --data-urlencode 'fileurl=http://receiver:8081/' http://target:9090/VulnerableApp/SSRFVulnerability/LEVEL_1
@@ -76,29 +97,32 @@ lab request ssrf-01 --method GET --param 'fileurl=http://receiver:8081/'
 lab status
 ```
 
-`lab_http` muestra evidencia pero no concede puntos. `lab_submit` y `lab request` piden evaluación al servidor. Una misión lograda se puntúa una sola vez; repetirla no debe sumar XP nuevamente. Una práctica manual puede quedar sin puntaje aunque el alumno complete correctamente su razonamiento.
+El `curl` directo sirve para entender la respuesta pero no identifica al alumno ni entrega XP. `lab request` y `lab_submit` piden evaluación a la misma API. En el chat:
 
-## 6. XSS, formularios y otras familias
+> Carga vulnerableapp-evidence. Consulta la misión ssrf-01 y prepara una solicitud GET con params {"fileurl":"http://receiver:8081/"}, headers {} y body null. El destino debe ser únicamente receiver del Compose. Después del control observado propón lab_submit y espera aprobación. Informa solo success, XP concedido y score que devuelva Academy. Finalmente propón lab_progress para confirmar el estado de mi cuenta.
 
-Para XSS, leer la receta del nivel y usar su marcador inofensivo. Una cadena reflejada en HTML no prueba ejecución JavaScript: Academy usa el navegador de Kali para las misiones con criterio de navegador. Para formularios POST, usar el cuerpo y `content_type` del nivel sin duplicar los parámetros de query. Para XXE o SSRF, usar solo las fixtures y el receptor local de las recetas. No apuntar al anfitrión, Internet ni otras redes.
+El resultado esperado del receptor contiene `VA_LAB_RECEIVER`, pero no darlo por observado antes de recibirlo. El evaluador comprueba sus condiciones; una misión lograda se premia una sola vez. Diferenciar XP de este intento y XP total. No repetir solicitudes para farmear puntos.
 
-El catálogo incluye las veinte familias del original y conserva prácticas manuales cuando no existe un verificador suficiente. El harness ayuda a ejecutar y explicar solicitudes del catálogo, pero no convierte todas las prácticas manuales en pruebas automáticas ni reemplaza el análisis del alumno. Consultar [TALLER.md](../TALLER.md) y [HERRAMIENTAS.md](../HERRAMIENTAS.md) para los recorridos de cada familia y sus herramientas manuales de Kali.
+## 8. Otras familias y límites de la ayuda
 
-## 7. Rechazar, detener y terminar
+Para inyección de comandos, usar solo el marcador benigno de la receta, como `printf VA_LAB_OK` en el target aislado; no introducir acciones contra el Mac, Internet u otras redes. Para XSS, usar el marcador DOM inofensivo: reflejar una cadena HTML no prueba ejecución; las misiones puntuables de navegador las verifica Chromium del runner. Para formularios, usar método, cuerpo y `content_type` reales sin duplicar query y formulario. XXE y SSRF deben apuntar únicamente a fixtures o receptor del laboratorio.
 
-Rechazar una llamada en el panel debe impedir su ejecución. Una aprobación anterior no se reutiliza. Si una herramienta no pertenece a `lab_discover`, `lab_http`, `lab_submit` o `skill`, la guarda la bloquea aunque un prompt intente pedir bash, leer archivos, delegar o cambiar políticas.
+Las veinte familias y sus niveles están explicados en [TALLER.md](../TALLER.md). Algunas requieren razonamiento, herramientas manuales de Kali o evidencia de más de una solicitud; el harness no convierte una práctica manual en una validación automática. Tampoco recibe shell libre, herramientas de filesystem, búsqueda web, delegación o permiso para modificar su política.
 
-Al terminar:
+## 9. Ver, conservar y terminar
 
 ```bash
+lab status
 lab export
 lab logout
 ```
 
-Cerrar la sesión del portal si el equipo es compartido. Detener el taller desde la terminal del anfitrión con `Ctrl+C`, o con `docker compose stop`. No usar `docker compose down -v` salvo que se quiera borrar deliberadamente el progreso y los pesos locales.
+Cerrar también la sesión del portal en un equipo compartido. En el anfitrión, `docker compose stop` detiene servicios sin borrar datos. `docker compose down` conserva los volúmenes si no se usa `-v`. No borrar progreso y pesos con `down -v` salvo que esa destrucción sea deliberada.
 
-## Interpretar fingerprint y consumo de CPU
+## Comparar manual y harness de forma honesta
 
-El reconocimiento primero intenta la detección de versión con un límite corto. Si no obtiene una fila abierta, hace una segunda prueba Nmap TCP del **mismo IP y puerto**. Cuando esa confirmación es positiva pero el fingerprint no lo es, el resultado indica puerto abierto y versión no confirmada. No atribuir un producto por el nombre de puerto que Nmap usa como heurística.
+Usar el mismo nivel, parámetros y criterio en ambos caminos. Registrar el control, solicitud real, respuesta, evidencia y puntaje del servidor. Manual muestra dominio directo de las herramientas; harness añade consulta del catálogo, propuestas en lenguaje natural, revisión de argumentos y síntesis de resultados. No asumir que el agente es más rápido, que necesita menos aprendizaje o que nunca se equivoca. Las medidas de inferencia son del equipo y configuración documentados; no son tiempos de resolución para alumnos.
 
-Los modelos de CPU pueden tardar y deben probarse en el equipo del aula. El perfil usa una persona docente compacta, cuatro hilos y una generación predeterminada breve; las explicaciones extensas están en el tutorial estático. Las variantes más grandes pueden usarse como opción de instructor, pero una llamada nativa aislada exitosa no demuestra que el flujo completo con contexto y aprobación funcione bien en ese hardware.
+## Si el agente pregunta antes de mostrar el panel
+
+A veces termina un turno con «¿apruebas el envío?» después de comparar las respuestas. Todavía no ha propuesto una llamada nativa. Responde en el chat: «Sí, revisé esta evidencia. Propón lab_submit de este ID con los mismos parámetros observados y espera Allow once; luego consulta lab_progress con otra aprobación». Esa confirmación didáctica **no sustituye** el nonce de ejecución. No apruebes otro ID o una solicitud que no hayas visto. Los pasos cortos son preferibles a pedirle resolver todo el capítulo de una vez.

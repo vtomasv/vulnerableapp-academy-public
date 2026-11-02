@@ -77,6 +77,7 @@ RUN mkdir -p /opt/academy-harness \
     && test -s /opt/pentest-harness/apps/cli/lib/bin.js
 
 COPY kali/entrypoint.sh /usr/local/bin/kali-entrypoint.sh
+COPY kali/start-desktop.sh /usr/local/bin/start-desktop.sh
 COPY kali/runner.py /usr/local/bin/runner.py
 COPY kali/lab.py /usr/local/bin/lab
 COPY kali/solve_crypto.py /usr/local/bin/lab-crypto
@@ -87,7 +88,11 @@ COPY harness/ /opt/academy-harness/
 COPY harness/presets/vulnerableapp/ /opt/pentest-harness/apps/cli/config/agent-presets/vulnerableapp/
 COPY academy/data/catalog.json /opt/academy-harness/catalog.json
 COPY harness/tools.py /usr/local/bin/lab-harness-tools
-RUN chmod 0755 /usr/local/bin/kali-entrypoint.sh /usr/local/bin/runner.py /usr/local/bin/lab /usr/local/bin/lab-crypto \
+COPY tests/ /opt/vulnerableapp-academy/tests/
+# Normalizar solo contenido público; claves y sesiones permanecen en otros volúmenes.
+RUN chmod -R a+rX /opt/academy-harness /opt/vulnerableapp-academy /opt/academy-desktop \
+      /opt/pentest-harness/apps/cli/config/agent-presets/vulnerableapp \
+    && chmod 0755 /usr/local/bin/kali-entrypoint.sh /usr/local/bin/start-desktop.sh /usr/local/bin/runner.py /usr/local/bin/lab /usr/local/bin/lab-crypto \
     /usr/local/bin/lab-harness-tools /opt/academy-harness/start.sh \
     && chmod 0644 /etc/supervisor/conf.d/va-lab.conf \
     && node --check /opt/academy-harness/workshop-plugin.mjs \

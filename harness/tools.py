@@ -40,6 +40,8 @@ MAX_VALUE_BYTES = 16 * 1024
 MAX_HEADER_VALUE_BYTES = 16 * 1024
 MAX_HEADER_NAME_BYTES = 256
 MAX_CATALOG_ROUTE_BYTES = 512
+MAX_MISSION_LIST = 32
+MAX_MISSION_SUMMARY_BYTES = 4 * 1024
 
 CATALOG_PATH = Path("/opt/academy-harness/catalog.json")
 LAB_CLIENT_PATH = Path("/usr/local/bin/lab")
@@ -72,6 +74,26 @@ BLOCKED_HEADERS = {
     "proxy-connection",
     "upgrade",
 }
+SENSITIVE_KEY_TOKENS = (
+    "password",
+    "passwd",
+    "pwd",
+    "authorization",
+    "cookie",
+    "setcookie",
+    "token",
+    "secret",
+    "apikey",
+    "credential",
+    "session",
+    "jwt",
+    "bearer",
+)
+SENSITIVE_TEXT_RE = re.compile(
+    r"(?i)(password|passwd|pwd|authorization|cookie|set-cookie|token|secret|api[_-]?key)"
+    r"\s*([:=])\s*(['\"]?)([^'\"\s,;&}]+)"
+)
+BEARER_RE = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+")
 
 
 class ToolError(ValueError):
@@ -117,6 +139,84 @@ def _reject_unknown(value: Mapping[str, Any], allowed: set[str], label: str) -> 
     unknown = sorted(set(value) - allowed)
     if unknown:
         raise ToolError(f"{label} contiene claves no permitidas: {', '.join(unknown)}")
+
+
+def _sensitive_key(key: Any) -> bool:
+    if not isinstance(key, str):
+        return False
+    compact = re.sub(r"[^a-z0-9]", "", key.lower())
+    return any(token in compact for token in SENSITIVE_KEY_TOKENS)
+
+
+def _redact_text(value: str, limit: int = 1_024) -> str:
+    value = BEARER_RE.sub("Bearer <redacted>", value)
+
+    def replace(match: re.Match[str]) -> str:
+        return f"{match.group(1)}{match.group(2)}{match.group(3)}<redacted>"
+
+    return SENSITIVE_TEXT_RE.sub(replace, value)[:limit]
+
+
+def _redact_display(value: Any, key: Any = None, *, depth: int = 0) -> Any:
+    """Copy a value for model-facing display, redacting credential-like fields."""
+
+    if _sensitive_key(key):
+        return "<redacted>"
+    if depth > 5:
+        return "<nested value omitted>"
+    if isinstance(value, Mapping):
+        return {
+            str(item_key)[:MAX_HEADER_NAME_BYTES]: _redact_display(item, item_key, depth=depth + 1)
+            for item_key, item in list(value.items())[:MAX_RECORDS]
+        }
+    if isinstance(value, list):
+        return [_redact_display(item, depth=depth + 1) for item in value[:8]]
+    if isinstance(value, tuple):
+        return [_redact_display(item, depth=depth + 1) for item in value[:8]]
+    if isinstance(value, str):
+        return _redact_text(value)
+    return value
+
+
+def _bounded_text(value: Any, limit: int = MAX_MISSION_SUMMARY_BYTES) -> str:
+    text = value if isinstance(value, str) else json.dumps(
+        _redact_display(value), ensure_ascii=False, separators=(",", ":"), default=str
+    )
+    return text[:limit] + ("…" if len(text) > limit else "")
+
+
+def _request_display(mission_id: str, mission: Mapping[str, Any], request: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "mission_id": mission_id,
+        "route": _normalize_route(mission.get("route")),
+        "method": request.get("method"),
+        "params": _redact_display(request.get("params", {})),
+        "headers": _redact_display(request.get("headers", {})),
+        "body": _redact_display(request.get("body"), "body"),
+        "content_type": _redact_display(request.get("content_type"), "content_type"),
+    }
+
+
+def _evidence_summary(value: Any) -> str:
+    """Describe returned evidence without inventing a status or score."""
+
+    if isinstance(value, Mapping) and isinstance(value.get("evidence"), Mapping):
+        value = value["evidence"]
+    if not isinstance(value, Mapping):
+        return "Evidencia devuelta: " + _bounded_text(value, 1_500)
+    parts: list[str] = []
+    status = value.get("status", value.get("code"))
+    if isinstance(status, int):
+        parts.append(f"HTTP {status}")
+    headers = value.get("headers")
+    if isinstance(headers, Mapping):
+        shown_headers = _redact_display(dict(list(headers.items())[:12]))
+        parts.append("cabeceras=" + _bounded_text(shown_headers, 700))
+    if "body" in value:
+        parts.append("cuerpo=" + _bounded_text(_redact_display(value.get("body")), 1_800))
+    if not parts and "message" in value:
+        parts.append("mensaje=" + _bounded_text(value.get("message"), 1_000))
+    return "; ".join(parts)[:MAX_MISSION_SUMMARY_BYTES] or "Evidencia devuelta sin campos resumibles"
 
 
 def _safe_env() -> dict[str, str]:
@@ -370,7 +470,19 @@ def _discover(args: Any) -> dict[str, Any]:
         if service in failures:
             item["error"] = failures[service]
         output.append(item)
-    return {"action": "discover", "ok": True, "services": output}
+    lines = ["Descubrimiento real de servicios fijos:"]
+    for item in output:
+        opened = sum(
+            1
+            for scan in item.get("open", [])
+            if isinstance(scan, Mapping)
+            and any(isinstance(port, Mapping) and port.get("state") == "open" for port in scan.get("open", []))
+        )
+        suffix = f"; {opened} comprobación(es) confirmó/confirmaron puerto abierto" if opened else "; sin puerto confirmado"
+        if item.get("error"):
+            suffix += f"; error: {item['error']}"
+        lines.append(f"- {item['service']}:{item['port']} ({item['hostname']}){suffix}")
+    return {"action": "discover", "ok": True, "services": output, "summary": "\n".join(lines)}
 
 
 def _load_catalog() -> dict[str, Any]:
@@ -402,6 +514,135 @@ def _mission_methods(mission: Mapping[str, Any]) -> set[str]:
         if isinstance(value, str):
             methods.update(match.group(1) for match in HTTP_VERB_RE.finditer(value.upper()))
     return methods & HTTP_METHODS
+
+
+MISSIONS_KEYS = {"mission_id", "family", "limit", "offset"}
+
+
+def _validate_missions_args(args: Any) -> tuple[str | None, str | None, int, int]:
+    value = _require_object(args, "missions")
+    _reject_unknown(value, MISSIONS_KEYS, "missions")
+    mission_id = value.get("mission_id")
+    if mission_id is not None and (not isinstance(mission_id, str) or not MISSION_ID_RE.fullmatch(mission_id)):
+        raise ToolError("missions.mission_id no es un identificador permitido")
+    family = value.get("family")
+    if family is not None and (
+        not isinstance(family, str)
+        or not family
+        or _text_size(family) > MAX_HEADER_NAME_BYTES
+        or not re.fullmatch(r"[A-Za-z0-9_.-]+", family)
+    ):
+        raise ToolError("missions.family no es válida")
+    limit = value.get("limit", MAX_MISSION_LIST)
+    offset = value.get("offset", 0)
+    if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= MAX_MISSION_LIST:
+        raise ToolError(f"missions.limit debe estar entre 1 y {MAX_MISSION_LIST}")
+    if isinstance(offset, bool) or not isinstance(offset, int) or not 0 <= offset <= 256:
+        raise ToolError("missions.offset debe estar entre 0 y 256")
+    if mission_id is not None and (family is not None or "limit" in value or "offset" in value):
+        raise ToolError("missions.mission_id no se combina con filtros o paginación")
+    return mission_id, family, limit, offset
+
+
+def _catalog_mission_brief(mission: Mapping[str, Any]) -> dict[str, Any]:
+    methods = sorted(_mission_methods(mission))
+    return {
+        "id": mission.get("id"),
+        "title": _bounded_text(_redact_display(mission.get("title", "")), 320),
+        "family": mission.get("family"),
+        "methods": methods,
+        "route": _normalize_route(mission.get("route")),
+        "tool": mission.get("tool"),
+        "points": mission.get("points"),
+    }
+
+
+def _catalog_templates(mission: Mapping[str, Any]) -> list[dict[str, Any]]:
+    raw_params = mission.get("params", {})
+    if not isinstance(raw_params, Mapping):
+        raw_params = {}
+    nested = bool(raw_params) and all(isinstance(item, Mapping) for item in raw_params.values())
+    variants: list[tuple[str, Mapping[str, Any]]] = []
+    if nested:
+        variants = [(str(name), item) for name, item in list(raw_params.items())[:8] if isinstance(item, Mapping)]
+    else:
+        variants = [("attack", raw_params)]
+    methods = sorted(_mission_methods(mission))
+    method = methods[0] if methods else "GET"
+    templates: list[dict[str, Any]] = []
+    for name, params in variants:
+        templates.append(
+            {
+                "name": name,
+                "request": {
+                    "method": method,
+                    "params": _redact_display(dict(params)),
+                    "headers": _redact_display(mission.get("headers", {})),
+                    "body": _redact_display(mission.get("body"), "body"),
+                    "content_type": _redact_display(mission.get("content_type"), "content_type"),
+                },
+            }
+        )
+    return templates
+
+
+def _catalog_mission_detail(mission: Mapping[str, Any]) -> dict[str, Any]:
+    detail = _catalog_mission_brief(mission)
+    detail.update(
+        {
+            "templates": _catalog_templates(mission),
+            "commands": [
+                _bounded_text(_redact_display(step), 1_024)
+                for step in mission.get("steps", [])[:8]
+                if isinstance(step, str)
+            ],
+            "hints": [_bounded_text(_redact_display(item), 700) for item in mission.get("hints", [])[:8]],
+            "expected": _redact_display(mission.get("expected")),
+            "mitigation": _bounded_text(_redact_display(mission.get("mitigation", "")), 1_500),
+        }
+    )
+    return detail
+
+
+def _missions(args: Any) -> dict[str, Any]:
+    mission_id, family, limit, offset = _validate_missions_args(args)
+    catalog = _load_catalog()
+    all_missions = [item for item in catalog["missions"] if isinstance(item, Mapping)]
+    if mission_id is not None:
+        selected = _catalog_mission(mission_id)
+        detail = _catalog_mission_detail(selected)
+        summary = (
+            f"Misión exacta {mission_id}: {detail.get('title', '')}. "
+            f"Método(s): {', '.join(detail['methods']) or 'no declarado'}; "
+            f"ruta fija: {detail['route']}. Se devolvieron las plantillas del catálogo; no se envió ninguna solicitud."
+        )
+        return {
+            "action": "missions",
+            "ok": True,
+            "catalog_version": catalog.get("version"),
+            "count": len(all_missions),
+            "mission": detail,
+            "summary": _bounded_text(summary),
+        }
+    filtered = [item for item in all_missions if family is None or item.get("family") == family]
+    page = filtered[offset : offset + limit]
+    rows = [_catalog_mission_brief(item) for item in page]
+    summary = (
+        f"Catálogo fijo v{catalog.get('version')}: {len(filtered)} misión(es)"
+        + (f" de la familia {family}" if family else "")
+        + f"; mostrando {offset + 1 if page else 0}-{offset + len(page)}. "
+        "Elige un id exacto y vuelve a consultar lab_missions con mission_id para ver la receta; no se ejecutó ninguna solicitud."
+    )
+    return {
+        "action": "missions",
+        "ok": True,
+        "catalog_version": catalog.get("version"),
+        "count": len(filtered),
+        "offset": offset,
+        "limit": limit,
+        "missions": rows,
+        "summary": _bounded_text(summary),
+    }
 
 
 def _normalize_route(raw_route: Any) -> str:
@@ -515,9 +756,9 @@ def _validate_request(mission_id: Any, request: Any) -> tuple[dict[str, Any], di
 
 
 def _display_url(mission: Mapping[str, Any], params: Mapping[str, str]) -> str:
-    # Keep parameter names useful to the agent while never putting submitted
-    # credentials or payloads in a copyable command.
-    redacted = {key: "<redacted>" for key in params}
+    # Keep benign values useful to the agent while redacting credentials and
+    # token-like values in the copyable display command.
+    redacted = {key: str(_redact_display(item, key)) for key, item in params.items()}
     return _mission_url(mission, redacted)
 
 
@@ -647,11 +888,15 @@ def _http(args: Any) -> dict[str, Any]:
             "--write-out",
             "%{http_code}",
         ]
-        for key, _item in headers:
-            display_command.extend(["--header", f"{key}: <redacted>"])
+        for key, item in headers:
+            display_command.extend(["--header", f"{key}: {_redact_display(item, key)}"])
         if request["body"] is not None:
-            display_command.extend(["--data-binary", "<body-redacted>"])
+            # The actual helper sends the body through stdin; keep the command
+            # executable without pretending that a redacted placeholder is data.
+            display_command.extend(["--data-binary", "@-"])
         display_command.extend(["--url", _display_url(mission, params)])
+        request_summary = _request_display(value["mission_id"], mission, request)
+        evidence_summary = _evidence_summary({"status": status, "headers": response_headers, "body": body})
         result: dict[str, Any] = {
             "action": "http",
             "ok": True,
@@ -660,6 +905,12 @@ def _http(args: Any) -> dict[str, Any]:
             "headers": response_headers,
             "body": body,
             "command": shlex.join(display_command),
+            "request_summary": request_summary,
+            "evidence_summary": evidence_summary,
+            "summary": (
+                f"Solicitud real {request['method']} {request_summary['route']} con argumentos visibles en "
+                f"request_summary. Respuesta real: {evidence_summary}"
+            )[:MAX_MISSION_SUMMARY_BYTES],
             "exit_code": int(completed.returncode),
         }
         if truncated:
@@ -713,6 +964,51 @@ def _check_session(path: Path) -> None:
         raise ToolError("la sesión de lab tiene permisos demasiado amplios")
 
 
+def _progress() -> dict[str, Any]:
+    session_path = _session_path()
+    _check_session(session_path)
+    client = _load_lab_client()
+    try:
+        code, server_value = client._api("/api/me", "GET", auth=True, timeout=MAX_ACTION_SECONDS)
+    except Exception as exc:
+        raise ToolError("no se pudo leer el progreso del servidor Academy") from exc
+    if not isinstance(code, int):
+        raise ToolError("el servidor Academy devolvió un código inválido")
+    if code >= 400:
+        raise ToolError(f"el servidor Academy rechazó la lectura de progreso ({code})")
+    if not isinstance(server_value, Mapping):
+        raise ToolError("el servidor Academy devolvió un progreso inválido")
+    score = server_value.get("score")
+    maximum = server_value.get("maximum")
+    completed = server_value.get("completed")
+    events = server_value.get("events")
+    summary_parts = [f"Academy devolvió HTTP {code}"]
+    if isinstance(score, int):
+        summary_parts.append(f"score actual reportado por Academy={score}")
+    if isinstance(maximum, int):
+        summary_parts.append(f"máximo reportado={maximum}")
+    if isinstance(completed, list):
+        summary_parts.append(f"misiones completadas={len(completed)}")
+    if isinstance(events, list):
+        recent = []
+        for event in events[:5]:
+            if isinstance(event, Mapping) and isinstance(event.get("mission_id"), str):
+                recent.append(
+                    f"{event['mission_id']}:{'éxito' if event.get('success') else 'fallo'}"
+                    f"/awarded={event.get('awarded', '<sin dato>')}"
+                )
+        if recent:
+            summary_parts.append("eventos recientes=" + ", ".join(recent))
+    summary_parts.append("Los valores son de Academy; el helper no calcula ni concede XP.")
+    return {
+        "action": "progress",
+        "ok": True,
+        "code": code,
+        "server": dict(server_value),
+        "summary": _bounded_text("; ".join(summary_parts)),
+    }
+
+
 def _submit(args: Any) -> dict[str, Any]:
     value = _require_object(args, "submit")
     _reject_unknown(value, TOP_LEVEL_KEYS, "submit")
@@ -721,7 +1017,6 @@ def _submit(args: Any) -> dict[str, Any]:
     # Validate mission, route, method, headers and size before loading the
     # session or making a network request.
     mission, request = _validate_request(value["mission_id"], value["request"])
-    del mission
     session_path = _session_path()
     _check_session(session_path)
     client = _load_lab_client()
@@ -742,12 +1037,21 @@ def _submit(args: Any) -> dict[str, Any]:
         raise ToolError("el servidor Academy devolvió un código inválido")
     if code >= 400:
         raise ToolError(f"el servidor Academy rechazó el intento ({code})")
+    request_summary = _request_display(value["mission_id"], mission, request)
+    evidence_summary = _evidence_summary(server_value.get("evidence") if isinstance(server_value, Mapping) else server_value)
     result: dict[str, Any] = {
         "action": "submit",
         "ok": True,
         "code": code,
         "mission": value["mission_id"],
         "server": server_value,
+        "request_summary": request_summary,
+        "evidence_summary": evidence_summary,
+        "summary": (
+            f"Academy recibió el intento de {value['mission_id']} con "
+            f"{request['method']} y los argumentos visibles en request_summary. "
+            f"Resultado real del servidor: {evidence_summary}"
+        )[:MAX_MISSION_SUMMARY_BYTES],
     }
     if isinstance(server_value, dict):
         # These are server values only. No score, XP, or evidence is computed
@@ -775,7 +1079,10 @@ def _bounded_output(value: Any) -> bytes:
     if isinstance(value, dict):
         minimal: dict[str, Any] = {
             key: value[key]
-            for key in ("action", "ok", "code", "status", "success", "mission", "message", "error")
+            for key in (
+                "action", "ok", "code", "status", "success", "mission", "message", "error",
+                "summary", "evidence_summary", "request_summary",
+            )
             if key in value
         }
         if "body" in value:
@@ -795,8 +1102,8 @@ def _error(action: str, message: str) -> dict[str, Any]:
 def main(argv: Sequence[str] | None = None) -> int:
     args = list(argv if argv is not None else sys.argv[1:])
     action = args[0] if args else "unknown"
-    if len(args) != 1 or action not in {"discover", "http", "submit"}:
-        data = _error(action, "uso: lab-harness-tools discover|http|submit")
+    if len(args) != 1 or action not in {"discover", "missions", "progress", "http", "submit"}:
+        data = _error(action, "uso: lab-harness-tools discover|missions|progress|http|submit")
         sys.stdout.buffer.write(_bounded_output(data) + b"\n")
         return 1
     try:
@@ -810,6 +1117,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         with _Deadline():
             if action == "discover":
                 reply = _discover(parsed)
+            elif action == "missions":
+                reply = _missions(parsed)
+            elif action == "progress":
+                if parsed not in ({}, None):
+                    raise ToolError("progress no acepta argumentos")
+                reply = _progress()
             elif action == "http":
                 reply = _http(parsed)
             else:

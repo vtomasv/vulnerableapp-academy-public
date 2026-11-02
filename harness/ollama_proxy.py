@@ -29,8 +29,10 @@ HOST = "127.0.0.1"
 PORT = 11435
 UPSTREAM_CHAT_URL = "http://ollama:11434/api/chat"
 UPSTREAM_TAGS_URL = "http://ollama:11434/api/tags"
-DEFAULT_MODEL = "huihui_ai/qwen3-abliterated:1.7b-v2-q4_K_M"
-UPSTREAM_TIMEOUT_SECONDS = 180
+DEFAULT_MODEL = "huihui_ai/Qwen3.8-abliterated:27b"
+UPSTREAM_TIMEOUT_SECONDS = min(max(int(os.environ.get("HARNESS_UPSTREAM_TIMEOUT", "1800")), 30), 3600)
+OLLAMA_NUM_THREADS = min(max(int(os.environ.get("OLLAMA_NUM_THREADS", "12")), 1), 64)
+OLLAMA_NUM_CTX = min(max(int(os.environ.get("OLLAMA_CONTEXT_LENGTH", "16384")), 2048), 32768)
 MAX_REQUEST_BODY_BYTES = 512 * 1024
 
 
@@ -262,10 +264,10 @@ def build_native_request(request: Any, model: Optional[str] = None) -> Dict[str,
         "stream": True,
         "think": False,
         "options": {
-            "num_ctx": 8192,
+            "num_ctx": OLLAMA_NUM_CTX,
             "num_predict": _request_num_predict(request),
             "temperature": _request_temperature(request),
-            "num_thread": 4,
+            "num_thread": OLLAMA_NUM_THREADS,
         },
     }
 
@@ -602,12 +604,12 @@ class OllamaProxyHandler(BaseHTTPRequestHandler):
                 raise RequestValidationError("request body must be an object")
 
             native_request = build_native_request(request, configured_model())
-            print("ollama-adapter request: messages=%d text_chars=%d tools=%d tool_chars=%d max_output=%d threads=4" % (
+            print("ollama-adapter request: messages=%d text_chars=%d tools=%d tool_chars=%d max_output=%d threads=%d" % (
                 len(native_request["messages"]),
                 sum(len(str(m.get("content", ""))) for m in native_request["messages"]),
                 len(native_request.get("tools", [])),
                 len(json.dumps(native_request.get("tools", []))),
-                native_request["options"]["num_predict"]), flush=True)
+                native_request["options"]["num_predict"], native_request["options"]["num_thread"]), flush=True)
             response = _upstream_request(UPSTREAM_CHAT_URL, "POST", _json_bytes(native_request))
             try:
                 if request.get("stream", False):

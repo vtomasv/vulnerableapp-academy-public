@@ -16,17 +16,17 @@ Solo Academy decide éxito y XP a partir del resultado del runner. El modelo no 
 
 ## Autorización por llamada
 
-Las herramientas visibles son `lab_discover`, `lab_http`, `lab_submit` y `skill`. La guarda monotónica rechaza nombres y argumentos fuera del alcance aunque otro plugin devuelva permiso. El consumidor de aprobación pide una decisión nueva por llamada; `allowed-once`, `rejected`, `cancelled` y `unavailable` son los estados originales. Sin agente, canal o respuesta disponible, la operación falla cerrada.
+Las herramientas visibles son `lab_discover`, `lab_missions`, `lab_progress`, `lab_http`, `lab_submit` y `skill`. La guarda monotónica rechaza nombres y argumentos fuera del alcance aunque otro plugin devuelva permiso. El consumidor de aprobación pide una decisión nueva por llamada; `allowed-once`, `rejected`, `cancelled` y `unavailable` son los estados originales. Sin agente, canal o respuesta disponible, la operación falla cerrada.
 
 El preset no instala herramientas genéricas de shell, filesystem, búsqueda externa, workflows o delegación. Los registries que la UI necesita no equivalen a herramientas autorizadas. Cargar un skill no aprueba un escaneo ni un intento posterior.
 
 ## Modelo local y protocolo
 
-El predeterminado es `huihui_ai/qwen3-abliterated:1.7b-v2-q4_K_M`, descargado en el volumen de Ollama. La variante comunitaria reduce filtrado, sin garantizar precisión ni ausencia de rechazos. Qwen 4B permanece seleccionable, pero no se declara probado con contexto completo en esta CPU.
+El predeterminado actual es `huihui_ai/Qwen3.8-abliterated:27b`, descargado en el volumen de Ollama 0.40.13. El perfil nativo usa contexto 16K, 12 hilos y capacidad de salida 4096 en el proveedor; la generación por solicitud sigue acotada por el adaptador. La variante comunitaria reduce filtrado, sin garantizar precisión ni ausencia de rechazos. Las pruebas anteriores con 1,7B se conservan como historial, no como perfil actual. Ver [prueba Mac/27B](../MAC_27B.md).
 
 El adaptador escucha únicamente en `127.0.0.1:11435` de Kali. Acepta un solo modelo configurado, `/health`, `/v1/models` y `/v1/chat/completions`; convierte el protocolo OpenAI del cliente original al `/api/chat` nativo de `http://ollama:11434`. No sigue URLs del usuario, ignora proxies del entorno y no usa proveedores externos.
 
-La solicitud nativa fija `think:false`, contexto 8192, cuatro hilos, generación predeterminada 256 y límite máximo 1024. La persona docente es un prompt completo para evitar instrucciones genéricas innecesarias; esto no desactiva los contextos de skills ni las guardas de ejecución. El adaptador registra solo conteos y tamaños, no los prompts ni credenciales.
+La solicitud nativa fija `think:false`, contexto 16384 y 12 hilos por defecto, parametrizados por Compose. La generación predeterminada del adaptador es 256 y su límite por solicitud es 1024; el proveedor dispone de presupuesto 4096 para no agotar la secuencia de pasos. La persona docente es un prompt completo para evitar instrucciones genéricas innecesarias; esto no desactiva los contextos de skills ni las guardas de ejecución. El adaptador registra solo conteos y tamaños, no los prompts ni credenciales.
 
 ## Interfaz y redes
 

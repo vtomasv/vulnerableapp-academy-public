@@ -6,7 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     DATA_DIR=/data \
     KALI_RUNNER_URL=http://kali:9001 \
     OLLAMA_URL=http://ollama:11434 \
-    OLLAMA_MODEL=huihui_ai/qwen3-abliterated:1.7b-v2-q4_K_M
+    OLLAMA_MODEL=huihui_ai/Qwen3.8-abliterated:27b
 
 WORKDIR /app
 

@@ -1,0 +1,100 @@
+{
+  "verified": true,
+  "real_model": true,
+  "replay": false,
+  "host_label": "Apple M3 Max / 128 GB · VM Docker 16 CPU / 64 GiB",
+  "model": "huihui_ai/Qwen3.8-abliterated:27b",
+  "digest": "bdc5e13cd1645bc409e95a7d9e864dc3ce3e5fe5beeb24a43c193e8041edd3e0",
+  "ollama_version": "0.40.13",
+  "size_vram": 0,
+  "benchmark_context": 8192,
+  "native_context": 16384,
+  "threads": 12,
+  "manual_score": 300,
+  "native_score": 300,
+  "approved_calls": 16,
+  "captured_nonces_unique": true,
+  "approval_capture_complete": false,
+  "observer_errors": [
+    "AssertionError: No hubo submit nativo aprobado"
+  ],
+  "reconciled_with_api": true,
+  "cases": [
+    {
+      "mission_id": "commandInjection-02",
+      "label": "RCE benigno",
+      "marker": "VA_LAB_OK",
+      "control_marker": false,
+      "payload_marker": true,
+      "manual_awarded": 100,
+      "native_awarded": 100,
+      "approved_calls": 6,
+      "resumed": false,
+      "observed_seconds": 461.507,
+      "timing_note": "Tiempo de QA, incluidas aprobaciones automatizadas; no mide al alumno."
+    },
+    {
+      "mission_id": "sqlInjection-07",
+      "label": "SQL de entrenamiento",
+      "marker": "BMW",
+      "control_marker": false,
+      "payload_marker": true,
+      "manual_awarded": 100,
+      "native_awarded": 100,
+      "approved_calls": 6,
+      "resumed": true,
+      "observed_seconds": 300.704,
+      "timing_note": "Solo tramo después de reanudar; no comparar como total."
+    },
+    {
+      "mission_id": "ssrf-01",
+      "label": "SSRF local",
+      "marker": "VA_LAB_RECEIVER",
+      "control_marker": false,
+      "payload_marker": true,
+      "manual_awarded": 100,
+      "native_awarded": 100,
+      "approved_calls": 4,
+      "resumed": true,
+      "observed_seconds": null,
+      "timing_note": "Solo tramo después de reanudar; no comparar como total."
+    }
+  ],
+  "benchmark": [
+    {
+      "label": "cold",
+      "elapsed_seconds": 42.692,
+      "first_content_seconds": 25.032,
+      "prompt_tokens": 78,
+      "output_tokens": 96,
+      "tokens_per_second": 5.435,
+      "load_seconds": 22.698,
+      "prompt_eval_seconds": 2.327,
+      "done_reason": "length"
+    },
+    {
+      "label": "warm",
+      "elapsed_seconds": 17.423,
+      "first_content_seconds": 2.382,
+      "prompt_tokens": 80,
+      "output_tokens": 96,
+      "tokens_per_second": 6.383,
+      "load_seconds": 0.001,
+      "prompt_eval_seconds": 2.331,
+      "done_reason": "length"
+    }
+  ],
+  "recovered_qa_errors": [
+    "URLError: <urlopen error [Errno -3] Temporary failure in name resolution>",
+    "TimeoutError: Locator.wait_for: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator(\"textarea:enabled:visible\").first to be visible\n"
+  ],
+  "student_checkpoints": [
+    {
+      "mission": "ssrf-01",
+      "instruction": "Evidencia revisada; proponer submit exacto y progreso con aprobaciones nuevas."
+    }
+  ],
+  "interpretation": "Recetas conocidas, no tiempos de aprendizaje. El modelo propone y Academy verifica. No se asume ventaja de velocidad.",
+  "goals_verified": true,
+  "observer_suite_passed": false
+}

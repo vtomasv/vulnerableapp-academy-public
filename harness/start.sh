@@ -8,11 +8,11 @@ mkdir -p "$DSH_HOME"
 python3 - <<'PY'
 import json, os, re
 from pathlib import Path
-model = os.environ.get('OLLAMA_MODEL', 'huihui_ai/qwen3-abliterated:1.7b-v2-q4_K_M')
+model = os.environ.get('OLLAMA_MODEL', 'huihui_ai/Qwen3.8-abliterated:27b')
 if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_./:@+-]{0,199}', model) or model.endswith(':cloud'):
     raise SystemExit('OLLAMA_MODEL debe ser una etiqueta local válida, no cloud')
 source = Path('/opt/academy-harness/workshop.cordis.patch.yml').read_text()
-source = source.replace('huihui_ai/qwen3-abliterated:1.7b-v2-q4_K_M', json.dumps(model))
+source = source.replace('huihui_ai/Qwen3.8-abliterated:27b', json.dumps(model))
 out = Path(os.environ['DSH_HOME']) / 'workshop.runtime.cordis.patch.yml'
 out.write_text(source)
 out.chmod(0o600)

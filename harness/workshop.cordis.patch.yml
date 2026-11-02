@@ -4,7 +4,7 @@
 - id: agent-default-model
   config:
     provider: ollama-local
-    model: huihui_ai/qwen3-abliterated:1.7b-v2-q4_K_M
+    model: huihui_ai/Qwen3.8-abliterated:27b
 
 - id: llm-pi-ai
   config:
@@ -14,8 +14,8 @@
         apiKeyEnv: OLLAMA_DUMMY_API_KEY
         api: openai-completions
         baseURL: http://127.0.0.1:11435/v1
-        defaultContextWindow: 8192
-        defaultMaxTokens: 256
+        defaultContextWindow: 16384
+        defaultMaxTokens: 4096
         defaultInput: [text]
         reasoning: off
         retryPolicy:
@@ -26,10 +26,10 @@
             maxDelayMs: 1
             jitterRatio: 0
         models:
-          - id: huihui_ai/qwen3-abliterated:1.7b-v2-q4_K_M
-            name: Qwen local (Ollama)
-            contextWindow: 8192
-            maxTokens: 256
+          - id: huihui_ai/Qwen3.8-abliterated:27b
+            name: Qwen 3.8 27B · local
+            contextWindow: 16384
+            maxTokens: 4096
             input: [text]
             reasoningEfforts: false
 

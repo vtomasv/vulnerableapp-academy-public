@@ -62,3 +62,7 @@ El smoke test adicional `scripts/smoke.sh` puede ejecutarse en Linux/macOS o WSL
 No se validó Docker Desktop en Windows/macOS ni x86_64. Se diseñó sin emulación forzada, pero Kali rolling y las imágenes externas pueden cambiar. Antes de clase hay que probar un equipo de cada tipo que se utilizará.
 
 No se ofrece garantía absoluta contra escapes del kernel, Docker, navegador, canales DNS o modificación por el dueño del anfitrión. Los datos deben ser ficticios. Una cuenta separa progreso, no el escritorio ni el target compartido: para simultaneidad, una instancia Compose por alumno.
+
+## Prueba actual Mac / Qwen 3.8 27B
+
+Docker Desktop Linux ARM64, M3 Max/128 GB, VM 16 CPU/64 GiB y Ollama 0.40.13. Se levantaron todos los servicios. 22 controles reales del helper y 8 contratos pasaron; el validador JS acepta content_type null sin relajar CRLF/Host. El modelo real consiguió RCE, SQL y SSRF, 300 XP en una cuenta distinta de la manual (también 300). El observador final perdió dos decisiones SSRF y terminó con error; el resultado de la misión se reconcilió contra API y transcript, no contra un supuesto éxito del test. Ver [MAC_27B](MAC_27B.md) y [datos públicos](../site/resultados.json). No se afirma haber probado los 189 ejercicios con el modelo ni esta versión en Windows/Linux x86_64.

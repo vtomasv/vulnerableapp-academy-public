@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1c2020">
+  <meta name="color-scheme" content="light">
+  <title>VulnerableApp Academy — laboratorio local de pentesting</title>
+  <meta name="description" content="Taller local en español para aprender pentesting con Docker, Kali XFCE, noVNC, evidencia verificable y progreso individual.">
+  <meta name="keywords" content="pentesting, laboratorio local, Docker, Kali, noVNC, VulnerableApp, aprendizaje">
+  <link rel="canonical" href="https://vtomasv.github.io/vulnerableapp-academy-public/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="VulnerableApp Academy">
+  <meta property="og:title" content="VulnerableApp Academy — aprende desde la evidencia">
+  <meta property="og:description" content="Un laboratorio de pentesting en español, aislado y local: Docker Compose, Kali XFCE, harness acotado y XP por evidencia.">
+  <meta property="og:url" content="https://vtomasv.github.io/vulnerableapp-academy-public/">
+  <meta property="og:image" content="https://vtomasv.github.io/vulnerableapp-academy-public/assets/og-image.png">
+  <meta property="og:image:alt" content="VulnerableApp Academy, laboratorio local en Docker">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="VulnerableApp Academy — aprende desde la evidencia">
+  <meta name="twitter:description" content="Taller local en español con Docker, Kali XFCE, noVNC, harness de pentesting y progreso individual.">
+  <meta name="twitter:image" content="https://vtomasv.github.io/vulnerableapp-academy-public/assets/og-image.png">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <script src="scripts.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#contenido">Saltar al contenido</a>
+  <div class="page-noise" aria-hidden="true"></div>
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="#inicio" aria-label="VulnerableApp Academy, inicio">
+        <span class="brand-mark" aria-hidden="true"><span>V</span><span>A</span></span>
+        <span class="brand-type">VulnerableApp <b>ACADEMY</b></span>
+      </a>
+      <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="primary-navigation">
+        <span class="sr-only">Abrir navegación</span>
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="primary-nav" id="primary-navigation" aria-label="Navegación principal">
+        <a href="#como-funciona">El enfoque</a>
+        <a href="#recorrido">Recorrido</a>
+        <a href="comparison.html">Resultados reales</a>
+        <a href="#instalar">Instalar</a>
+        <a class="nav-cta" href="https://github.com/vtomasv/vulnerableapp-academy-public" target="_blank" rel="noreferrer">Ver en GitHub <span aria-hidden="true">↗</span></a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="contenido">
+    <section class="hero section-pad" id="inicio">
+      <div class="container hero-grid">
+        <div class="hero-copy reveal">
+          <p class="eyebrow"><span class="eyebrow-dot"></span> LABORATORIO LOCAL <span class="eyebrow-slash">/</span> ES</p>
+          <h1>Aprende a encontrar la <em>señal,</em> no solo el fallo.</h1>
+          <p class="hero-lede">VulnerableApp Academy convierte un catálogo deliberadamente vulnerable en una práctica guiada: controlas la solicitud, observas la evidencia y entiendes por qué una respuesta no basta.</p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="#instalar">Arrancar localmente <span aria-hidden="true">↓</span></a>
+            <a class="button button-quiet" href="#recorrido">Ver el recorrido <span aria-hidden="true">↗</span></a>
+          </div>
+          <p class="hero-note"><span class="status-dot"></span> Sin target público · sin chat remoto · sin telemetría</p>
+        </div>
+
+        <figure class="hero-product reveal" aria-labelledby="product-preview-title">
+          <div class="product-kicker"><span>01</span><span>ACADEMY / EJECUCIÓN LOCAL</span></div>
+          <div class="browser-window">
+            <div class="browser-chrome">
+              <div class="browser-lights" aria-hidden="true"><i></i><i></i><i></i></div>
+              <span class="browser-address"><span class="address-lock">◈</span> localhost:8080 / missions</span>
+              <span class="browser-live"><b></b> LOCAL</span>
+            </div>
+            <div class="browser-stage">
+              <img class="product-shot" src="assets/portal-mac.png" alt="Captura real del portal VulnerableApp Academy en Mac" width="1440" height="900">
+              <div class="browser-stage-tag">EVIDENCIA<br><b>PRIMERO</b></div>
+            </div>
+          </div>
+          <figcaption id="product-preview-title"><span>Vista del producto</span><span>01 / 04</span></figcaption>
+        </figure>
+      </div>
+      <div class="hero-index container" aria-hidden="true"><span>VULNERABLEAPP ACADEMY</span><span>SISTEMA DE APRENDIZAJE LOCAL</span><span>EDICIÓN / 2026</span></div>
+    </section>
+
+    <section class="signal-strip" aria-label="Resumen del laboratorio">
+      <div class="container signal-grid">
+        <div class="signal-item"><strong>20</strong><span>familias del<br>catálogo</span></div>
+        <div class="signal-item"><strong>189</strong><span>prácticas para<br>contrastar</span></div>
+        <div class="signal-item"><strong>XP</strong><span>individual y<br>basado en evidencia</span></div>
+        <div class="signal-statement"><span class="signal-arrow">↳</span><p>La puntuación no la decide el modelo.<br><b>La valida Academy.</b></p></div>
+      </div>
+    </section>
+
+    <section class="section-pad approach" id="como-funciona">
+      <div class="container">
+        <div class="section-heading reveal">
+          <p class="eyebrow"><span class="eyebrow-dot"></span> EL ENFOQUE</p>
+          <h2>Una práctica de seguridad<br><em>con criterio.</em></h2>
+          <p>El laboratorio está hecho para que el razonamiento quede visible: qué controlaste, qué cambiaste, qué observaste y qué evidencia permite afirmarlo.</p>
+        </div>
+        <div class="approach-grid">
+          <article class="approach-card approach-card-dark reveal">
+            <div class="card-topline"><span>01 / OBSERVAR</span><span class="card-symbol">↗</span></div>
+            <div class="card-number">01</div>
+            <h3>Primero el<br><em>control.</em></h3>
+            <p>Una respuesta HTTP 200 no es una vulnerabilidad. Cada misión comienza por reconocer entrada, componente y comportamiento esperado.</p>
+            <span class="card-foot">CONTROL → CONTEXTO</span>
+          </article>
+          <article class="approach-card approach-card-cyan reveal">
+            <div class="card-topline"><span>02 / CONTRASTAR</span><span class="card-symbol">≠</span></div>
+            <div class="card-number">02</div>
+            <h3>Cambia una<br><em>variable.</em></h3>
+            <p>Manual o asistido, el ejercicio conserva el contraste: la prueba solo tiene sentido frente a su control y su resultado observable.</p>
+            <span class="card-foot">CAMBIO → SEÑAL</span>
+          </article>
+          <article class="approach-card approach-card-paper reveal">
+            <div class="card-topline"><span>03 / EVIDENCIAR</span><span class="card-symbol">✓</span></div>
+            <div class="card-number">03</div>
+            <h3>Gana XP por<br><em>lo que pruebas.</em></h3>
+            <p>El runner de Kali entrega la evidencia; el servidor calcula el progreso individual. Repetir un intento no duplica recompensas.</p>
+            <span class="card-foot">PRUEBA → PROGRESO</span>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section-pad architecture" aria-labelledby="architecture-title">
+      <div class="container architecture-grid">
+        <div class="architecture-copy reveal">
+          <p class="eyebrow"><span class="eyebrow-dot"></span> TODO LOCAL</p>
+          <h2 id="architecture-title">Un sistema de práctica,<br><em>no una demo.</em></h2>
+          <p>El laboratorio completo permanece dentro de Docker. El target conserva el Java original de SasanLabs/VulnerableApp; el portal, Kali XFCE/noVNC, el runner y Ollama se conectan por redes internas. Desde el anfitrión se publica únicamente el gateway local.</p>
+          <div class="architecture-rule"></div>
+          <p class="small-note"><b>Perfil de referencia:</b> Mac con M3 Max y 128 GB. La inferencia se comunica como backend de CPU: no se promete Metal ni GPU.</p>
+        </div>
+        <div class="architecture-stack reveal">
+          <div class="stack-label">ARQUITECTURA / 05 CAPAS</div>
+          <div class="stack-row stack-row-top"><span class="stack-icon">▦</span><span>DOCKER COMPOSE</span><b>orquestar</b></div>
+          <div class="stack-row"><span class="stack-icon">▤</span><span>KALI XFCE + noVNC</span><b>observar</b></div>
+          <div class="stack-row"><span class="stack-icon">⌁</span><span>S1N6H / PENTEST-HARNESS</span><b>asistir</b></div>
+          <div class="stack-row"><span class="stack-icon">◌</span><span>OLLAMA / QWEN 3.8 27B</span><b>local</b></div>
+          <div class="stack-row stack-row-bottom"><span class="stack-icon">✓</span><span>ACADEMY EVIDENCE API</span><b>puntuar</b></div>
+          <div class="stack-foot"><span>MODELO LOCAL</span><code>huihui_ai/Qwen3.8-abliterated:27b</code></div>
+          <p class="stack-pin">HARNESS FIJADO <code>4638f38082bdf37cea03ad151905c4bb8662f6e9</code></p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section-pad compare" id="comparar" aria-labelledby="compare-title">
+      <div class="container">
+        <div class="section-heading compare-heading reveal">
+          <p class="eyebrow"><span class="eyebrow-dot"></span> DOS RUTAS, UNA EVIDENCIA</p>
+          <h2 id="compare-title">Manual para entender.<br><em>Harness para ampliar.</em></h2>
+          <p>El harness no reemplaza tu análisis ni abre una shell libre. Encapsula operaciones permitidas, muestra argumentos y pide una aprobación nueva para cada llamada.</p>
+        </div>
+        <div class="comparison-shell reveal">
+          <div class="tab-header" role="tablist" aria-label="Comparar recorrido manual y harness">
+            <button class="tab-button is-active" type="button" role="tab" id="tab-manual" aria-controls="panel-manual" aria-selected="true">01 <span>Manual</span></button>
+            <button class="tab-button" type="button" role="tab" id="tab-harness" aria-controls="panel-harness" aria-selected="false">02 <span>Harness</span></button>
+          </div>
+          <div class="tab-panel is-active" id="panel-manual" role="tabpanel" aria-labelledby="tab-manual" tabindex="0">
+            <div class="tab-copy">
+              <span class="panel-label">CAMINO A / FUNDAMENTOS</span>
+              <h3>Lee el recorrido<br>con tus propias herramientas.</h3>
+              <p>Desde la terminal de Kali, reconoce el control, cambia un parámetro y compara el cuerpo de la respuesta. La guía explica qué observar, no solo qué copiar.</p>
+              <ul class="check-list">
+                <li><span>01</span> Control benigno antes de la prueba</li>
+                <li><span>02</span> Solicitud acotada al catálogo</li>
+                <li><span>03</span> Resultado interpretado, no supuesto</li>
+              </ul>
+            </div>
+            <div class="code-card">
+              <div class="code-card-bar"><span>TERMINAL / KALI</span><button class="copy-button" type="button" data-copy="curl -sS --noproxy '*' --get --data-urlencode 'id=999' http://target:9090/VulnerableApp/BlindSQLInjectionVulnerability/LEVEL_1"><span class="copy-icon">□</span> Copiar</button></div>
+              <pre><code><span class="prompt">$</span> curl -sS --noproxy '*' --get \
+    --data-urlencode <span class="code-string">'id=999'</span> \
+    http://target:9090/VulnerableApp/BlindSQLInjectionVulnerability/LEVEL_1</code></pre>
+              <p class="code-note">Ejemplo documentado de control. Ejecutar solo dentro del laboratorio local.</p>
+            </div>
+          </div>
+          <div class="tab-panel" id="panel-harness" role="tabpanel" aria-labelledby="tab-harness" tabindex="0" hidden>
+            <div class="tab-copy">
+              <span class="panel-label">CAMINO B / ASISTENCIA ACOTADA</span>
+              <h3>Deja que el harness<br>te ayude a mirar mejor.</h3>
+              <p>El preset Taller VulnerableApp limita el modelo a descubrir, hacer HTTP, registrar evidencia y cargar skills. Tú revisas cada operación y decides si se ejecuta.</p>
+              <ul class="check-list">
+                <li><span>01</span> Aprobación explícita por llamada</li>
+                <li><span>02</span> Rutas y argumentos del catálogo</li>
+                <li><span>03</span> XP solo desde Academy</li>
+              </ul>
+            </div>
+            <div class="code-card">
+              <div class="code-card-bar"><span>TERMINAL / KALI</span><button class="copy-button" type="button" data-copy="lab login && lab missions && lab status"><span class="copy-icon">□</span> Copiar</button></div>
+              <pre><code><span class="prompt">$</span> lab login
+<span class="prompt">$</span> lab missions
+<span class="prompt">$</span> lab status</code></pre>
+              <p class="code-note">La cuenta del CLI es la misma del portal; el modelo no controla la puntuación.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section-pad walkthrough" id="recorrido" aria-labelledby="walkthrough-title">
+      <div class="container">
+        <div class="walkthrough-head reveal">
+          <div>
+            <p class="eyebrow"><span class="eyebrow-dot"></span> TOUR DE PRODUCTO</p>
+            <h2 id="walkthrough-title">Cuatro vistas.<br><em>Un solo laboratorio.</em></h2>
+          </div>
+          <button class="button button-dark" id="tour-start" type="button">Iniciar tour <span aria-hidden="true">→</span></button>
+        </div>
+        <p class="walkthrough-note reveal">Capturas reales de la ejecución local en Mac. Haz clic en cualquier vista para ampliarla.</p>
+        <div class="shot-grid">
+          <article class="shot-card shot-card-wide reveal" data-shot data-image="assets/portal-mac.png" data-title="Portal y catálogo" data-kicker="01 / PORTAL">
+            <button class="shot-trigger" type="button" data-lightbox-index="0" aria-label="Ampliar captura del portal y catálogo">
+              <span class="shot-frame shot-frame-wide"><img src="assets/portal-mac.png" alt="Captura real del portal local con catálogo de VulnerableApp Academy" width="1440" height="900"><span class="shot-number">01</span><span class="zoom-mark" aria-hidden="true">↗</span></span>
+              <span class="shot-caption"><b>Portal y catálogo</b><span>Misiones · briefings · progreso</span></span>
+            </button>
+          </article>
+          <article class="shot-card reveal" data-shot data-image="assets/kali-mac.png" data-title="Kali XFCE + noVNC" data-kicker="02 / DESKTOP">
+            <button class="shot-trigger" type="button" data-lightbox-index="1" aria-label="Ampliar captura del escritorio Kali">
+              <span class="shot-frame"><img src="assets/kali-mac.png" alt="Captura real del escritorio Kali XFCE abierto por noVNC" width="1200" height="800"><span class="shot-number">02</span><span class="zoom-mark" aria-hidden="true">↗</span></span>
+              <span class="shot-caption"><b>Kali XFCE + noVNC</b><span>Herramientas dentro del lab</span></span>
+            </button>
+          </article>
+          <article class="shot-card reveal" data-shot data-image="assets/harness-mac.png" data-title="Harness del taller" data-kicker="03 / ASSIST">
+            <button class="shot-trigger" type="button" data-lightbox-index="2" aria-label="Ampliar captura del harness del taller">
+              <span class="shot-frame"><img src="assets/harness-mac.png" alt="Captura real del harness local con el preset Taller VulnerableApp" width="1200" height="800"><span class="shot-number">03</span><span class="zoom-mark" aria-hidden="true">↗</span></span>
+              <span class="shot-caption"><b>Harness del taller</b><span>Operaciones acotadas · aprobación</span></span>
+            </button>
+          </article>
+          <article class="shot-card shot-card-wide reveal" data-shot data-image="assets/comparison-mac.png" data-title="Control frente a prueba" data-kicker="04 / EVIDENCE">
+            <button class="shot-trigger" type="button" data-lightbox-index="3" aria-label="Ampliar captura de la comparación entre control y prueba">
+              <span class="shot-frame shot-frame-wide"><img src="assets/comparison-mac.png" alt="Captura real de una comparación entre solicitud de control y prueba" width="1440" height="900"><span class="shot-number">04</span><span class="zoom-mark" aria-hidden="true">↗</span></span>
+              <span class="shot-caption"><b>Control frente a prueba</b><span>La diferencia que sí se puede explicar</span></span>
+            </button>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section-pad install" id="instalar" aria-labelledby="install-title">
+      <div class="container install-grid">
+        <div class="install-copy reveal">
+          <p class="eyebrow"><span class="eyebrow-dot"></span> EMPEZAR EN LOCAL</p>
+          <h2 id="install-title">Tu terminal.<br><em>Tu laboratorio.</em></h2>
+          <p>Descarga el repositorio completo. No necesitas instalar Kali, Java, Python, Ollama, Node ni VNC en el anfitrión: Compose prepara el entorno dentro del lab.</p>
+          <div class="install-alert"><span class="alert-mark">!</span><p><b>Solo para prácticas autorizadas.</b> Mantén el gateway en localhost. No publiques el target, no uses túneles y trabaja con datos ficticios.</p></div>
+        </div>
+        <div class="install-steps reveal">
+          <div class="install-step">
+            <span class="step-index">01</span>
+            <div><h3>Clona el repositorio</h3><p>Abre una terminal en una carpeta de trabajo.</p><div class="command-line"><code>git clone https://github.com/vtomasv/vulnerableapp-academy-public.git</code><button class="copy-button" type="button" data-copy="git clone https://github.com/vtomasv/vulnerableapp-academy-public.git" aria-label="Copiar comando para clonar"><span class="copy-icon">□</span></button></div></div>
+          </div>
+          <div class="install-step">
+            <span class="step-index">02</span>
+            <div><h3>Levanta todo dentro de Docker</h3><p>Entra primero en <code>vulnerableapp-academy-public</code>. El primer arranque descarga imágenes, paquetes y el modelo de 27B; asigna suficiente RAM a la VM Docker.</p><div class="command-line"><code>cd vulnerableapp-academy-public</code><button class="copy-button" type="button" data-copy="cd vulnerableapp-academy-public" aria-label="Copiar cambio de carpeta">□</button></div><div class="command-line"><code>docker compose up --build -d</code><button class="copy-button" type="button" data-copy="docker compose up --build -d" aria-label="Copiar comando de inicio"><span class="copy-icon">□</span></button></div></div>
+          </div>
+          <div class="install-step">
+            <span class="step-index">03</span>
+            <div><h3>Abre el portal local</h3><p>Registra tu cuenta y pulsa «Abrir Kali».</p><div class="command-line"><code>http://localhost:8080</code><button class="copy-button" type="button" data-copy="http://localhost:8080" aria-label="Copiar dirección local"><span class="copy-icon">□</span></button></div></div>
+          </div>
+          <div class="install-step install-step-last">
+            <span class="step-index">04</span>
+            <div><h3>Haz tu primer intento</h3><p>En Kali: inicia sesión, lista misiones y observa tu estado.</p><div class="command-line"><code>lab login && lab missions && lab status</code><button class="copy-button" type="button" data-copy="lab login && lab missions && lab status" aria-label="Copiar comando de primer intento"><span class="copy-icon">□</span></button></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section-pad boundaries" aria-labelledby="boundaries-title">
+      <div class="container boundaries-grid">
+        <div class="boundary-stamp reveal" aria-hidden="true"><span>LOCAL</span><strong>SOLO</strong><small>PRÁCTICA<br>AUTORIZADA</small></div>
+        <div class="boundary-copy reveal">
+          <p class="eyebrow"><span class="eyebrow-dot"></span> LÍMITES CLAROS</p>
+          <h2 id="boundaries-title">La aplicación vulnerable<br><em>no es un destino público.</em></h2>
+          <p>Esta web explica cómo funciona el proyecto. No ofrece un target alojado, no abre un chat de Ollama en Internet y no sustituye la ejecución de Docker en tu equipo.</p>
+          <div class="boundary-links"><a href="https://github.com/vtomasv/vulnerableapp-academy-public/blob/main/docs/SEGURIDAD.md" target="_blank" rel="noreferrer">Leer seguridad y alcance <span aria-hidden="true">↗</span></a><a href="https://github.com/vtomasv/vulnerableapp-academy-public/blob/main/docs/VALIDACION.md" target="_blank" rel="noreferrer">Ver validación y límites <span aria-hidden="true">↗</span></a></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section-pad faq" aria-labelledby="faq-title">
+      <div class="container faq-grid">
+        <div class="section-heading reveal"><p class="eyebrow"><span class="eyebrow-dot"></span> PREGUNTAS DE CAMPO</p><h2 id="faq-title">Antes de<br><em>abrir la terminal.</em></h2></div>
+        <div class="faq-list reveal">
+          <details open><summary>¿Dónde se ejecuta el laboratorio?</summary><p>En tu equipo, dentro de Docker Compose. El perfil descrito aquí es un Mac M3 Max con 128 GB; la ejecución del lab y la inferencia se mantienen en el backend de CPU. Consulta la validación antes de una clase.</p></details>
+          <details><summary>¿El harness puede ejecutar cualquier cosa?</summary><p>No. El preset Taller VulnerableApp restringe las operaciones a <code>lab_discover</code>, <code>lab_missions</code>, <code>lab_http</code>, <code>lab_submit</code>, <code>lab_progress</code> y <code>skill</code>; cada llamada pide aprobación y una guarda adicional limita herramientas y argumentos.</p></details>
+          <details><summary>¿Cómo se entrega el XP?</summary><p>La evidencia sale del runner de Kali y Academy valida el objetivo. El modelo no concede puntos, y una repetición no debe duplicar la recompensa.</p></details>
+          <details><summary>¿Qué documentación sigue después?</summary><p>Empieza por la guía paso a paso, sigue con el tutorial completo y revisa la guía del harness cuando quieras comparar el recorrido manual con el asistido.</p></details>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-main">
+      <div class="footer-brand"><a class="brand" href="#inicio" aria-label="Volver al inicio"><span class="brand-mark" aria-hidden="true"><span>V</span><span>A</span></span><span class="brand-type">VulnerableApp <b>ACADEMY</b></span></a><p>Un taller local para leer la evidencia con criterio.</p></div>
+      <div class="footer-nav"><div><span class="footer-label">PROYECTO</span><a href="https://github.com/vtomasv/vulnerableapp-academy-public" target="_blank" rel="noreferrer">GitHub ↗</a><a href="https://github.com/vtomasv/vulnerableapp-academy-public/blob/main/README.md" target="_blank" rel="noreferrer">README ↗</a><a href="https://github.com/SasanLabs/VulnerableApp" target="_blank" rel="noreferrer">SasanLabs / origen ↗</a></div><div><span class="footer-label">GUÍAS</span><a href="https://github.com/vtomasv/vulnerableapp-academy-public/blob/main/docs/INICIO.md" target="_blank" rel="noreferrer">Inicio paso a paso ↗</a><a href="https://github.com/vtomasv/vulnerableapp-academy-public/blob/main/docs/TALLER.md" target="_blank" rel="noreferrer">Tutorial del taller ↗</a><a href="https://github.com/vtomasv/vulnerableapp-academy-public/blob/main/docs/harness/GUIA.md" target="_blank" rel="noreferrer">Guía del harness ↗</a></div><div><span class="footer-label">MOTOR</span><a href="https://github.com/S1N6H/pentest-harness/tree/4638f38082bdf37cea03ad151905c4bb8662f6e9" target="_blank" rel="noreferrer">S1N6H / commit fijado ↗</a><a href="https://github.com/vtomasv/vulnerableapp-academy-public/blob/main/docs/FUENTES.md" target="_blank" rel="noreferrer">Fuentes y licencias ↗</a></div></div>
+    </div>
+    <div class="container footer-bottom"><span>VULNERABLEAPP ACADEMY / WEB DE PRESENTACIÓN LOCAL</span><span>Construido para aprender, no para exponer.</span><span>© 2026 VTOMASV</span></div>
+  </footer>
+
+  <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-labelledby="lightbox-title" aria-describedby="lightbox-description" hidden>
+    <div class="lightbox-backdrop" data-lightbox-close></div>
+    <div class="lightbox-panel">
+      <div class="lightbox-top"><span id="lightbox-kicker">01 / PORTAL</span><button class="lightbox-close" type="button" data-lightbox-close aria-label="Cerrar visor">×</button></div>
+      <div class="lightbox-image-wrap"><img id="lightbox-image" src="assets/portal-mac.png" alt="" width="1440" height="900"><button class="lightbox-arrow lightbox-prev" type="button" aria-label="Vista anterior">←</button><button class="lightbox-arrow lightbox-next" type="button" aria-label="Vista siguiente">→</button></div>
+      <div class="lightbox-bottom"><div><h2 id="lightbox-title">Portal y catálogo</h2><p id="lightbox-description">Vista real de la ejecución local.</p></div><span id="lightbox-count">01 / 04</span></div>
+    </div>
+  </div>
+
+  <div class="sr-only" aria-live="polite" id="copy-status"></div>
+</body>
+</html>

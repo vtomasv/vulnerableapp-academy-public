@@ -1,0 +1,44 @@
+name: Publicar la página del taller
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Descargar únicamente el código versionado
+        uses: actions/checkout@v4
+      - name: Comprobar la presentación y sus capturas
+        run: |
+          test -s site/index.html
+          test -s site/assets/portal-mac.png
+          test -s site/assets/kali-mac.png
+          test -s site/assets/harness-mac.png
+          test -s site/assets/comparison-mac.png
+      - name: Configurar GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Preparar solo el sitio estático
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - name: Publicar la página, no el laboratorio
+        id: deployment
+        uses: actions/deploy-pages@v4

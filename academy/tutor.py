@@ -18,7 +18,10 @@ from .grading import bounded_request_size, mission_methods, target_path
 
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "huihui_ai/qwen3-abliterated:1.7b-v2-q4_K_M")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "huihui_ai/Qwen3.8-abliterated:27b")
+OLLAMA_NUM_THREADS = min(max(int(os.getenv("OLLAMA_NUM_THREADS", "12")), 1), 64)
+OLLAMA_CONTEXT_LENGTH = min(max(int(os.getenv("OLLAMA_CONTEXT_LENGTH", "16384")), 2048), 32768)
+OLLAMA_TIMEOUT = min(max(float(os.getenv("HARNESS_UPSTREAM_TIMEOUT", "1800")), 30), 3600)
 MAX_MESSAGE = 8_000
 MAX_PROPOSALS = 3
 _ALLOWED_TOOLS = {"inspect_headers", "lab_request"}
@@ -100,10 +103,10 @@ async def ask_ollama(mission: Mapping[str, Any], user_message: str) -> dict[str,
                  "body": {"type": "string"}, "content_type": {"type": "string"}},
                  "additionalProperties": False}}},
         ],
-        "options": {"num_ctx": 4096, "num_predict": 800},
+        "options": {"num_ctx": OLLAMA_CONTEXT_LENGTH, "num_thread": OLLAMA_NUM_THREADS, "num_predict": 800},
     }
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(180.0, connect=5.0)) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(OLLAMA_TIMEOUT, connect=5.0)) as client:
             response = await client.post(OLLAMA_URL.rstrip("/") + "/api/chat", json=payload)
         if response.status_code < 200 or response.status_code >= 300:
             raise TutorUnavailable("Ollama respondió con error")

@@ -11,13 +11,15 @@ const MAX_INPUT_BYTES = 32 * 1024
 const MAX_OUTPUT_BYTES = 80 * 1024
 const MAX_STDERR_BYTES = 16 * 1024
 const HELPER_TIMEOUT_MS = 80_000
-const ALLOWED_TOOLS = new Set(['lab_discover', 'lab_http', 'lab_submit', 'skill'])
+const ALLOWED_TOOLS = new Set(['lab_discover', 'lab_missions', 'lab_progress', 'lab_http', 'lab_submit', 'skill'])
 const SERVICES = new Set(['target', 'receiver', 'mailpit', 'academy', 'ollama'])
 const DISCOVER_SERVICES = new Set([...SERVICES, 'all'])
 const METHODS = new Set(['GET', 'POST', 'PUT'])
 const MISSION_KEYS = new Set(['mission_id', 'request'])
 const REQUEST_KEYS = new Set(['method', 'params', 'headers', 'body', 'content_type'])
 const DISCOVER_KEYS = new Set(['service'])
+const MISSIONS_KEYS = new Set(['mission_id', 'family', 'limit', 'offset'])
+const MAX_MISSION_LIST = 32
 const SKILL_KEYS = new Set(['name'])
 const SKILL_NAMES = new Set([
   'vulnerableapp-scope',
@@ -50,7 +52,7 @@ const REQUEST_SCHEMA = {
       oneOf: [{ type: 'string' }, { type: 'null' }],
     },
     content_type: {
-      type: 'string',
+      oneOf: [{ type: 'string' }, { type: 'null' }],
       description: 'Optional Content-Type header passed to the fixed helper.',
     },
   },
@@ -111,7 +113,7 @@ function validateRequest(request) {
   }
   if (request.body !== null && typeof request.body !== 'string') return 'request.body debe ser string o null'
   if (typeof request.body === 'string' && byteLength(request.body) > 16 * 1024) return 'request.body excede 16 KiB'
-  if (request.content_type !== undefined) {
+  if (request.content_type !== undefined && request.content_type !== null) {
     if (typeof request.content_type !== 'string' || request.content_type.length === 0
       || byteLength(request.content_type) > 256) {
       return 'request.content_type no es válido'
@@ -128,6 +130,33 @@ function validateMission(args) {
   const unknown = validateUnknownKeys(args, MISSION_KEYS, 'arguments')
   if (unknown) return unknown
   return validateRequest(args.request)
+}
+
+function validateMissions(args) {
+  if (!isRecord(args)) return 'lab_missions requiere un objeto'
+  const unknown = validateUnknownKeys(args, MISSIONS_KEYS, 'lab_missions')
+  if (unknown) return unknown
+  if (args.mission_id !== undefined && (typeof args.mission_id !== 'string' || !KEY_RE.test(args.mission_id))) {
+    return 'lab_missions.mission_id no está allowlisted'
+  }
+  if (args.family !== undefined && (typeof args.family !== 'string' || !/^[A-Za-z0-9_.-]+$/.test(args.family))) {
+    return 'lab_missions.family no es válida'
+  }
+  if (args.limit !== undefined && (!Number.isInteger(args.limit) || args.limit < 1 || args.limit > MAX_MISSION_LIST)) {
+    return `lab_missions.limit debe estar entre 1 y ${MAX_MISSION_LIST}`
+  }
+  if (args.offset !== undefined && (!Number.isInteger(args.offset) || args.offset < 0 || args.offset > 256)) {
+    return 'lab_missions.offset debe estar entre 0 y 256'
+  }
+  if (args.mission_id !== undefined && (args.family !== undefined || args.limit !== undefined || args.offset !== undefined)) {
+    return 'lab_missions.mission_id no se combina con filtros o paginación'
+  }
+  return undefined
+}
+
+function validateProgress(args) {
+  if (!isRecord(args)) return 'lab_progress requiere un objeto vacío'
+  return Object.keys(args).length === 0 ? undefined : 'lab_progress no acepta argumentos'
 }
 
 function validateHelperReply(action, reply) {
@@ -242,6 +271,33 @@ function registerTools(ctx) {
     isConcurrencySafe: () => true,
   }))
 
+  ctx.tools.register(defineTool({
+    name: 'lab_missions',
+    description: 'Lee el catálogo fijo local: lista misiones o muestra la receta exacta de un mission_id. No acepta rutas, URLs ni comandos.',
+    parameters: {
+      mission_id: { type: 'string', description: 'ID exacto del catálogo; omitir para listar.' },
+      family: { type: 'string', description: 'Filtro de familia allowlisted del catálogo.' },
+      limit: { type: 'integer', description: 'Máximo 32 misiones por página.' },
+      offset: { type: 'integer', description: 'Desplazamiento entre 0 y 256.' },
+    },
+    output: JSON_OUTPUT,
+    async execute(args, exec) {
+      return await runHelper('missions', args ?? {}, exec.signal)
+    },
+    isConcurrencySafe: () => true,
+  }))
+
+  ctx.tools.register(defineTool({
+    name: 'lab_progress',
+    description: 'Lee score, misiones completadas y eventos recientes desde la sesión local de lab y Academy. No envía intentos.',
+    parameters: {},
+    output: JSON_OUTPUT,
+    async execute(_args, exec) {
+      return await runHelper('progress', {}, exec.signal)
+    },
+    isConcurrencySafe: () => true,
+  }))
+
   for (const [name, action, description] of [
     ['lab_http', 'http', 'Envía una solicitud HTTP al endpoint fijo de la misión y devuelve evidencia acotada del servidor; nunca acepta una ruta arbitraria.'],
     ['lab_submit', 'submit', 'Envía una solicitud de misión al backend autorizado para evaluación y devuelve únicamente el resultado de puntuación/evidencia producido por el servidor.'],
@@ -260,6 +316,63 @@ function registerTools(ctx) {
       isConcurrencySafe: () => false,
     }))
   }
+}
+
+function sensitiveApprovalKey(key) {
+  const compact = String(key ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
+  return ['password', 'passwd', 'pwd', 'authorization', 'cookie', 'setcookie', 'token', 'secret', 'apikey', 'credential', 'session', 'jwt', 'bearer']
+    .some(token => compact.includes(token))
+}
+
+function sanitizeApprovalValue(value, key, depth = 0) {
+  if (sensitiveApprovalKey(key)) return '<redacted>'
+  if (depth > 4) return '<nested value omitted>'
+  if (typeof value === 'string') {
+    return value
+      .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer <redacted>')
+      .replace(/(password|passwd|pwd|authorization|cookie|set-cookie|token|secret|api[_-]?key)\s*([:=])\s*(['"]?)[^'"\s,;&}]+/gi, '$1$2$3<redacted>')
+      .slice(0, 512)
+  }
+  if (Array.isArray(value)) return value.slice(0, 8).map(item => sanitizeApprovalValue(item, undefined, depth + 1))
+  if (isRecord(value)) {
+    return Object.fromEntries(Object.entries(value).slice(0, 16).map(([itemKey, item]) => [
+      itemKey.slice(0, 128), sanitizeApprovalValue(item, itemKey, depth + 1),
+    ]))
+  }
+  return value
+}
+
+function approvalReason(exec) {
+  const args = isRecord(exec.arguments) ? exec.arguments : {}
+  let detail
+  if (exec.name === 'lab_discover') {
+    detail = { service: args.service }
+  } else if (exec.name === 'lab_missions') {
+    detail = {
+      mission_id: args.mission_id,
+      family: args.family,
+      limit: args.limit,
+      offset: args.offset,
+    }
+  } else if (exec.name === 'lab_progress') {
+    detail = { session: 'lab local; solo lectura' }
+  } else {
+    const request = isRecord(args.request) ? args.request : {}
+    detail = {
+      mission_id: args.mission_id,
+      method: request.method,
+      params: sanitizeApprovalValue(request.params ?? {}, 'params'),
+      header_names: isRecord(request.headers) ? Object.keys(request.headers).slice(0, 32) : [],
+      body: request.body === null || request.body === undefined ? null : '<body present; values not shown>',
+    }
+  }
+  let encoded
+  try {
+    encoded = JSON.stringify(sanitizeApprovalValue(detail))
+  } catch {
+    encoded = '{"detail":"unavailable"}'
+  }
+  return `Aprobación única para ${exec.name}; no se reutiliza: ${encoded.slice(0, 1_400)}`
 }
 
 function guardReason(exec) {
@@ -282,6 +395,8 @@ function guardReason(exec) {
       ? 'lab_discover.service inválido'
       : undefined
   }
+  if (exec.name === 'lab_missions') return validateMissions(exec.arguments)
+  if (exec.name === 'lab_progress') return validateProgress(exec.arguments)
   return validateMission(exec.arguments)
 }
 
@@ -301,7 +416,7 @@ async function approvalGate(exec, next) {
     agent: exec.agent,
     toolName: exec.name,
     callId: exec.callId,
-    reason: `Operación de laboratorio ${exec.name}; aprobación única, sin reutilización`,
+    reason: approvalReason(exec),
     signal: exec.signal,
   })
   if (outcome === 'allowed-once') return { kind: 'allow' }

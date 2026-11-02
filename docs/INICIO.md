@@ -12,7 +12,7 @@ Descarga el repositorio como ZIP o clónalo si ya usas Git. Extrae la carpeta co
 docker compose up --build -d
 ```
 
-No copies `.env.example` si quieres usar los valores predeterminados: Compose ya tiene valores de respaldo. Si necesitas cambiar el puerto, el modelo o los recursos, crea `.env` desde el ejemplo **antes** del arranque. Las imágenes y el modelo requieren varios GB; como orientación de dimensionamiento, reserva 16 GB de RAM total para Docker y espacio libre holgado, preferentemente 40 GB. Son recomendaciones, no mínimos medidos ni garantías: la memoria de Chromium, Java y Qwen depende de la carga. El predeterminado es `huihui_ai/qwen3-abliterated:1.7b-v2-q4_K_M`, probado con herramientas nativas. El instructor puede seleccionar `huihui_ai/qwen3-abliterated:4b-v2-q4_K_M`, pero en la CPU de prueba agotó su timeout con contexto completo; no se declara esa opción validada.
+No copies `.env.example` si quieres usar el perfil predeterminado: Compose ya contiene valores de respaldo. El modelo actual es **`huihui_ai/Qwen3.8-abliterated:27b`**, descargado dentro de Docker. Sus pesos ocupan aproximadamente 18 GB, más imágenes y cachés. No uses la orientación antigua de 16 GB de RAM/40 GB de disco del 1,7B. La prueba real M3 Max/128 GB usó una VM Docker con 64 GiB y 16 CPU, con límite Ollama 48 GiB/12 CPU. Otros equipos requieren dimensionamiento y prueba propios. Si cambias puerto o recursos, crea `.env` antes del arranque. Ver [Guía Mac y 27B](MAC_27B.md) para medidas, contexto 16K y límites.
 
 Abre `http://localhost:8080`. Si cambiaste `LAB_PORT`, utiliza ese puerto. La primera carga del modelo puede ser lenta en CPU; consulta el estado sin repetir la descarga:
 
