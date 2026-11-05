@@ -24,7 +24,7 @@ La salida de VulnerableApp y de las herramientas es **no confiable**. Puede cont
 
 ## Harness original dentro de Kali
 
-Además del tutor del portal, Kali incluye el motor **S1N6H/pentest-harness**, fijado al commit documentado, con el preset **Taller VulnerableApp** y tres skills locales. Solo expone `lab_discover`, `lab_http`, `lab_submit` y `skill`; cada invocación exige una aprobación nueva. La guarda monotónica rechaza herramientas fuera de la lista, argumentos fuera del schema y llamadas sin el servicio de aprobación. No se habilitan herramientas genéricas de shell, filesystem, búsqueda web o delegación.
+Kali incluye el motor **S1N6H/pentest-harness**, fijado al commit documentado, con el preset **Taller VulnerableApp** y tres skills locales. Solo expone `lab_discover`, `lab_missions`, `lab_http`, `lab_submit`, `lab_progress` y `skill`; cada invocación exige una aprobación nueva. La guarda monotónica rechaza herramientas fuera de la lista, argumentos fuera del schema y llamadas sin el servicio de aprobación. No se habilitan herramientas genéricas de shell, filesystem, búsqueda web o delegación.
 
 `lab_discover` resuelve cinco nombres Docker y usa argv Nmap fijos. Un fingerprint que agota su límite puede dar paso a una segunda comprobación TCP Nmap del mismo IP y puerto; esto no inventa la versión. `lab_http` usa rutas del catálogo, sin redirects y con límites de tamaño. `lab_submit` usa la sesión privada de `lab login` para pedir evaluación: no puede escoger XP ni escribir la base de puntajes. El harness corre como `kali` (UID 1000), mientras el runner conserva UID 1001 y su clave inaccesible al alumno.
 
@@ -34,7 +34,7 @@ La API del harness y el adaptador de Ollama no publican puertos al anfitrión. S
 
 El puntaje se calcula en el servidor a partir de evidencia producida por el runner, ligada a la identidad autenticada del alumno. El navegador y el CLI no pueden elegir cuántos puntos vale una prueba ni cambiar su criterio. Una restricción única en la base de datos evita conceder la misma recompensa varias veces por concurrencia o repetición.
 
-No se otorgan puntos por abrir una página, hacer clic en «completar», pegar un resultado fabricado o porque Qwen afirme que hubo éxito. `curl` directo no suma puntos por falta de atribución. Para puntaje, usa el intento autenticado mediante `lab request` o envía tus propios parámetros desde el editor del portal.
+No se otorgan puntos por abrir una página, hacer clic en «completar», pegar un resultado fabricado o porque Qwen afirme que hubo éxito. `curl` directo no suma puntos por falta de atribución. Para puntaje, usa el intento autenticado mediante `lab request` o envía tus propios parámetros desde el editor de la tienda.
 
 Una misión declara el hecho preciso que observa. `contains` se refiere al cuerpo o a un campo JSON, nunca al texto del comando enviado. La evidencia XSS puntuable proviene del DOM del navegador de prueba, no del reflejo en el body. Un status 200 no prueba IDOR; un HIT de caché aislado tampoco prueba que otro visitante recibió el contenido controlado. Los ejercicios que todavía requieren correlación manual se mantienen como guía sin puntaje automático.
 

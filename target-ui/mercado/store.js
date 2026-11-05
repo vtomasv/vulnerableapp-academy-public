@@ -7,11 +7,11 @@
     { id: 'parlante-pacifico', name: 'Parlante Pacífico', category: 'audio', categoryLabel: 'Audio de ruta', price: 24990, image: 'assets/parlante.jpg', description: 'Sonido compacto para el refugio, con una historia de producto bien simple.' }
   ];
   const PRICE = new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 });
-  const STANDARD_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
   const LAB_METHODS = new Set(['GET', 'POST', 'PUT']);
-  const MAX_RESPONSE = 12000;
-  const VIEW_HASHES = { home: '#inicio', catalog: '#catalogo', orders: '#pedidos', account: '#cuenta', support: '#soporte', challenges: '#retos', admin: '#administracion' };
+  const TOKEN_KEY = 'va_session_token';
+  const VIEW_HASHES = { home: '#inicio', catalog: '#catalogo', orders: '#pedidos', account: '#cuenta', support: '#soporte', challenges: '#retos' };
   const state = {
+    token: null,
     catalog: { families: [], missions: [] },
     contexts: { families: {} },
     selectedFamily: 'all',
@@ -46,10 +46,9 @@
     state.toastTimer = setTimeout(() => node.classList.remove('is-visible'), 4200);
   }
 
-  function normalizeMethod(raw) {
-    const value = text(raw, 'GET').trim().toUpperCase();
-    const match = value.match(/^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b/);
-    return match ? match[1] : 'GET';
+  function missionMethods(mission) {
+    const methods = text(mission.method).toUpperCase().match(/\b(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b/g) || [];
+    return [...new Set(methods)];
   }
 
   function normalizeCatalogRoute(raw) {
@@ -74,7 +73,7 @@
   }
 
   function setView(view) {
-    const allowed = new Set(['home', 'catalog', 'orders', 'account', 'support', 'challenges', 'admin']);
+    const allowed = new Set(['home', 'catalog', 'orders', 'account', 'support', 'challenges']);
     state.currentView = allowed.has(view) ? view : 'home';
     $$('[data-page]').forEach((section) => {
       const active = section.dataset.page === state.currentView;
@@ -90,9 +89,8 @@
     });
     if (state.currentView === 'catalog') renderProducts();
     if (state.currentView === 'challenges') renderChallengeArea();
-    if (state.currentView === 'admin') renderAdminArea();
-    updateAcademyLinks();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (state.currentView === 'account' && state.token) refreshProgress();
+    window.scrollTo({ top: 0 });
   }
 
   function setViewHash(view) {
@@ -106,7 +104,7 @@
         const view = element.dataset.view;
         if (!view) return;
         event.preventDefault();
-        if (element.dataset.mission) {
+        if (element.dataset.mission && missionById(element.dataset.mission)) {
           selectMission(element.dataset.mission, true);
         } else {
           setView(view);
@@ -120,9 +118,12 @@
       if (!value) { setView('catalog'); setViewHash('catalog'); return; }
       state.productQuery = value;
       state.challengeQuery = value;
+      $('#challenge-search').value = value;
+      state.selectedFamily = 'all';
       const productHit = PRODUCTS.some((product) => `${product.name} ${product.categoryLabel} ${product.description}`.toLocaleLowerCase('es-CL').includes(value.toLocaleLowerCase('es-CL')));
-      if (productHit) { setView('catalog'); setViewHash('catalog'); renderProducts(); }
-      else { setView('challenges'); setViewHash('challenges'); renderChallengeArea(); }
+      const view = productHit ? 'catalog' : 'challenges';
+      setView(view);
+      setViewHash(view);
     });
   }
 
@@ -153,20 +154,6 @@
     if (count) count.textContent = `${products.length} producto${products.length === 1 ? '' : 's'} visibles`;
     $$('.category-tab').forEach((button) => button.classList.toggle('is-active', button.dataset.category === state.category));
     $$('.add-product').forEach((button) => button.addEventListener('click', () => addToCart(button.dataset.product)));
-  }
-
-  function renderAdminArea() {
-    const missions = Array.isArray(state.catalog.missions) ? state.catalog.missions : [];
-    const families = familyIds();
-    const points = missions.reduce((total, mission) => total + (Number(mission.points) || 0), 0);
-    const missionCount = $('#admin-mission-count');
-    const familyCount = $('#admin-family-count');
-    const pointsTotal = $('#admin-points-total');
-    const status = $('#admin-catalog-status');
-    if (missionCount) missionCount.textContent = String(missions.length);
-    if (familyCount) familyCount.textContent = String(families.length);
-    if (pointsTotal) pointsTotal.textContent = points ? `${points.toLocaleString('es-CL')} XP` : '—';
-    if (status) status.textContent = missions.length === 189 && new Set(missions.map((mission) => mission.id)).size === 189 ? '189 misiones verificadas' : 'Catálogo incompleto';
   }
 
   function addToCart(productId) {
@@ -252,7 +239,7 @@
   }
 
   function loadContexts() {
-    return fetch('contexts.json', { headers: { Accept: 'application/json' } }).then((response) => {
+    return fetch('/contexts.json', { headers: { Accept: 'application/json' } }).then((response) => {
       if (!response.ok) throw new Error('No se pudo cargar el mapa de áreas.');
       return response.json();
     }).then((data) => { state.contexts = data && data.families ? data : state.contexts; }).catch(() => {
@@ -261,19 +248,17 @@
   }
 
   function loadCatalog() {
-    return fetch('catalog.json', { headers: { Accept: 'application/json' } }).then((response) => {
+    return fetch('/api/catalog', { headers: { Accept: 'application/json' } }).then((response) => {
       if (!response.ok) throw new Error(`Catálogo HTTP ${response.status}`);
       return response.json();
     }).then((data) => {
       if (!data || !Array.isArray(data.families) || !Array.isArray(data.missions)) throw new Error('Formato de catálogo inválido.');
       const ids = new Set(data.missions.map((mission) => mission && mission.id).filter(Boolean));
-      if (data.missions.length !== 189 || ids.size !== 189) throw new Error('El catálogo no contiene exactamente las 189 misiones únicas de Academy.');
+      if (!ids.size || ids.size !== data.missions.length) throw new Error('El catálogo contiene IDs inválidos o duplicados.');
       state.catalog = data;
     }).catch((error) => {
       state.catalog = { families: [], missions: [] };
-      $('#family-list').innerHTML = `<p class="empty-copy">No se pudo leer catalog.json. ${escapeHtml(error.message)}</p>`;
-      $('#mission-list').innerHTML = '<p class="empty-copy">El padre del entorno debe copiar el catálogo local junto a esta tienda.</p>';
-      showToast('Catálogo local no disponible todavía.');
+      showToast(`No se pudo cargar el catálogo. ${error.message} Recarga la página para reintentar.`);
     });
   }
 
@@ -316,16 +301,14 @@
   function renderMissionSelect(missions) {
     const select = $('#mission-select');
     select.innerHTML = '<option value="">Selecciona una misión</option>' + missions.map((mission) => `<option value="${escapeHtml(mission.id)}">${escapeHtml(mission.title || mission.id)}</option>`).join('');
-    select.value = state.selectedMission && state.catalog.missions.some((mission) => mission.id === state.selectedMission.id) ? state.selectedMission.id : '';
-    if (!missions.some((mission) => state.selectedMission && mission.id === state.selectedMission.id)) select.value = '';
+    select.value = missions.some((mission) => mission === state.selectedMission) ? state.selectedMission.id : '';
   }
 
-  function renderMissionList() {
-    const base = familyMissions(state.selectedFamily).filter(challengeMatches);
+  function renderMissionList(base) {
     const context = state.selectedFamily === 'all' ? null : familyContext(state.selectedFamily);
     $('#mission-list-title').textContent = context ? context.title : (state.challengeQuery ? 'Resultados del catálogo' : 'Todas las misiones');
     $('#mission-count').textContent = String(base.length);
-    $('#mission-list').innerHTML = base.length ? base.map((mission, index) => `<button class="mission-row ${state.selectedMission && state.selectedMission.id === mission.id ? 'is-selected' : ''}" type="button" data-mission-row="${escapeHtml(mission.id)}"><span class="mission-number">${String(index + 1).padStart(2, '0')}</span><span class="mission-row-copy"><strong>${escapeHtml(mission.title || mission.id)}</strong><small>${escapeHtml(normalizeMethod(mission.method))} · ${escapeHtml(mission.route || 'ruta no publicada')}</small></span><span class="mission-row-arrow" aria-hidden="true">→</span></button>`).join('') : '<p class="empty-copy">No hay coincidencias. Prueba por área, título o una palabra más amplia.</p>';
+    $('#mission-list').innerHTML = base.length ? base.map((mission, index) => `<button class="mission-row ${state.selectedMission && state.selectedMission.id === mission.id ? 'is-selected' : ''}" type="button" data-mission-row="${escapeHtml(mission.id)}"><span class="mission-number">${String(index + 1).padStart(2, '0')}</span><span class="mission-row-copy"><strong>${escapeHtml(mission.title || mission.id)}</strong><small>${escapeHtml(missionMethods(mission).join(' / '))} · ${escapeHtml(mission.route || 'ruta no publicada')}</small></span><span class="mission-row-arrow" aria-hidden="true">→</span></button>`).join('') : '<p class="empty-copy">No hay coincidencias. Prueba por área, título o una palabra más amplia.</p>';
     $$('[data-mission-row]').forEach((button) => button.addEventListener('click', () => selectMission(button.dataset.missionRow, true)));
   }
 
@@ -333,29 +316,24 @@
     if (!id) return;
     const next = `#mission=${encodeURIComponent(id)}`;
     if (window.location.hash !== next) window.history.replaceState(null, '', next);
-    updateAcademyLinks();
-  }
-
-  function academyUrl(missionId) {
-    const host = window.location.hostname.toLowerCase();
-    const base = host === 'target' ? 'http://gateway:8080/' : `${window.location.protocol}//${host || 'localhost'}:8080/`;
-    return missionId ? `${base}#mission=${encodeURIComponent(missionId)}` : base;
-  }
-
-  function updateAcademyLinks() {
-    const missionId = state.selectedMission && state.selectedMission.id;
-    $$('[data-academy-link]').forEach((link) => { link.href = academyUrl(missionId); });
+    $('#lab-resume').href = next;
+    $('#lab-resume').dataset.mission = id;
   }
 
   function selectMission(id, focus) {
     const mission = typeof id === 'object' ? id : missionById(id);
     if (!mission) return;
+    const changed = mission !== state.selectedMission;
     state.selectedMission = mission;
     state.selectedFamily = familyId(mission) || 'all';
     setView('challenges');
     setMissionHash(mission.id);
-    renderChallengeArea();
-    if (focus) setTimeout(() => $('#mission-detail')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 30);
+    if (changed) renderMissionDetail();
+    if (focus) {
+      const detail = $('#mission-detail');
+      detail.focus({ preventScroll: true });
+      detail.scrollIntoView({ block: 'start' });
+    }
   }
 
   function renderChallengeArea() {
@@ -363,8 +341,7 @@
     renderFamilyList();
     const visible = familyMissions(state.selectedFamily).filter(challengeMatches);
     renderMissionSelect(visible);
-    renderMissionList();
-    renderMissionDetail();
+    renderMissionList(visible);
   }
 
   function parseHashMission() {
@@ -387,67 +364,123 @@
     return `<div class="param-row" data-row-kind="${kind}"><input class="editor-input mono row-key" aria-label="Nombre de ${kind === 'header' ? 'cabecera' : 'parámetro'}" placeholder="${placeholder}" value="${keyAttr}"><input class="editor-input mono row-value" aria-label="Valor de ${kind === 'header' ? 'cabecera' : 'parámetro'}" placeholder="valor benigno" value="${valueAttr}"><button class="remove-row" type="button" aria-label="Quitar fila">×</button></div>`;
   }
 
-  function defaultsForMission(mission) {
-    if (familyId(mission) === 'ssrf') return [['fileurl', 'not-a-url']];
-    if (familyId(mission) === 'commandInjection' && ['commandInjection-01', 'commandInjection-02'].includes(String(mission.id))) {
-      return Object.entries(mission.params || {}).map(([key, value]) => [key, text(value)]);
-    }
-    return [];
+  function editorValues() {
+    const params = Object.fromEntries($$('#param-rows .param-row')
+      .map((row) => [$('.row-key', row).value.trim(), $('.row-value', row).value]).filter(([key]) => key));
+    const headers = Object.fromEntries($$('#header-rows .param-row')
+      .map((row) => [$('.row-key', row).value.trim(), $('.row-value', row).value]).filter(([key]) => key));
+    return {
+      method: $('#request-method').value, params, headers,
+      body: $('#request-body').value || null,
+      content_type: $('#request-content-type').value.trim() || null
+    };
   }
 
-  function editorValues() {
-    const params = {};
-    $$('#param-rows .param-row').forEach((row) => { const key = $('.row-key', row).value.trim(); if (key) params[key] = $('.row-value', row).value; });
-    const headers = {};
-    $$('#header-rows .param-row').forEach((row) => { const key = $('.row-key', row).value.trim(); if (key) headers[key] = $('.row-value', row).value; });
-    return { method: $('#request-method').value, params, headers, body: $('#request-body').value, content_type: $('#request-content-type').value.trim() };
+  function fillEditor(request) {
+    const method = $('#request-method');
+    if (Array.from(method.options).some((option) => option.value === request.method)) method.value = request.method;
+    $('#request-body').value = request.body || '';
+    $('#request-content-type').value = request.content_type || '';
+    for (const [kind, fields] of [['param', request.params], ['header', request.headers]]) {
+      $(`#${kind}-rows`).innerHTML = Object.entries(fields || {})
+        .filter(([, value]) => typeof value === 'string')
+        .map(([key, value]) => inputRow(kind, key, value)).join('');
+    }
+    $('#confirm-practice').checked = false;
   }
 
   function renderMissionDetail() {
     const mission = state.selectedMission;
     const detail = $('#mission-detail');
-    if (!mission) {
-      detail.innerHTML = '<div class="empty-detail"><span aria-hidden="true">⌁</span><h2>Tu mesa de práctica está lista</h2><p>Selecciona un nivel para ver la ruta exacta, el criterio de verificación y el editor de solicitud.</p></div>';
-      return;
-    }
-    const family = familyId(mission);
-    const context = familyContext(family);
+    const context = familyContext(familyId(mission));
     const route = missionRoute(mission);
-    const method = normalizeMethod(mission.method);
-    const rawMethod = text(mission.method, method);
-    const check = mission.check === undefined ? 'El catálogo no publicó un check.' : safeJson(mission.check, text(mission.check));
-    const tool = text(mission.tool, 'http_request');
-    const multipart = text(mission.content_type).toLowerCase().includes('multipart') || Boolean(mission.params && mission.params.file);
-    const browserContext = tool === 'browser_probe' || ['xss', 'clickjacking'].includes(family) || /csrf/i.test(text(mission.title));
-    const safeDiagnostic = mission.id === 'commandInjection-02' && family === 'commandInjection';
-    const warning = safeDiagnostic ? '<strong>Diagnóstico benigno listo.</strong> El valor proviene del catálogo y termina en <code>printf VA_LAB_OK</code>; no lee archivos, no abre conexiones y no agrega otra orden. Abrir esta ficha, editarla o copiar el comando no ejecuta nada.' : multipart ? '<strong>Requiere multipart/form-data.</strong> No se construye FormData aquí: usa la experiencia original o el flujo de Kali, que conserva el campo de archivo y sus límites.' : browserContext ? '<strong>Requiere contexto de navegador.</strong> Este panel no ejecuta HTML, JavaScript, iframes ni CSRF; abre el endpoint real o la experiencia original para observar el contexto correcto.' : '<strong>Control antes de probar.</strong> La solicitud se envía solo al endpoint catalogado en este mismo origen. Edita datos benignos y confirma explícitamente.';
-    const parameterHelp = safeDiagnostic ? 'Valor benigno del catálogo cargado como diagnóstico; enviar requiere la casilla de confirmación.' : family === 'ssrf' ? 'Plantilla inicial segura: <code>fileurl=not-a-url</code>.' : 'Plantilla inicial vacía.';
-    detail.innerHTML = `<div class="mission-detail-head"><p class="eyebrow">${escapeHtml(context.area)} · ${escapeHtml(context.title)}</p><h2>${escapeHtml(mission.title || mission.id)}</h2><p>${escapeHtml(context.summary)}</p><div class="mission-facts"><span class="fact-chip"><b>Ruta</b><code>${escapeHtml(text(mission.route, 'no publicada'))}</code></span><span class="fact-chip"><b>Método catálogo</b><code>${escapeHtml(rawMethod)}</code></span><span class="fact-chip"><b>Misión</b><code>${escapeHtml(mission.id)}</code></span></div></div><div class="mission-docs"><div class="doc-block"><p class="doc-label">Criterio del catálogo</p><p><code>${escapeHtml(check)}</code></p></div><div class="doc-block"><p class="doc-label">Lectura recomendada</p><p>${escapeHtml(text(mission.explanation, 'Lee la ficha técnica de Academy y compara controles positivos y negativos.'))}</p></div><div class="doc-block wide"><p class="doc-label">Límite pedagógico</p><p>El botón de esta tienda no concede XP, no guarda tokens y no convierte un HTTP 200 en éxito. Academy y el runner de Kali son la fuente para validar la misión.</p></div></div><div class="practice-editor"><div class="practice-title"><div><h3>Editor de solicitud</h3><p>Endpoint same-origin: <code>${escapeHtml(route ? `/VulnerableApp/${route}` : 'ruta rechazada')}</code></p></div><span class="status-pill">${escapeHtml(tool === 'browser_probe' ? 'Navegador / manual' : 'HTTP local')}</span></div><div class="editor-warning">${warning}</div><form id="practice-form" class="editor-form" novalidate><div class="editor-grid"><section class="editor-section"><h4>Solicitud</h4><div class="field-group"><label class="editor-label" for="request-method">Método editable</label><select id="request-method" class="editor-select"></select><p class="editor-help">Valor original: <code>${escapeHtml(rawMethod)}</code></p></div><div class="field-group"><label class="editor-label" for="request-content-type">content_type</label><input id="request-content-type" class="editor-input mono" type="text" autocomplete="off" placeholder="vacío si no aplica"><p class="editor-help">No se rellena con el catálogo para mantener un control benigno.</p></div><div class="field-group"><label class="editor-label" for="request-body">body</label><textarea id="request-body" class="editor-textarea mono" rows="5" placeholder="vacío por defecto"></textarea></div></section><section class="editor-section"><h4>params</h4><div id="param-rows" class="rows-editor"></div><button class="add-row" type="button" data-add-row="param">+ Agregar parámetro</button><p class="editor-help">${parameterHelp}</p></section></div><section class="editor-section"><h4>headers</h4><div id="header-rows" class="rows-editor"></div><button class="add-row" type="button" data-add-row="header">+ Agregar cabecera</button><p class="editor-help">No se copia ninguna sesión ni token. La cabecera <code>Host</code> está bloqueada para no reemplazar el origen.</p></section><label class="control-check"><input id="confirm-practice" type="checkbox"><span>Confirmo que revisaré el método, la ruta y los datos antes de enviar esta práctica. Entiendo que es una simulación de laboratorio sin pagos ni XP y que una respuesta HTTP 200 no prueba éxito.</span></label><div class="editor-actions"><button class="button button-primary" id="send-request" type="submit" ${route && !multipart && !browserContext ? '' : 'disabled'}>Enviar control al target</button><button class="button copy-button" id="copy-curl" type="button" ${route ? '' : 'disabled'}>Copiar curl</button><button class="button copy-button" id="copy-lab" type="button" ${route && LAB_METHODS.has(method) ? '' : 'disabled'}>Copiar lab request</button></div><div class="endpoint-links"><a class="text-link" id="endpoint-link" href="${route ? `/VulnerableApp/${escapeHtml(route)}` : '#'}" target="_blank" rel="noopener">Abrir endpoint real ↗</a><a class="text-link" href="/VulnerableApp/original/" target="_blank" rel="noopener">Abrir experiencia original ↗</a><a class="text-link" id="mission-academy-link" data-academy-link href="${escapeHtml(academyUrl(mission.id))}">Volver a Academy ↗</a></div><div id="response-panel" class="response-panel" hidden></div></form></div>`;
-    const methodSelect = $('#request-method');
-    methodSelect.innerHTML = STANDARD_METHODS.map((candidate) => `<option value="${candidate}" ${candidate === method ? 'selected' : ''}>${candidate}</option>`).join('');
-    const params = defaultsForMission(mission);
-    $('#param-rows').innerHTML = params.map(([key, value]) => inputRow('param', key, value)).join('');
-    $('#header-rows').innerHTML = '';
-    $$('.remove-row').forEach((button) => button.addEventListener('click', () => button.closest('.param-row').remove()));
-    $$('[data-add-row]').forEach((button) => button.addEventListener('click', () => {
-      const target = button.dataset.addRow === 'header' ? $('#header-rows') : $('#param-rows');
-      target.insertAdjacentHTML('beforeend', inputRow(button.dataset.addRow));
-      $('.remove-row:last-child', target).addEventListener('click', (event) => event.currentTarget.closest('.param-row').remove());
-    }));
-    $('#practice-form').addEventListener('submit', (event) => sendPractice(event, mission, route, multipart, browserContext));
+    const methods = missionMethods(mission);
+    const multipart = text(mission.content_type).toLowerCase().includes('multipart') || Boolean(mission.params?.file);
+    const browserProbe = mission.tool === 'browser_probe';
+    const guided = !route || !methods.length || multipart ||
+      (!browserProbe && (familyId(mission) === 'clickjacking' || /csrf/i.test(text(mission.title))));
+    const example = Object.values(mission.params || {}).every((value) => typeof value === 'string');
+    const steps = (mission.steps || []).map((step) => `<li>${escapeHtml(step)}</li>`).join('');
+    const hints = (mission.hints || []).map((hint) => `<li>${escapeHtml(hint)}</li>`).join('');
+    detail.innerHTML = `
+      <div class="mission-detail-head">
+        <p class="eyebrow">${escapeHtml(context.area)} · ${escapeHtml(context.title)}</p>
+        <h2>${escapeHtml(mission.title || mission.id)}</h2>
+        <p>${escapeHtml(context.summary)}</p>
+        <div class="mission-facts">
+          <span class="fact-chip"><b>Ruta</b><code>${escapeHtml(mission.route)}</code></span>
+          <span class="fact-chip"><b>Método</b><code>${escapeHtml(mission.method)}</code></span>
+          <span class="fact-chip"><b>Misión</b><code>${escapeHtml(mission.id)}</code></span>
+          <span class="fact-chip">${mission.points ? `${Number(mission.points)} XP` : 'Práctica guiada'}</span>
+        </div>
+      </div>
+      <div class="mission-docs">
+        <div class="doc-block"><p class="doc-label">Hipótesis</p><p>${escapeHtml(mission.explanation)}</p></div>
+        <div class="doc-block"><p class="doc-label">Evidencia esperada</p><p>${escapeHtml(mission.expected)}</p></div>
+        <details class="doc-block wide"><summary>Pasos para practicar a mano en Kali</summary><ol class="mission-steps">${steps}</ol></details>
+        <details class="doc-block wide"><summary>Pistas y mitigación</summary><ul>${hints}</ul><p>${escapeHtml(mission.mitigation)}</p></details>
+      </div>
+      <div class="practice-editor">
+        <div class="practice-title"><div><h3>Práctica del reto</h3><p>Trabaja con el servicio interno <code>target:9090</code>.</p></div></div>
+        <div class="editor-warning">${guided ? 'Sigue los pasos de esta ficha en la terminal o Firefox de Kali. Esta práctica requiere un flujo específico.' : browserProbe ? 'El runner usa Chromium de Kali para verificar la evidencia en el DOM.' : 'Prueba primero un control y compara su respuesta con la del ejemplo.'}</div>
+        ${guided ? '' : `
+        <form id="practice-form" class="editor-form">
+          <div class="editor-actions">
+            ${mission.baseline ? '<button class="button button-secondary" id="load-baseline" type="button">Cargar control</button>' : ''}
+            ${example ? '<button class="button button-secondary" id="load-example" type="button">Cargar ejemplo</button>' : ''}
+          </div>
+          <div class="editor-grid">
+            <section class="editor-section">
+              <h4>Solicitud</h4>
+              <div class="field-group"><label for="request-method">Método HTTP</label><select id="request-method" class="editor-select">${methods.map((method) => `<option>${method}</option>`).join('')}</select></div>
+              <div class="field-group" ${browserProbe ? 'hidden' : ''}><label for="request-content-type">Content-Type</label><input id="request-content-type" class="editor-input mono" type="text" maxlength="256"></div>
+              <div class="field-group" ${browserProbe ? 'hidden' : ''}><label for="request-body">Cuerpo</label><textarea id="request-body" class="editor-textarea mono" rows="4"></textarea></div>
+            </section>
+            <section class="editor-section"><h4>Parámetros</h4><div id="param-rows" class="rows-editor"></div><button class="add-row" type="button" data-add-row="param">+ Agregar parámetro</button></section>
+          </div>
+          <section class="editor-section" ${browserProbe ? 'hidden' : ''}><h4>Cabeceras</h4><div id="header-rows" class="rows-editor"></div><button class="add-row" type="button" data-add-row="header">+ Agregar cabecera</button></section>
+          <label class="control-check"><input id="confirm-practice" type="checkbox"><span>Revisé el método y los datos. Quiero ejecutar esta solicitud en el laboratorio.</span></label>
+          <div class="editor-actions">
+            <button class="button button-primary" id="send-request" type="submit">Enviar y verificar</button>
+            <button class="button copy-button" id="copy-curl" type="button">Copiar curl</button>
+            <button class="button copy-button" id="copy-lab" type="button">Copiar lab request</button>
+          </div>
+          <div id="response-panel" class="response-panel" role="status" hidden></div>
+        </form>`}
+        <details class="harness-guide">
+          <summary>Practicar con el harness</summary>
+          <ol>
+            <li>Abre Kali. En su terminal, ejecuta <code>lab login</code> con tu cuenta del taller.</li>
+            <li>Abre <strong>Harness del taller</strong> en el escritorio de Kali. Pide al agente que consulte <code>lab_missions</code> para <code>${escapeHtml(mission.id)}</code> y explique el control.</li>
+            <li>Revisa los argumentos de cada llamada y usa <strong>Allow once</strong> para aprobarla. <code>lab_submit</code> registra la evidencia cuando el reto tiene verificación automática.</li>
+          </ol>
+          <a class="button button-secondary" href="/kali/vnc.html?autoconnect=1&amp;resize=scale&amp;path=websockify" target="_blank" rel="noopener">Abrir Kali ↗</a>
+        </details>
+      </div>`;
+    if (guided) return;
+    const initial = mission.baseline || { params: Object.fromEntries(Object.keys(mission.params || {}).map((key) => [key, ''])) };
+    fillEditor(initial);
+    $('#load-baseline')?.addEventListener('click', () => fillEditor(mission.baseline));
+    $('#load-example')?.addEventListener('click', () => fillEditor(mission));
+    $('#practice-form').addEventListener('click', (event) => {
+      const kind = event.target.dataset.addRow;
+      if (kind) $(`#${kind}-rows`).insertAdjacentHTML('beforeend', inputRow(kind));
+      if (event.target.matches('.remove-row')) event.target.closest('.param-row').remove();
+    });
+    $('#practice-form').addEventListener('submit', (event) => sendPractice(event, mission, route));
     $('#copy-curl').addEventListener('click', () => copyCommand('curl', mission, route));
     $('#copy-lab').addEventListener('click', () => copyCommand('lab', mission, route));
   }
 
   function parseHeaders(rawHeaders) {
-    const headers = {};
+    const headers = Object.create(null);
     const errors = [];
     Object.entries(rawHeaders).forEach(([key, value]) => {
       const name = key.trim();
       if (!name) return;
       if (!/^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/.test(name)) errors.push(`Cabecera inválida: ${name}`);
       if (/^(host|:authority)$/i.test(name)) errors.push('No se permite reemplazar el host del target.');
-      if (/^[\x00-\x1f\x7f]/.test(value) || /[\x00-\x1f\x7f]/.test(name)) errors.push(`Caracteres de control en ${name}.`);
+      if (/[\x00-\x1f\x7f]/.test(value) || /[\x00-\x1f\x7f]/.test(name)) errors.push(`Caracteres de control en ${name}.`);
       headers[name] = value;
     });
     return { headers, errors };
@@ -456,57 +489,162 @@
   function validateEditor(mission, route, values) {
     const errors = [];
     if (!route || !missionRoute(mission)) errors.push('La ruta no coincide con una misión del catálogo local.');
-    if (!STANDARD_METHODS.includes(values.method)) errors.push('Método no permitido.');
+    if (!missionMethods(mission).includes(values.method)) errors.push('Método no permitido.');
     Object.keys(values.params).forEach((key) => { if (!/^[A-Za-z0-9_.~-]+$/.test(key)) errors.push(`Parámetro inválido: ${key}`); });
     const headerResult = parseHeaders(values.headers);
     errors.push(...headerResult.errors);
-    if (values.body.length > 16384) errors.push('El body supera el límite local de 16 KiB.');
-    if (values.content_type.length > 180) errors.push('content_type demasiado largo.');
+    if (new TextEncoder().encode(values.body || '').length > 16384) errors.push('El body supera el límite local de 16 KiB.');
     return { errors, headers: headerResult.headers };
   }
 
   function buildTargetUrl(route, params) {
     if (!route) return null;
-    const url = new URL(`/VulnerableApp/${route}`, window.location.origin);
+    const url = new URL(`/VulnerableApp/${route}`, 'http://target:9090');
     Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, value));
     return url;
   }
 
-  async function sendPractice(event, mission, route, multipart, browserContext) {
-    event.preventDefault();
-    if (!$('#confirm-practice').checked) { showToast('Marca la confirmación explícita antes de probar.'); return; }
-    if (multipart || browserContext) { showToast('Esta misión necesita el endpoint original o Kali para conservar su contexto real.'); return; }
-    const values = editorValues();
-    const validation = validateEditor(mission, route, values);
-    if (validation.errors.length) { showToast(validation.errors.join(' ')); return; }
-    const target = buildTargetUrl(route, values.params);
-    const options = { method: values.method, headers: validation.headers, credentials: 'same-origin' };
-    if (values.content_type && !Object.keys(options.headers).some((key) => key.toLowerCase() === 'content-type')) options.headers['Content-Type'] = values.content_type;
-    if (!['GET', 'HEAD'].includes(values.method) && values.body) options.body = values.body;
-    const button = $('#send-request');
-    button.disabled = true;
-    button.textContent = 'Probando…';
-    renderResponse({ loading: true });
+  async function api(path, payload, token = state.token) {
+    const headers = { Accept: 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    if (payload) headers['Content-Type'] = 'application/json';
+    const response = await fetch(path, { method: payload ? 'POST' : 'GET', headers, body: payload ? JSON.stringify(payload) : undefined });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      if (response.status === 401 && token && token === state.token) setSession(null);
+      const error = new Error(typeof data.detail === 'string' ? data.detail : `La solicitud falló (HTTP ${response.status}).`);
+      error.status = response.status;
+      throw error;
+    }
+    return data;
+  }
+
+  function setSession(token) {
+    state.token = token;
     try {
-      const response = await fetch(target.href, options);
-      const raw = await response.text();
-      renderResponse({ status: response.status, statusText: response.statusText, body: raw.slice(0, MAX_RESPONSE), truncated: raw.length > MAX_RESPONSE, headers: Array.from(response.headers.entries()) });
-    } catch (error) {
-      renderResponse({ error: `No se pudo completar la solicitud same-origin: ${error.message}` });
-    } finally {
-      button.disabled = false;
-      button.textContent = 'Enviar control al target';
+      if (token) sessionStorage.setItem(TOKEN_KEY, token);
+      else sessionStorage.removeItem(TOKEN_KEY);
+    } catch (_) {
+      // El navegador puede bloquear el almacenamiento en esta pestaña.
+    }
+    $('#lab-auth').hidden = Boolean(token);
+    $('#lab-progress').hidden = !token;
+    $('#lab-session-link').textContent = token ? 'Mi progreso' : 'Ingresar al taller';
+    $('#lab-score').textContent = '';
+    $('#lab-auth-feedback').textContent = '';
+    if (!token && $('#response-panel')) {
+      $('#response-panel').replaceChildren();
+      $('#response-panel').hidden = true;
     }
   }
 
-  function renderResponse(result) {
-    const panel = $('#response-panel');
-    if (!panel) return;
+  async function refreshProgress() {
+    const token = state.token;
+    if (!token) return;
+    try {
+      const progress = await api('/api/me', null, token);
+      if (token !== state.token) return;
+      $('#lab-score').textContent = `${progress.user.username} · ${progress.score} / ${progress.maximum} XP · ${progress.completed.length} retos completados`;
+      $('#lab-auth-feedback').textContent = '';
+    } catch (error) {
+      $('#lab-auth-feedback').textContent = error.message;
+    }
+  }
+
+  function bindSession() {
+    let token = null;
+    try { token = sessionStorage.getItem(TOKEN_KEY); } catch (_) {}
+    setSession(token);
+    $('#lab-auth').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const action = event.submitter?.value === 'register' ? 'register' : 'login';
+      const buttons = $$('button', form);
+      const fields = $$('input', form);
+      fields.forEach((field) => field.removeAttribute('aria-invalid'));
+      $('#lab-auth-feedback').textContent = 'Verificando la cuenta…';
+      buttons.forEach((button) => { button.disabled = true; });
+      try {
+        const credentials = Object.fromEntries(new FormData(form));
+        const data = await api(`/api/auth/${action}`, credentials, null);
+        form.reset();
+        setSession(data.token);
+        $('#lab-resume').focus();
+        await refreshProgress();
+      } catch (error) {
+        if ([400, 401, 409, 422].includes(error.status)) fields.forEach((field) => field.setAttribute('aria-invalid', 'true'));
+        $('#lab-auth-feedback').textContent = error.message;
+      } finally {
+        buttons.forEach((button) => { button.disabled = false; });
+      }
+    });
+    $('#lab-refresh').addEventListener('click', refreshProgress);
+    $('#lab-logout').addEventListener('click', () => {
+      setSession(null);
+      $('#lab-username').focus();
+    });
+  }
+
+  function evidenceMarkup(evidence) {
+    const status = evidence.status ? `<p class="response-note">HTTP ${Number(evidence.status)}</p>` : '';
+    let body = evidence.browser_dataset ? safeJson(evidence.browser_dataset) : evidence.body;
+    if (typeof body === 'string') {
+      try {
+        const parsed = JSON.parse(body);
+        if (parsed && typeof parsed.content === 'string' && Object.prototype.hasOwnProperty.call(parsed, 'isValid')) {
+          body = parsed.content;
+        }
+      } catch (_) {
+        // Keep non-JSON responses unchanged.
+      }
+    }
+    const headers = Object.entries(evidence.headers || {}).map(([name, value]) => `${name}: ${value}`).join('\n');
+    return `${status}<pre class="response-body">${escapeHtml(body ?? evidence.error ?? '(respuesta sin cuerpo)')}</pre>
+      ${headers ? `<details><summary>Cabeceras de respuesta</summary><pre class="response-body">${escapeHtml(headers)}</pre></details>` : ''}`;
+  }
+
+  async function sendPractice(event, mission, route) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const confirmation = $('#confirm-practice', form);
+    if (!confirmation.checked) {
+      showToast('Confirma la solicitud antes de enviarla.');
+      confirmation.focus();
+      return;
+    }
+    const token = state.token;
+    if (!token) {
+      setView('account');
+      setViewHash('account');
+      $('#lab-auth-feedback').textContent = 'Inicia sesión o crea una cuenta y luego vuelve al reto.';
+      $('#lab-username').focus();
+      return;
+    }
+    const request = editorValues();
+    const { errors, headers } = validateEditor(mission, route, request);
+    if (errors.length) { showToast(errors.join(' ')); return; }
+    const button = $('#send-request', form);
+    const panel = $('#response-panel', form);
+    button.disabled = true;
+    confirmation.checked = false;
     panel.hidden = false;
-    if (result.loading) { panel.innerHTML = '<div class="response-head"><h4>Respuesta del target</h4><span class="response-meta">en curso…</span></div>'; return; }
-    if (result.error) { panel.innerHTML = `<div class="response-head"><h4>Respuesta del target</h4><span class="response-meta">error local</span></div><pre class="response-body">${escapeHtml(result.error)}</pre><p class="response-note">Revisa que el target esté disponible y que la ruta pertenezca al catálogo.</p>`; return; }
-    const headers = result.headers && result.headers.length ? `\n\nCabeceras visibles:\n${result.headers.map(([key, value]) => `${key}: ${value}`).join('\n')}` : '';
-    panel.innerHTML = `<div class="response-head"><h4>Respuesta del target</h4><span class="response-meta">HTTP ${escapeHtml(result.status)} ${escapeHtml(result.statusText)}</span></div><pre class="response-body">${escapeHtml(result.body || '(body vacío)')}${escapeHtml(headers)}</pre>${result.truncated ? '<p class="response-note">Body recortado a 12.000 caracteres para esta vista.</p>' : ''}<p class="response-note">HTTP 200 no es sinónimo de éxito: lee el JSON, el criterio de la misión y los controles en Academy.</p>`;
+    panel.textContent = 'Ejecutando la solicitud…';
+    try {
+      const result = await api('/api/attempt', { mission_id: mission.id, request: { ...request, headers } }, token);
+      if (token !== state.token) return;
+      const evidence = result.evidence || {};
+      panel.innerHTML = `
+        <div class="response-head"><h4>${result.success ? 'Evidencia verificada' : 'Resultado de la prueba'}</h4><span class="response-meta">+${Number(result.awarded)} XP · Total ${Number(result.score)} XP</span></div>
+        <p class="response-note">${escapeHtml(result.message)}</p>
+        ${evidenceMarkup(evidence)}
+        ${evidence.baseline ? `<details><summary>Respuesta del control</summary>${evidenceMarkup(evidence.baseline)}</details>` : ''}
+        ${evidence.probe && evidence.attack ? `<details><summary>Respuesta de la solicitud inicial</summary>${evidenceMarkup(evidence.attack)}</details>` : ''}`;
+    } catch (error) {
+      panel.hidden = false;
+      panel.textContent = error.message;
+    } finally {
+      button.disabled = false;
+    }
   }
 
   function shellQuote(value) {
@@ -569,13 +707,12 @@
   async function boot() {
     bindNavigation();
     bindCart();
+    bindSession();
     renderProducts();
     renderCart();
     bindChallengeControls();
     await Promise.all([loadContexts(), loadCatalog()]);
     renderChallengeArea();
-    renderAdminArea();
-    updateAcademyLinks();
     const missionId = parseHashMission();
     if (missionId && missionById(missionId)) selectMission(missionId, false);
     else if (viewFromHash()) setView(viewFromHash());

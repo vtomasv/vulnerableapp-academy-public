@@ -6,7 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     DATA_DIR=/data \
     KALI_RUNNER_URL=http://kali:9001 \
     OLLAMA_URL=http://ollama:11434 \
-    OLLAMA_MODEL=huihui_ai/Qwen3.8-abliterated:27b
+    OLLAMA_MODEL=qwen3:4b
 
 WORKDIR /app
 
@@ -17,6 +17,7 @@ RUN pip install --no-cache-dir -r /app/requirements.txt \
     && chown -R 1001:1001 /app /data /run/academy-secrets
 
 COPY academy /app/academy
+COPY target-ui/mercado /app/target-ui/mercado
 RUN chown -R 1001:1001 /app/academy
 
 USER 1001:1001

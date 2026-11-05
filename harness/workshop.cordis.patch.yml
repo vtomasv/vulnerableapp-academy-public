@@ -4,7 +4,7 @@
 - id: agent-default-model
   config:
     provider: ollama-local
-    model: huihui_ai/Qwen3.8-abliterated:27b
+    model: __OLLAMA_MODEL__
 
 - id: llm-pi-ai
   config:
@@ -26,8 +26,8 @@
             maxDelayMs: 1
             jitterRatio: 0
         models:
-          - id: huihui_ai/Qwen3.8-abliterated:27b
-            name: Qwen 3.8 27B · local
+          - id: __OLLAMA_MODEL__
+            name: __OLLAMA_MODEL__
             contextWindow: 16384
             maxTokens: 4096
             input: [text]

@@ -75,11 +75,14 @@ def request(base, m, browser=False):
     if m.get('content_type'):
         headers = {**headers, 'Content-Type': m['content_type']}
     body = m.get('body')
-    # La variante localhost usa únicamente el receptor de esta prueba.
-    params = {k: v.replace('http://receiver:8081', 'http://127.0.0.1:8081') if isinstance(v, str) else v
-              for k, v in params.items()}
-    if body:
-        body = body.replace('http://receiver:8081', 'http://127.0.0.1:8081')
+    # Desde Kali, receiver es el nombre DNS correcto del servicio Compose.
+    # Solo una ejecución contra un target publicado en localhost necesita la
+    # sustitución; 127.0.0.1 dentro del contenedor target no es receiver.
+    if urlsplit(base).hostname in {'127.0.0.1', 'localhost'}:
+        params = {k: v.replace('http://receiver:8081', 'http://127.0.0.1:8081') if isinstance(v, str) else v
+                  for k, v in params.items()}
+        if body:
+            body = body.replace('http://receiver:8081', 'http://127.0.0.1:8081')
     r = requests.request(m.get('method', 'GET'), url, params=params, headers=headers,
                          data=body, timeout=15, allow_redirects=False)
     e = {'status': r.status_code, 'headers': dict(r.headers), 'body': r.text, 'exit_code': 0}
@@ -125,7 +128,7 @@ def main():
             for before in m.get('before', []):
                 request(args.base_url, before)
             attack = request(args.base_url, m, m.get('tool') == 'browser_probe')
-            e = request(args.base_url, m['probe']) if m.get('probe') else attack
+            e = request(args.base_url, m['probe'], m.get('tool') == 'browser_probe') if m.get('probe') else attack
             ok = check_evidence(m['check'], e)
             if m.get('baseline'):
                 ctrl = request(args.base_url, m['baseline'])

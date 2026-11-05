@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eu
+
+# The target keeps the upstream command-injection behavior, while hiding the
+# diagnostic output of ping so the exercise has one deterministic marker.
+exec /usr/bin/ping.real "$@" >/dev/null 2>&1

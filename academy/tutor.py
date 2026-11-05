@@ -18,7 +18,7 @@ from .grading import bounded_request_size, mission_methods, target_path
 
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "huihui_ai/Qwen3.8-abliterated:27b")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:4b")
 OLLAMA_NUM_THREADS = min(max(int(os.getenv("OLLAMA_NUM_THREADS", "12")), 1), 64)
 OLLAMA_CONTEXT_LENGTH = min(max(int(os.getenv("OLLAMA_CONTEXT_LENGTH", "16384")), 2048), 32768)
 OLLAMA_TIMEOUT = min(max(float(os.getenv("HARNESS_UPSTREAM_TIMEOUT", "1800")), 30), 3600)

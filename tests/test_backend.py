@@ -323,11 +323,13 @@ def test_tutor_approval_revalidates_parameter_count(client: TestClient, monkeypa
     assert 'error' in result['audit'][0]
 
 
-def test_portal_assets_are_served_on_declared_paths(client: TestClient) -> None:
-    assert client.get('/').status_code == 200
-    assert client.get('/static/app.js').status_code == 200
-    assert client.get('/static/styles.css').status_code == 200
-    assert client.get('/static/favicon.svg').status_code == 200
+def test_store_is_the_landing_page_and_api_routes_keep_precedence(client: TestClient) -> None:
+    assert "Mercado Cordillera" in client.get("/").text
+    for asset in ("/store.js", "/store.css", "/contexts.json", "/assets/mochila.jpg"):
+        assert client.get(asset).status_code == 200
+    assert client.get("/api/catalog").json()["missions"][0]["id"] == "good"
+    assert client.get("/static/app.js").status_code == 404
+    assert client.get("/VulnerableApp/").status_code == 404
 
 
 def test_native_ollama_tool_calls_are_pending_and_allowlisted() -> None:

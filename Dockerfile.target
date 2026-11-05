@@ -28,13 +28,19 @@ RUN apt-get update \
     && mkdir -p /app /run/target-netlock \
     && printf 'VA_LAB_FILE' > /tmp/va-training.txt
 
+# Docker drops file capabilities from the target. Keep the real ping binary
+# for the intentionally vulnerable upstream command and use a quiet wrapper
+# so the benign marker is the only response body.
+RUN mv /usr/bin/ping /usr/bin/ping.real
+COPY target-overlay/ping /usr/local/bin/ping
+RUN chmod 0755 /usr/local/bin/ping
+
 COPY --from=builder /unpacked /app
 
 RUN mkdir -p /app/BOOT-INF/classes/static/original \
     && sed 's|<head>|<head><base href="/VulnerableApp/">|' \
        /app/BOOT-INF/classes/static/index.html > /app/BOOT-INF/classes/static/original/index.html
-COPY target-ui/ /app/BOOT-INF/classes/static/
-COPY academy/data/catalog.json /app/BOOT-INF/classes/static/mercado/catalog.json
+COPY target-ui/index.html /app/BOOT-INF/classes/static/index.html
 RUN chmod -R a+rX /app/BOOT-INF/classes/static
 
 ENV SERVER_PORT=9090 \
@@ -46,4 +52,4 @@ ENV SERVER_PORT=9090 \
 WORKDIR /app
 EXPOSE 9090
 
-ENTRYPOINT ["/bin/sh", "-c", "set -eu; marker=/run/target-netlock/ready; rm -f \"$marker\"; i=0; while [ ! -s \"$marker\" ]; do i=$((i + 1)); if [ $i -ge 120 ]; then echo 'target network lock did not become ready' >&2; exit 1; fi; sleep 1; done; expected_namespace=$(readlink /proc/self/ns/net); actual_namespace=$(cat \"$marker\"); [ \"$actual_namespace\" = \"$expected_namespace\" ] || { echo 'target network lock marker belongs to another namespace' >&2; exit 1; }; exec java -cp 'BOOT-INF/classes:BOOT-INF/lib/*' org.sasanlabs.Application"]
+ENTRYPOINT ["/bin/sh", "-c", "set -eu; marker=/run/target-netlock/ready; namespace=$(readlink /proc/self/ns/net); i=0; until [ \"$(cat \"$marker\" 2>/dev/null || true)\" = \"$namespace\" ]; do i=$((i + 1)); if [ $i -ge 120 ]; then echo 'target network lock did not become ready' >&2; exit 1; fi; sleep 1; done; exec java -cp 'BOOT-INF/classes:BOOT-INF/lib/*' org.sasanlabs.Application"]

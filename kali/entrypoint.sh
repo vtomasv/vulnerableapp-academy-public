@@ -7,11 +7,9 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 marker=/run/lab-netlock/ready
-# Let the resident sidecar remove a marker left by a prior named-volume generation.
-sleep 1
-rm -f "$marker"
+namespace=$(readlink /proc/self/ns/net)
 i=0
-while [ ! -s "$marker" ]; do
+until [ "$(cat "$marker" 2>/dev/null || true)" = "$namespace" ]; do
     i=$((i + 1))
     if [ "$i" -ge 120 ]; then
         echo 'Kali network lock did not become ready' >&2
@@ -19,12 +17,6 @@ while [ ! -s "$marker" ]; do
     fi
     sleep 1
 done
-expected_namespace=$(readlink /proc/self/ns/net)
-actual_namespace=$(cat "$marker")
-[ "$actual_namespace" = "$expected_namespace" ] || {
-    echo 'Kali network lock marker belongs to another namespace' >&2
-    exit 1
-}
 
 [ -r /run/academy-secrets/harness.key ] || {
     echo 'runner secret is not available' >&2
@@ -37,7 +29,8 @@ chown -R 1000:1000 /home/kali 2>/dev/null || true
 mkdir -p /home/kali/.config/va-lab
 chown -R 1000:1000 /home/kali/.config 2>/dev/null || true
 mkdir -p /home/kali/Desktop
-cp -n /opt/academy-desktop/* /home/kali/Desktop/ 2>/dev/null || true
+rm -f /home/kali/Desktop/Academy.desktop /home/kali/Desktop/VulnerableApp.desktop /home/kali/Desktop/SasanLabsOriginal.desktop
+cp --remove-destination /opt/academy-desktop/* /home/kali/Desktop/
 chmod +x /home/kali/Desktop/*.desktop 2>/dev/null || true
 chown -R 1000:1000 /home/kali/Desktop 2>/dev/null || true
 

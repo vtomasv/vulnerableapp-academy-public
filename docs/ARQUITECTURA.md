@@ -2,7 +2,7 @@
 
 ## Servicios del Compose
 
-`gateway` es Nginx sin root, con un único puerto publicado en `127.0.0.1:8080`. Sirve el portal desde `academy` y el WebSocket de noVNC desde `kali`. No publica la API Ollama, el runner, SMTP, el receptor ni VNC nativo. `/VulnerableApp/` redirige al escritorio Kali: el target deliberadamente vulnerable no debe compartir el origen web del portal y sus sesiones.
+`gateway` publica `127.0.0.1:8080`. Nginx sirve Mercado Cordillera y la API de evaluación desde `academy`, el escritorio noVNC desde `kali` y el correo ficticio desde `mailpit`. El target deliberadamente vulnerable queda en la red interna. El editor envía el ID del reto y los datos al evaluador, que resuelve el destino en el catálogo y devuelve evidencia para mostrar como texto.
 
 `academy` es FastAPI con SQLite. Autentica cuentas locales, entrega el catálogo, recibe intentos y calcula puntos. No envía HTTP directamente al target para evaluar: usa el runner autenticado de Kali. Los tokens son aleatorios y se guardan como digest en SQLite; el cliente web usa sessionStorage y el CLI un archivo de sesión con permisos 0600. Las contraseñas se derivan mediante scrypt con fallback PBKDF2, no se almacenan en claro.
 
@@ -38,4 +38,4 @@ Qwen recibe un contexto acotado de la misión y la pregunta. El API local usa `/
 
 La propuesta queda pendiente por cinco minutos y ligada al alumno y la misión. La aprobación autenticada es explícita, de un solo uso y vuelve a comprobar tipos, cantidad de campos, tamaño, ruta y método. La herramienta no da puntos ni permite ejecutar shell, una URL arbitraria, JavaScript libre, escáneres libres o acceso a secretos. Para sumar puntos el alumno registra su propio intento.
 
-La variante predeterminada Qwen3 ablacionada está publicada por huihui.ai y reduce el filtrado del modelo. No se promete ausencia total de rechazos, seguridad ni exactitud. El harness impone las restricciones externas incluso si el modelo produce instrucciones indebidas. La inferencia y los mensajes permanecen locales; no hay fallback a un proveedor de IA externo.
+El modelo predeterminado es `qwen3:4b`. Compose descarga los pesos con `model-init` y el servicio interno `ollama` ejecuta la inferencia local. Las herramientas del harness validan el destino y los argumentos, y requieren una aprobación por llamada.

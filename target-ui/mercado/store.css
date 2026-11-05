@@ -67,7 +67,7 @@ code { font-size: .88em; }
 .nav-count { display: inline-block; margin-left: 4px; padding: 2px 5px; border-radius: 5px; color: var(--copper-dark); background: #f3dfd0; font-size: .62rem; }
 
 .page-section { min-height: 540px; padding: 58px 0 88px; }
-.page-section[hidden] { display: none; }
+[hidden] { display: none !important; }
 .eyebrow { margin: 0 0 9px; color: var(--copper-dark); font-size: .68rem; font-weight: 900; letter-spacing: .17em; text-transform: uppercase; }
 h1, h2, h3, p { margin-top: 0; }
 h1, h2, h3 { color: var(--forest); font-family: var(--serif); line-height: 1.08; }
@@ -160,14 +160,6 @@ h3 { margin-bottom: 8px; font-size: 1.26rem; }
 .support-icon { display: grid; place-items: center; width: 37px; height: 37px; margin-bottom: 20px; border-radius: 50%; color: var(--copper-dark); background: #f3dfd0; font-size: 1.25rem; }
 .support-card .button { margin-top: 9px; }
 
-.admin-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-bottom: 20px; }
-.admin-stat { padding: 22px; }
-.admin-stat strong { display: block; margin: 2px 0 6px; color: var(--forest); font-family: var(--serif); font-size: clamp(2rem, 4vw, 3.25rem); line-height: 1; }
-.admin-stat p:last-child { margin: 0; color: var(--muted); font-size: .78rem; }
-.admin-layout { display: grid; grid-template-columns: 1.2fr .8fr; gap: 20px; }
-.admin-layout p { color: var(--muted); font-size: .84rem; }
-.admin-source { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin: 23px 0; padding: 13px 15px; border: 1px dashed var(--line); border-radius: 8px; color: var(--muted); font-size: .76rem; }
-.admin-source strong { color: var(--forest); font-size: .74rem; }
 
 .challenge-onboarding { margin-bottom: 25px; padding: 13px 17px; border-left: 3px solid var(--copper); color: var(--muted); background: #f5eadd; font-size: .8rem; }
 .challenge-onboarding strong { color: var(--forest); }
@@ -219,6 +211,10 @@ h3 { margin-bottom: 8px; font-size: 1.26rem; }
 .doc-label { margin-bottom: 6px; color: var(--copper-dark); font-size: .64rem; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; }
 .doc-block p:last-child { margin: 0; color: var(--muted); font-size: .78rem; }
 .doc-block code { overflow-wrap: anywhere; color: var(--forest); }
+.doc-block summary, .harness-guide summary { color: var(--forest); font-size: .85rem; font-weight: 800; cursor: pointer; }
+.doc-block li, .harness-guide li { margin-bottom: 6px; font-size: .82rem; overflow-wrap: anywhere; }
+.mission-steps { white-space: pre-wrap; }
+.harness-guide { margin-top: 20px; padding: 13px; border: 1px solid var(--line); border-radius: 8px; }
 .practice-editor { padding: 22px 27px 27px; }
 .practice-title { display: flex; justify-content: space-between; gap: 14px; align-items: start; margin-bottom: 17px; }
 .practice-title h3 { margin: 0; font-size: 1.35rem; }
@@ -329,7 +325,6 @@ h3 { margin-bottom: 8px; font-size: 1.26rem; }
   .page-heading { align-items: start; flex-direction: column; gap: 13px; margin-bottom: 25px; }
   .catalog-toolbar { align-items: start; flex-direction: column; }
   .info-grid, .support-grid, .account-layout { grid-template-columns: 1fr; }
-  .admin-grid, .admin-layout { grid-template-columns: 1fr; }
   .challenge-toolbar { grid-template-columns: 1fr 1fr; }
   .challenge-toolbar .field-group:first-child { grid-column: 1 / -1; }
   .challenge-layout { grid-template-columns: 1fr; }

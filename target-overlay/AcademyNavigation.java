@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 public class AcademyNavigation {
     @GetMapping({"/mercado", "/mercado/"})
     public String market() {
-        return "forward:/mercado/index.html";
+        return "redirect:http://gateway:8080/";
     }
 
     @GetMapping({"/original", "/original/"})

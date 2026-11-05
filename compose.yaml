@@ -12,7 +12,6 @@ services:
       target: init
     image: ${COMPOSE_PROJECT_NAME:-vulnerableapp-academy}-init:local
     user: "0:0"
-    command: ["python3", "/usr/local/bin/init-secrets.py"]
     volumes:
       - academy_secrets:/run/academy-secrets
       - academy_data:/var/lib/academy
@@ -39,7 +38,7 @@ services:
         OLLAMA_IMAGE: ${OLLAMA_IMAGE:-ollama/ollama:0.40.13}
     image: ${COMPOSE_PROJECT_NAME:-vulnerableapp-academy}-model-init:local
     environment:
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-huihui_ai/Qwen3.8-abliterated:27b}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:4b}
       OLLAMA_HOST: 127.0.0.1:11434
     volumes:
       - ollama_data:/root/.ollama
@@ -69,6 +68,7 @@ services:
     volumes:
       - target_netlock:/run/target-netlock
     cap_drop: ["ALL"]
+    cap_add: ["NET_RAW"]
     security_opt:
       - no-new-privileges:true
     expose: ["9090"]
@@ -90,7 +90,12 @@ services:
 
   target-netlock:
     image: ${COMPOSE_PROJECT_NAME:-vulnerableapp-academy}-target:local
+    pull_policy: never
     depends_on:
+      receiver:
+        condition: service_started
+      mailpit:
+        condition: service_started
       target:
         condition: service_started
     network_mode: service:target
@@ -100,7 +105,6 @@ services:
       - |
         marker=/run/target-netlock/ready
         apply_rules() {
-          rm -f "$$marker"
           iptables -P OUTPUT DROP
           iptables -F OUTPUT
           iptables -A OUTPUT -o lo -j ACCEPT
@@ -122,7 +126,8 @@ services:
             ip6tables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
             ip6tables -A OUTPUT -j REJECT
           fi
-          printf '%s\n' "$$(readlink /proc/self/ns/net)" > "$$marker"
+          printf '%s\n' "$$(readlink /proc/self/ns/net)" > "$$marker.tmp"
+          mv "$$marker.tmp" "$$marker"
         }
         apply_rules
         while sleep 10; do apply_rules; done
@@ -134,7 +139,7 @@ services:
       - no-new-privileges:true
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "test -s /run/target-netlock/ready && iptables -C OUTPUT -j REJECT"]
+      test: ["CMD-SHELL", "test \"$$(cat /run/target-netlock/ready)\" = \"$$(readlink /proc/self/ns/net)\" && iptables -C OUTPUT -j REJECT"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -151,8 +156,8 @@ services:
       DISPLAY: :99
       RUNNER_SECRET_FILE: /run/academy-secrets/harness.key
       RUNNER_BIND: 0.0.0.0:9001
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-huihui_ai/Qwen3.8-abliterated:27b}
-      OLLAMA_NUM_THREADS: ${OLLAMA_NUM_THREADS:-12}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:4b}
+      OLLAMA_NUM_THREADS: ${OLLAMA_NUM_THREADS:-4}
       OLLAMA_CONTEXT_LENGTH: ${OLLAMA_CONTEXT_LENGTH:-16384}
       HARNESS_UPSTREAM_TIMEOUT: ${HARNESS_UPSTREAM_TIMEOUT:-1800}
     volumes:
@@ -185,6 +190,7 @@ services:
 
   lab-netlock:
     image: ${COMPOSE_PROJECT_NAME:-vulnerableapp-academy}-kali:local
+    pull_policy: never
     depends_on:
       kali:
         condition: service_started
@@ -272,8 +278,8 @@ services:
       RUNNER_BASE_URL: http://kali:9001
       OLLAMA_URL: http://ollama:11434
       OLLAMA_BASE_URL: http://ollama:11434
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-huihui_ai/Qwen3.8-abliterated:27b}
-      OLLAMA_NUM_THREADS: ${OLLAMA_NUM_THREADS:-12}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:4b}
+      OLLAMA_NUM_THREADS: ${OLLAMA_NUM_THREADS:-4}
       OLLAMA_CONTEXT_LENGTH: ${OLLAMA_CONTEXT_LENGTH:-16384}
       HARNESS_UPSTREAM_TIMEOUT: ${HARNESS_UPSTREAM_TIMEOUT:-1800}
       RECEIVER_BASE_URL: http://receiver:8081
@@ -308,6 +314,7 @@ services:
         condition: service_completed_successfully
     environment:
       OLLAMA_HOST: 0.0.0.0:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:4b}
       OLLAMA_CONTEXT_LENGTH: ${OLLAMA_CONTEXT_LENGTH:-16384}
     volumes:
       - ollama_data:/root/.ollama
@@ -316,11 +323,11 @@ services:
       - no-new-privileges:true
     expose: ["11434"]
     networks: [control]
-    cpus: ${OLLAMA_CPUS:-12.0}
-    mem_limit: ${OLLAMA_MEMORY:-48g}
+    cpus: ${OLLAMA_CPUS:-4.0}
+    mem_limit: ${OLLAMA_MEMORY:-6g}
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1"]
+      test: ["CMD-SHELL", "ollama show \"$$OLLAMA_MODEL\" >/dev/null 2>&1"]
       interval: 15s
       timeout: 8s
       retries: 20
@@ -336,14 +343,17 @@ services:
         condition: service_healthy
       kali:
         condition: service_healthy
+      lab-netlock:
+        condition: service_healthy
+      target-netlock:
+        condition: service_healthy
+      receiver:
+        condition: service_healthy
       mailpit:
         condition: service_healthy
     configs:
       - source: gateway_nginx
         target: /etc/nginx/nginx.conf
-        mode: 0444
-    volumes:
-      - ./site:/usr/share/academy-site:ro
     ports:
       - "127.0.0.1:${LAB_PORT:-8080}:8080"
     read_only: true
@@ -370,6 +380,7 @@ services:
 
   gateway-netlock:
     image: ${COMPOSE_PROJECT_NAME:-vulnerableapp-academy}-kali:local
+    pull_policy: never
     user: "0:0"
     network_mode: "service:gateway"
     depends_on:

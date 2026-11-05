@@ -1,23 +1,11 @@
-BIENVENIDO A VULNERABLEAPP ACADEMY
+Mercado Cordillera · Taller de seguridad web
 
-Todo está dentro de Docker. No escanees Internet, tu anfitrión ni otros equipos.
+Mercado Cordillera abre la tienda y sus retos.
+En la terminal de Kali, ejecuta lab login con tu cuenta del taller.
+Los retos incluyen pasos manuales y comandos para esta terminal.
+Para practicar con el agente, abre Harness del taller y revisa cada aprobación.
+Mailpit recibe correo ficticio del laboratorio.
 
-1. Abre Terminal desde el menú XFCE.
-2. Ejecuta: lab login
-   Usa tu usuario y contraseña del portal. No son las cuentas del target.
-3. Ejecuta: lab missions
-4. Vuelve al portal, lee una misión y copia su comando lab request exacto.
-5. Ejecuta el comando en esta terminal y observa success, awarded y evidence.
-6. Ejecuta: lab status
-7. Al terminar en un equipo compartido: lab logout
-
-Abre los accesos VulnerableApp y Mailpit solo dentro de este escritorio.
-La aplicación del target usa http://target:9090/VulnerableApp/
-El buzón usa http://mailpit:8025/mailpit/
-La guía completa y herramientas están en /opt/vulnerableapp-academy/docs/.
-Ejemplo: less /opt/vulnerableapp-academy/docs/TALLER.md
-
-curl directo sirve para explorar pero no atribuye puntaje.
-Una práctica manual vale 0 XP. No fuerces una marca de éxito.
-Qwen puede equivocarse; valida sus explicaciones contra la evidencia.
-Las herramientas propuestas por el tutor requieren tu aprobación explícita.
+Tienda: http://gateway:8080/
+Harness: http://127.0.0.1:2323/
+Target: http://target:9090/VulnerableApp/

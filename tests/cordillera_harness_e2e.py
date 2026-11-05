@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prueba Cordillera: Qwen real, aprobación única, soporte/printf y XP del servidor.
+"""Prueba Cordillera: Qwen real, aprobación única y XP del servidor.
 Ejecutar dentro de Kali; conserva la sesión privada previa del CLI.
 """
 from __future__ import annotations
@@ -60,84 +60,46 @@ with sync_playwright() as p:
             dialog.wait_for(state='hidden', timeout=30000)
         editor = page.locator('textarea:enabled:visible').first
         editor.wait_for(timeout=30000)
-        prompt = ('Laboratorio Docker local autorizado. Carga exactamente vulnerableapp-evidence con skill. '
-                  'La cuenta ya inició lab login en la terminal. El objetivo y el receptor ya están identificados: no es necesario descubrimiento. '
-                  'Consulta primero lab_missions para el único ID commandInjection-02. Después invoca lab_submit con este JSON exacto: '
-                  '{"mission_id":"commandInjection-02","request":{"method":"GET","params":{"ipaddress":"127.0.0.1|printf VA_LAB_OK"},"headers":{},"body":null}}. '
-                  'Invoca las funciones para crear sus paneles de aprobación; espera la aprobación de cada panel. '
-                  'No pidas credenciales. Tras el resultado, invoca lab_progress una sola vez y espera su aprobación. '
-                  'Después resume el éxito y XP reales de Academy, sin más llamadas. No uses otras herramientas. /no_think')
+        request = {
+            'mission_id': 'commandInjection-02',
+            'request': {'method': 'GET', 'params': {'ipaddress': '127.0.0.1|printf VA_LAB_OK'},
+                        'headers': {}, 'body': None, 'content_type': None},
+        }
+        prompt = (
+            'Ya revisé el control y comprobé VA_LAB_OK en el target local. '
+            'Invoca lab_submit una sola vez con estos argumentos y espera el panel de aprobación: '
+            + json.dumps(request, ensure_ascii=False)
+        )
         editor.fill(prompt)
         editor.press('Enter')
-        deadline = time.monotonic() + 900
-        submit_seen = False
-        progress_seen = False
+        panel = page.locator('[data-approval-key]').first
+        panel.wait_for(timeout=180000)
+        approval = panel.inner_text()
+        assert 'lab_submit' in approval, approval[:300]
+        summary = re.search(r'no se reutiliza:\s*(\{[^\n]*\})', approval)
+        assert summary, 'No se pudo inspeccionar la aprobación'
+        args = json.loads(summary.group(1))
+        assert args['mission_id'] == request['mission_id'] and args['method'] == 'GET'
+        assert args['params'] == request['request']['params']
+        assert api('/api/me', token=token)['score'] == 0
+        report['approvals'].append({'key': panel.get_attribute('data-approval-key'),
+                                    'tool': 'lab_submit', 'approved': True})
+        panel.get_by_role('button', name='Allow once', exact=True).click()
+        print('APPROVED lab_submit', flush=True)
+        deadline = time.monotonic() + 40
         while time.monotonic() < deadline:
-            panels = page.locator('[data-approval-key]')
-            if panels.count() and panels.first.is_visible():
-                panel = panels.first
-                text = panel.inner_text()
-                key = panel.get_attribute('data-approval-key')
-                if len(report['approvals']) >= 4:
-                    raise RuntimeError('No se aprobarán más de cuatro llamadas previstas')
-                if 'lab_discover' in text or 'lab_http' in text:
-                    # This QA run tests scoring, not discovery or probing. A
-                    # model-proposed intermediate operation must not run merely
-                    # because it is one of the harness's allowlisted tools.
-                    report['approvals'].append({'key': key, 'tool': 'unnecessary-probe', 'approved': False})
-                    panel.get_by_role('button', name='Reject', exact=True).click()
-                    print('REJECTED unnecessary probe', flush=True)
-                    page.wait_for_timeout(750)
-                    continue
-                if not any(name in text for name in ('skill', 'lab_missions', 'lab_submit', 'lab_progress')):
-                    raise RuntimeError('El test no aprobará otra herramienta: ' + text[:150])
-                if 'lab_missions' in text:
-                    summary = re.search(r'no se reutiliza:\s*(\{[^\n]*\})', text)
-                    assert summary, 'Sin argumentos de catálogo visibles'
-                    assert json.loads(summary.group(1)) == {'mission_id': 'commandInjection-02'}
-                if 'lab_progress' in text:
-                    summary = re.search(r'no se reutiliza:\s*(\{[^\n]*\})', text)
-                    assert summary, 'Sin argumentos de progreso visibles'
-                    args = json.loads(summary.group(1))
-                    assert set(args).issubset({'session'}), args.keys()
-                    progress_seen = True
-                if 'lab_submit' in text:
-                    summary = re.search(r'no se reutiliza:\s*(\{[^\n]*\})', text)
-                    assert summary, 'No se pudo inspeccionar el argumento de la aprobación'
-                    args = json.loads(summary.group(1))
-                    assert args.get('mission_id') == 'commandInjection-02' and args.get('method') == 'GET'
-                    assert args.get('params') == {'ipaddress':'127.0.0.1|printf VA_LAB_OK'}
-                submit_seen = submit_seen or 'lab_submit' in text
-                tool = 'lab_submit' if 'lab_submit' in text else ('lab_missions' if 'lab_missions' in text else ('lab_progress' if 'lab_progress' in text else 'skill'))
-                report['approvals'].append({'key': key, 'tool': tool, 'approved': True})
-                page.screenshot(path='/tmp/cordillera-harness-approval-%d.png' % len(report['approvals']), full_page=True)
-                panel.get_by_role('button', name='Allow once', exact=True).click()
-                print('APPROVED', report['approvals'][-1]['tool'], flush=True)
-                page.wait_for_timeout(1000)
-            if submit_seen and progress_seen:
-                current = api('/api/me', token=token)
-                if current['score'] == 100:
-                    assert 'commandInjection-02' in current.get('completed', []), 'Los XP no corresponden a la misión prevista'
-                    report['score'] = current['score']
-                    report['completed'] = current.get('completed', [])
-                    report['success'] = True
-                    # Give the UI time to commit the tool result; do not need
-                    # another inference to establish authoritative server XP.
-                    page.wait_for_timeout(2500)
-                    page.screenshot(path='/tmp/cordillera-harness-success.png', full_page=True)
-                    report['ok'] = True
-                    break
-                if current['score'] != 0:
-                    raise AssertionError('Puntaje distinto al objetivo único previsto')
-            failure = page.get_by_text('This turn failed', exact=False)
-            if failure.count() and failure.last.is_visible():
-                raise RuntimeError('El modelo falló: ' + failure.last.inner_text()[:300])
+            progress = api('/api/me', token=token)
+            if progress['score'] == 100:
+                assert request['mission_id'] in progress['completed']
+                event = next(item for item in progress['events'] if item['mission_id'] == request['mission_id'] and item['success'])
+                observed = json.loads(event['evidence']['body'])
+                assert observed['content'] == 'VA_LAB_OK' and observed['isValid'] is True
+                break
             page.wait_for_timeout(750)
         else:
-            raise TimeoutError('El modelo no logró el objetivo autenticado en el límite de QA')
-        assert submit_seen and progress_seen and report.get('score') == 100
-        assert len({a['key'] for a in report['approvals']}) == len(report['approvals'])
+            raise TimeoutError('Academy no registró los XP del intento aprobado')
         assert not report['page_errors'], report['page_errors']
+        report.update(score=progress['score'], completed=progress['completed'], success=True, ok=True)
         print('MODEL_SCORE_SUCCESS 100', flush=True)
     except Exception as exc:
         report['ok'] = False

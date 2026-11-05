@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-: "${OLLAMA_MODEL:=huihui_ai/Qwen3.8-abliterated:27b}"
+: "${OLLAMA_MODEL:=qwen3:4b}"
 export OLLAMA_HOST="${OLLAMA_HOST:-127.0.0.1:11434}"
 
 log_file=/tmp/ollama-model-init.log

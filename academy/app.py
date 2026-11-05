@@ -351,7 +351,7 @@ class ApproveInput(StrictModel):
     pending_ids: list[StrictStr] = Field(default_factory=list, max_length=3)
 
 
-app = FastAPI(title="VulnerableApp Academy", docs_url="/docs", redoc_url="/redoc")
+app = FastAPI(title="VulnerableApp Academy", docs_url=None, redoc_url=None, openapi_url=None)
 
 
 def _client_key(request: Request) -> str:
@@ -860,8 +860,6 @@ async def service_status(user: dict[str, Any] = Depends(current_user)) -> dict[s
     }
 
 
-# The parent agent supplies academy/static. check_dir=False lets the backend
-# boot during bootstrap while preserving API route precedence over this mount.
-_STATIC_DIR = Path(__file__).resolve().parent / "static"
-app.mount("/static", StaticFiles(directory=str(_STATIC_DIR), check_dir=False), name="assets")
-app.mount("/", StaticFiles(directory=str(_STATIC_DIR), html=True, check_dir=False), name="portal")
+# Serve the classroom storefront after the API routes so it cannot shadow them.
+_STORE_DIR = Path(__file__).resolve().parent.parent / "target-ui" / "mercado"
+app.mount("/", StaticFiles(directory=str(_STORE_DIR), html=True, check_dir=False), name="store")

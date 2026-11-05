@@ -1,6 +1,6 @@
 # Harness del taller: aprender con comandos, evidencia y progreso
 
-El escritorio Kali incluye el motor original [S1N6H/pentest-harness](https://github.com/S1N6H/pentest-harness), fijado al commit `4638f38082bdf37cea03ad151905c4bb8662f6e9`. El preset **Taller VulnerableApp** usa exclusivamente el Ollama del Compose y `huihui_ai/Qwen3.8-abliterated:27b`. No se necesita una cuenta de proveedor, una API key externa ni un Ollama instalado en el anfitrión. Una respuesta del modelo nunca sustituye la evidencia del servidor.
+El escritorio Kali incluye el motor original [S1N6H/pentest-harness](https://github.com/S1N6H/pentest-harness), fijado al commit `4638f38082bdf37cea03ad151905c4bb8662f6e9`. El preset **Taller VulnerableApp** usa el Ollama del Compose y el modelo indicado en `OLLAMA_MODEL`. No se necesita una cuenta de proveedor, una API key externa ni un Ollama instalado en el anfitrión. Una respuesta del modelo nunca sustituye la evidencia del servidor.
 
 ## 1. Entrar en el escritorio y en el agente
 
@@ -10,7 +10,7 @@ En la carpeta del repositorio, desde Windows, Linux o macOS:
 docker compose up --build -d
 ```
 
-Abrir `http://localhost:8080`, registrar una cuenta individual y entrar en **Comenzar taller → Retos del taller → commandInjection-02** como soporte diagnóstico. **Abrir Kali** muestra el escritorio noVNC; **Abrir tienda** usa `http://localhost:8080/kali/vnc.html?autoconnect=1&resize=scale&path=websockify`. En Firefox de Kali, el icono **Mercado Cordillera** abre `http://target:9090/VulnerableApp/mercado/`; el backend original opcional está en `http://target:9090/VulnerableApp/original/`.
+Abre `http://localhost:8080` y registra una cuenta en **Mi cuenta** de Mercado Cordillera. **Empezar primer reto** abre `commandInjection-02`. **Kali y harness** abre el escritorio noVNC en otra pestaña.
 
 En el escritorio noVNC, abrir **Harness del taller**. Si se prefiere una terminal de Kali:
 
@@ -20,7 +20,7 @@ firefox-esr http://127.0.0.1:2323
 
 Aceptar la pantalla inicial del motor y, si solicita una carpeta, usar `/home/kali`. El preset predeterminado debe ser **Taller VulnerableApp**, no uno de pentesting genérico. No iniciar una segunda copia del servidor. El harness se abre **dentro de Kali** en `http://127.0.0.1:2323`; no existe enlace ni puerto host `2323`. Las explicaciones, razones de aprobación, catálogo y resultados docentes están en español; algunos controles del motor original aparecen como **Allow once**, **Reject** y **Choose workspace**: significan permitir una sola llamada, rechazarla y elegir la carpeta del trabajo.
 
-El perfil 27B exige suficiente memoria en la VM de Docker. Los pesos tienen aproximadamente 18 GB de descarga y la inferencia requiere memoria adicional. El modelo usa el backend CPU dentro de Docker en Mac: no se presenta como una prueba de Metal ni se cambia a Ollama nativo de forma oculta. Consultar la guía de prueba del Mac y las medidas reales que acompañan esta versión.
+Pide una herramienta por turno para poder contrastar el resultado con el control antes de avanzar. Consulta el [primer reto](../COMENZAR.md) para el recorrido completo.
 
 ## 2. Vincular la cuenta, sin entregar credenciales al modelo
 
@@ -31,9 +31,9 @@ lab login
 lab status
 ```
 
-Usar la misma cuenta del portal. No pegar la contraseña, cookies ni tokens en el chat. La sesión del CLI queda en un archivo privado del usuario de Kali; el helper utiliza esa sesión para pedir evaluación a Academy. La clave del runner pertenece a otro usuario y no se entrega al agente.
+Usa la misma cuenta del taller. No pegar la contraseña, cookies ni tokens en el chat. La sesión del CLI queda en un archivo privado del usuario de Kali; el helper utiliza esa sesión para pedir evaluación a Academy. La clave del runner pertenece a otro usuario y no se entrega al agente.
 
-Cada alumno debe usar su propia instancia Compose, o turnarse cerrando tanto la sesión del portal como la del CLI. El puntaje es individual por cuenta, pero el escritorio y el target son compartidos dentro de una misma instancia. La cuenta ficticia de Mercado Cordillera no es una cuenta de Academy.
+Cada alumno debe usar su propia instancia Compose, o turnarse cerrando tanto la sesión de la tienda como la del CLI. El puntaje es individual por cuenta, pero el escritorio y el target son compartidos dentro de una misma instancia. La cuenta ficticia de Mercado Cordillera no es una cuenta de Academy.
 
 ## 3. Qué puede hacer el harness
 
@@ -52,7 +52,7 @@ Todas las llamadas, incluso leer un skill o consultar progreso, requieren una ap
 
 Enviar al chat:
 
-> Carga vulnerableapp-scope. Después propón lab_discover con service all. Explica los nombres, IP, puerto y comando Nmap observados. No explotes nada y espera la aprobación de cada llamada.
+> Invoca lab_discover con {"service":"all"} y espera la aprobación. Explica los nombres, IP y puertos observados.
 
 `all` significa solo `target:9090`, `receiver:8081`, `mailpit:8025`, `academy:8000` y `ollama:11434`, no una subred ni otros proyectos Docker. Las IP cambian entre instalaciones. Un comando manual equivalente dentro de Kali es:
 
@@ -65,10 +65,6 @@ El helper resuelve una IP de un nombre permitido y limita el reconocimiento. Si 
 ## 5. Elegir `commandInjection-02` sin adivinar su ID
 
 Enviar:
-
-> Carga vulnerableapp-http y consulta lab_missions con mission_id commandInjection-02. Muéstrame el control, el método, la ruta fija, los parámetros y la evidencia que requiere. No ejecutes solicitudes todavía.
-
-Luego, si necesitas comprobar el registro exacto, consulta de nuevo el ID preciso:
 
 > Consulta lab_missions para mission_id commandInjection-02. Explica su método, ruta fija, parámetros, criterio y mitigación. No asumas que un HTTP 200 demuestra el objetivo.
 
@@ -101,7 +97,9 @@ lab status
 
 El `curl` directo sirve para entender la respuesta pero no identifica al alumno ni entrega XP. `lab request` y `lab_submit` piden evaluación a la misma API. En el chat:
 
-> Carga vulnerableapp-evidence. Consulta la misión ssrf-01 y prepara una solicitud GET con params {"fileurl":"http://receiver:8081/"}, headers {} y body null. El destino debe ser únicamente receiver del Compose. Después del control observado propón lab_submit y espera aprobación. Informa solo success, XP concedido y score que devuelva Academy. Finalmente propón lab_progress para confirmar el estado de mi cuenta.
+> Ya comparé el control con la respuesta del receptor local. Invoca lab_submit para ssrf-01 con método GET, params {"fileurl":"http://receiver:8081/"}, headers {} y body null. Espera el panel de aprobación e informa el resultado del evaluador.
+
+En un turno nuevo, puedes pedir `lab_progress` para consultar el puntaje.
 
 El resultado esperado del receptor contiene `VA_LAB_RECEIVER`, pero no darlo por observado antes de recibirlo. El evaluador comprueba sus condiciones; una misión lograda se premia una sola vez. Diferenciar XP de este intento y XP total. No repetir solicitudes para farmear puntos.
 
@@ -119,7 +117,7 @@ lab export
 lab logout
 ```
 
-Cerrar también la sesión del portal en un equipo compartido. En el anfitrión, `docker compose stop` detiene servicios sin borrar datos. `docker compose down` conserva los volúmenes si no se usa `-v`. No borrar progreso y pesos con `down -v` salvo que esa destrucción sea deliberada.
+Cerrar también la sesión de la tienda en un equipo compartido. En el anfitrión, `docker compose stop` detiene servicios sin borrar datos. `docker compose down` conserva los volúmenes si no se usa `-v`. No borrar progreso y pesos con `down -v` salvo que esa destrucción sea deliberada.
 
 ## Comparar manual y harness de forma honesta
 

