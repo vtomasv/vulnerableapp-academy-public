@@ -139,7 +139,7 @@ services:
       - no-new-privileges:true
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "test \"$$(cat /run/target-netlock/ready)\" = \"$$(readlink /proc/self/ns/net)\" && iptables -C OUTPUT -j REJECT"]
+      test: ["CMD-SHELL", "for i in 1 2 3 4 5; do test \"$$(cat /run/target-netlock/ready 2>/dev/null || true)\" = \"$$(readlink /proc/self/ns/net)\" && iptables -C OUTPUT -j REJECT 2>/dev/null && exit 0; sleep 1; done; exit 1"]
       interval: 10s
       timeout: 5s
       retries: 12
